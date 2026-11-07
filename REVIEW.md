@@ -1,6 +1,11 @@
 # Code review — uploaded v1.7 prototype
 
-Reviewed 2026-11-07. Application files are preserved byte-for-byte from
+Reviewed 2026-11-07. **Historical review of the original upload.**
+The subsequent Supabase migration changes the database code and schema and fixes
+finding 5 (duplicate opening tag). Findings 1–4 remain open; original line
+references below refer to the imported version, commit `7192ba0`.
+
+Original review: Application files are preserved byte-for-byte from
 `pigeon-clock-php-v1.7-member-dashboard.zip`, placed at the repository root.
 Added this report and `.gitignore`; no application fixes are included.
 

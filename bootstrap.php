@@ -11,13 +11,28 @@ function db(): PDO {
     static $pdo = null;
     global $config;
     if ($pdo) return $pdo;
-    $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', $config['db_host'], $config['db_port'], $config['db_name']);
+    if (!in_array('pgsql', PDO::getAvailableDrivers(), true)) {
+        throw new RuntimeException('Enable the PHP PDO PostgreSQL extension (pdo_pgsql).');
+    }
+    if (!preg_match('/^[a-zA-Z0-9.-]+$/D', $config['db_host'])
+        || !ctype_digit((string)$config['db_port'])
+        || (int)$config['db_port'] < 1 || (int)$config['db_port'] > 65535
+        || !preg_match('/^[a-zA-Z0-9_]+$/D', $config['db_name'])
+        || $config['db_user'] === '' || $config['db_pass'] === '') {
+        throw new RuntimeException('Configure the Supabase database connection in the server environment.');
+    }
+    if (!is_readable($config['db_sslrootcert']) || preg_match('/[;\\r\\n]/', $config['db_sslrootcert'])) {
+        throw new RuntimeException('Configure DB_SSLROOTCERT with a readable trusted CA bundle.');
+    }
+    $dsn = sprintf('pgsql:host=%s;port=%s;dbname=%s;sslmode=verify-full;sslrootcert=%s;connect_timeout=10',
+        $config['db_host'], $config['db_port'], $config['db_name'], $config['db_sslrootcert']);
     $pdo = new PDO($dsn, $config['db_user'], $config['db_pass'], [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
-    $pdo->exec("SET time_zone = '+00:00'");
+    $pdo->exec("SET TIME ZONE 'UTC'");
+    $pdo->exec("SET search_path TO public");
     return $pdo;
 }
 function h(mixed $v): string { return htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }

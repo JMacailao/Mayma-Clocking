@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
         }
         throw new InvalidArgumentException('Unknown action.');
     } catch (PDOException $e) {
-        $error=$e->getCode()==='23000' ? 'Cannot delete a race point referenced by a race.' : 'Database error. Confirm the v1.2 migration has been imported.';
+        $error=str_starts_with((string)$e->getCode(), '23') ? 'Cannot delete a race point referenced by a race.' : 'Database error. Check the Supabase connection and PostgreSQL schema.';
     } catch (Throwable $e) {$error=$e->getMessage();}
 }
 $editing=null;

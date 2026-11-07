@@ -1,43 +1,89 @@
-# v1.7 Member Dashboard update
+# Mayma Clocking — PHP + Supabase PostgreSQL
 
-After login, members land on `member_dashboard.php`, with tabs **Home**, **Clocking**, and **Clocking History**. The **Clocking** tab (`member_clock.php`) lets members select their open, registered race, **scan** a QR/barcode with a supported browser camera (HTTPS or localhost required), or **type** the exact code. Submit clocking to record a server-side provisional receipt. History lists clocking receipts. This uses the existing v1.6 member_auth and clocking service; **no new SQL migration** is required when upgrading from v1.6.
+Member dashboard, race registration, barcode clocking, history, and provisional
+results backed by **Supabase PostgreSQL**. PHP sessions and password hashes still
+handle admin/member login; Supabase Auth is not used.
 
-For earlier installations, apply your missing migrations in order before using this version. Continue to follow the v1.6 SMS integration documentation below. A live inbound SMS provider/number is still **not connected**; a signed generic SMS webhook exists but needs a configured provider.
+This remains a prototype: barcode/SMS receipt time is not independently verified
+pigeon arrival. See [REVIEW.md](REVIEW.md) for remaining security findings.
 
----
+## Hosting requirements
 
-# Pigeon Racing Clocking System — PHP v1.6 (Member Scan + SMS)
+- PHP 8.1+ with PDO and `pdo_pgsql`, HTTPS, and a trusted CA bundle.
+- A Supabase project and a server-side database password.
+- PHP hosting is required. GitHub stores the source; GitHub Pages cannot execute
+  PHP. Switching to Supabase does not turn this into a static GitHub Pages site.
+- Node.js is only needed to run the optional PostgreSQL regression tests.
 
-This is a **PHP/MySQL prototype**, not a certified electronic timing system. Member barcode submissions and SMS submissions record the server's receipt time, **not independently verified pigeon arrival**. Club officials must approve any competition use and verification rules.
+## Connect your Supabase project
 
-## Existing workflow
+Project: `ddwzrjvlatdbwaiagxhp` (API URL:
+`https://ddwzrjvlatdbwaiagxhp.supabase.co`).
 
-1. Admin registers members and loft coordinates (DMS).
-2. Admin creates race points (DMS) and a race schedule.
-3. Admin registers each race entry with a ring number and a **race-specific barcode**.
-4. Admin sets the race status to **Open**.
-5. Members scan/enter barcodes on the member page or text the code to a gateway number.
-6. The server logs the first valid receipt and provisional results use the stored distance / elapsed time.
+1. In that project's SQL Editor, run [schema.sql](schema.sql) as the database owner
+   on a fresh database. It creates the eight application tables, indexes, update
+   triggers and row-level security. It does not drop tables or import MySQL data.
+2. In **Connect**, select the direct connection or **Session pooler**. For hosts
+   without IPv6, use the Session pooler and copy its exact host and username.
+   The pooler username is normally `postgres.<project-ref>`; do not invent a
+   region/host. Use session mode because PHP uses prepared statements and
+   transactions.
+3. Set these **server environment variables** on your PHP host:
 
-## New version 1.6 features
+   | Variable | Direct connection value |
+   | --- | --- |
+   | `DB_HOST` | `db.ddwzrjvlatdbwaiagxhp.supabase.co` |
+   | `DB_PORT` | `5432` |
+   | `DB_NAME` | `postgres` |
+   | `DB_USER` | `postgres` |
+   | `DB_PASSWORD` | Your project's database password, entered privately |
+   | `DB_SSLROOTCERT` | Path to your host's trusted CA bundle or the Supabase database CA |
 
-- **Member Access** (`member_access.php`): admin issues/resets a member clocking password; only the hash is stored, password shown once. Share it privately.
-- **Member login** (`member_login.php`): member ID + password.
-- **Member scan page** (`member_clock.php`): selects an open race, uses the camera when the browser supports `BarcodeDetector`, or allows typing a code, and shows receipts. Chrome/Android with HTTPS is recommended; not all browsers support the built-in scanner.
-- **Shared clocking service** (`clocking_service.php`): validates member, race status, release time, exact-case barcode; retains the first clock for a race entry and rejects duplicates.
-- **Generic SMS gateway receiver** (`sms_webhook.php`): authenticated HMAC-signed JSON request for member-registered phone numbers. Requires a configured SMS number/provider that forwards inbound SMS.
-- No physical RFID hardware is required.
+   The connection enforces `sslmode=verify-full`. Install the correct trusted
+   certificate if verification fails; do not disable TLS verification. Linux
+   defaults to `/etc/ssl/certs/ca-certificates.crt`. For a pooler connection,
+   replace the direct host/user/port with the values in **Connect**.
+4. Restrict access to `setup.php` while creating the first administrator. Then
+   disable public access to setup. Open `login.php` for admin login; issue member
+   passwords through **Member Access**, then use `member_login.php`.
+5. Keep SQL files, tests, Git metadata and local configuration inaccessible from
+   the public web. Only the PHP host receives database credentials.
 
-## Upgrade existing v1.5 installation
+[.env.example](.env.example) lists the variables. PHP does **not** automatically
+load `.env` files: configure the process environment using your hosting controls.
+Never commit a real `.env` or put a database password in browser JavaScript.
 
-1. **Back up** the database and application.
-2. Replace application PHP/CSS files, preserving your configured `config.php`.
-3. Import `migrations/005_member_clocking_sms.sql` **once**, after earlier migrations.
-4. In the admin dashboard, use **Member Access** to issue passwords.
-5. Ask members to open `https://YOUR-SITE/member_login.php` and sign in. Public HTTPS is essential for production and camera access.
-6. Open a race schedule, then register race entries with unique barcodes and test the member scan page.
+`NEXT_PUBLIC_SUPABASE_URL` and the publishable key are intended for a JavaScript
+client. They are not PostgreSQL credentials and are not used by this PHP server.
+No Supabase service-role key is needed. RLS is enabled without browser access
+policies; anonymous/authenticated API clients cannot read these application
+tables. The server connects as the database owner, which bypasses RLS, so all
+member authorization continues to be enforced in PHP.
 
-For a **fresh install**, import `schema.sql`, run `setup.php`, and create an admin.
+## Existing installations
+
+The old MySQL upgrade scripts are retained under `migrations/legacy_mysql/` for
+reference only. **Do not run them in Supabase.** This version uses a fresh
+PostgreSQL schema; it does not automatically migrate an existing MySQL database.
+For existing production data, back it up and plan a separate transfer preserving
+IDs, foreign keys, UTC timestamps and password hashes, then reset identity
+sequences. Do not switch a populated installation until that transfer is tested.
+
+## Development and validation
+
+After setting the server environment and installing `pdo_pgsql`, a local-only
+server can run with `php -S 127.0.0.1:8000 -t .`. For deployment, use HTTPS and a
+production PHP web server; do not expose the development server publicly.
+
+- PHP syntax: `find . -path ./node_modules -prune -o -name '*.php' -exec php -l {} \;`
+- Database regression tests: `npm ci && npm test`.
+
+Tests use PGlite's embedded PostgreSQL engine and SQL extracted from application
+files. They exercise schema installation/repeatability, member ownership and
+case-sensitive barcodes, receipt IDs, duplicate clocks/SMS, password upserts,
+dashboard/history/results queries, update triggers, constraints and Data API
+role restrictions. They do not establish live Supabase connectivity, PHP PDO
+compatibility, camera behavior or SMS delivery; verify these on the PHP host.
 
 ## SMS setup (NOT ACTIVE until connected to a provider)
 
@@ -66,14 +112,10 @@ signature = "sha256=" + hmac.new(secret, raw, hashlib.sha256).hexdigest()
 
 ## Security and limitations
 
-- Barcodes are **race-specific secrets**. Do not publish, print on public results, or expose them to other members before release.
-- Member password login has basic session-based attempt throttling. **Add a shared/IP-based rate limiter and MFA before a public, high-stakes deployment**.
-- Never treat a scanned barcode as automatic physical arrival verification. A copied or exposed barcode can be submitted remotely. Club supervision and evidence are still needed.
-- Never take the handset clock or SMS sent time as an authoritative race clock.
-- SMS webhook requires a 32-character secret and signed messages. Do not remove signature verification.
-- For high traffic, use a provider message-ID queue, monitoring, rate limits, and stronger audit logging.
-- PHP syntax checks can be run with `php -l`. This environment did not have PDO MySQL installed, so database integration is not yet verified.
-
-## Previous migrations
-
-`002_race_points.sql`, `003_members_manager.sql`, `004_race_entries_manager.sql` are for upgrades from earlier releases; do not rerun them on a v1.5 database. Fresh installations only need `schema.sql`.
+- The existing review's public bootstrap, login throttling, session revocation
+  and concurrent entry-edit findings remain outstanding. The duplicate PHP tag
+  in `clock.php` was corrected during this migration.
+- All receipt timestamps are generated by PostgreSQL in UTC; display uses
+  Asia/Manila. Barcodes are compared case-sensitively and remain private.
+- SMS needs a real inbound provider and a high-entropy `SMS_WEBHOOK_SECRET`.
+- Test authentication and race workflows before public deployment.

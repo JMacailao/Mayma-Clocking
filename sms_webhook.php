@@ -39,10 +39,8 @@ try {
     $seen->execute([$messageId]);
     if($seen->fetch()) sms_reply(200,'Duplicate SMS message ignored');
     $receipt=clock_submission($pdo,(int)$m[1],$m[2],$memberId,'sms');
-    try {
-        $mark=$pdo->prepare('INSERT INTO sms_receipts(provider_message_id,sender_phone) VALUES(?,?)');
-        $mark->execute([$messageId,$phone]);
-    } catch(PDOException $e){if($e->getCode()!=='23000')throw $e;}
+    $mark=$pdo->prepare('INSERT INTO sms_receipts(provider_message_id,sender_phone) VALUES(?,?) ON CONFLICT (provider_message_id) DO NOTHING');
+    $mark->execute([$messageId,$phone]);
     $desc=$receipt['status']==='duplicate'?'Already clocked':'Clock accepted (provisional)';
     sms_reply(200,$desc.' · Ref #'.$receipt['id'].' · PH time '.local_time($receipt['time']),$receipt);
 } catch(InvalidArgumentException $e) { sms_reply(200,'Clocking rejected: '.$e->getMessage()); }

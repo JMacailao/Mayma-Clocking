@@ -3,7 +3,7 @@ require __DIR__.'/bootstrap.php';
 if (!empty($_SESSION['admin_id'])) go('index.php');
 $error='';
 try { $hasAdmin=(int)db()->query('SELECT COUNT(*) FROM admins')->fetchColumn()>0; }
-catch (Throwable $e) { http_response_code(503); exit('Database not available. See README.md and configure your MySQL server.'); }
+catch (Throwable $e) { http_response_code(503); exit('Database not available. See README.md and configure your Supabase PostgreSQL connection.'); }
 if (!$hasAdmin) go('setup.php');
 if ($_SERVER['REQUEST_METHOD']==='POST') {
     verify_csrf();

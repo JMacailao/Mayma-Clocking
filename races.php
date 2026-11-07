@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
             $stmt=$pdo->prepare('UPDATE races SET status=? WHERE id=?');$stmt->execute([$status,$id]);message('Race status updated.');go('races.php');
         }
         throw new InvalidArgumentException('Unknown action.');
-    }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();$error=$e instanceof PDOException?'Database error. Check the latest migration.':$e->getMessage();}
+    }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();$error=$e instanceof PDOException?'Database error. Check the Supabase connection and PostgreSQL schema.':$e->getMessage();}
 }
 $points=$pdo->query('SELECT * FROM race_points ORDER BY sector,location,id')->fetchAll();
 $races=$pdo->query("SELECT r.*, p.sector AS point_sector, COUNT(CASE WHEN e.pigeon_ring IS NOT NULL AND e.pigeon_ring <> '' THEN e.id END) entry_count FROM races r LEFT JOIN race_points p ON p.id=r.race_point_id LEFT JOIN race_entries e ON e.race_id=r.id GROUP BY r.id,p.sector ORDER BY r.id DESC")->fetchAll();

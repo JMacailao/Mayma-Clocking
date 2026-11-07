@@ -1,11 +1,12 @@
 <?php
 declare(strict_types=1);
-// Configure credentials here or as server environment variables.
+// Set these in the PHP host's environment. Never commit database credentials.
 return [
-    'db_host' => getenv('DB_HOST') ?: '127.0.0.1',
-    'db_port' => getenv('DB_PORT') ?: '3306',
-    'db_name' => getenv('DB_NAME') ?: 'pigeon_clock',
-    'db_user' => getenv('DB_USER') ?: 'root',
+    'db_host' => getenv('DB_HOST') ?: '',
+    'db_port' => getenv('DB_PORT') ?: '5432',
+    'db_name' => getenv('DB_NAME') ?: 'postgres',
+    'db_user' => getenv('DB_USER') ?: '',
     'db_pass' => getenv('DB_PASSWORD') ?: '',
+    'db_sslrootcert' => getenv('DB_SSLROOTCERT') ?: '/etc/ssl/certs/ca-certificates.crt',
     'timezone' => 'Asia/Manila',
 ];

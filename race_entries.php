@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
         }
         throw new InvalidArgumentException('Unknown action.');
     } catch (PDOException $e) {
-        $error='Database error. The ring number or barcode may already be registered in this schedule, or migration 004 was not applied.';
+        $error='Database error. Check for duplicate ring numbers or barcodes and confirm the PostgreSQL schema is installed.';
     } catch (Throwable $e) {
         $error=$e->getMessage();
     }

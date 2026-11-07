@@ -10,10 +10,10 @@ if($_SERVER['REQUEST_METHOD']==='POST') {
         if(!$member) throw new InvalidArgumentException('Unknown member.');
         // 12 random hex characters; only hash is stored. Shown once, so admin must share privately.
         $password=strtoupper(bin2hex(random_bytes(6)));
-        $stmt=$pdo->prepare('INSERT INTO member_auth(member_id,pin_hash) VALUES (?,?) ON DUPLICATE KEY UPDATE pin_hash=VALUES(pin_hash)');
+        $stmt=$pdo->prepare('INSERT INTO member_auth(member_id,pin_hash) VALUES (?,?) ON CONFLICT (member_id) DO UPDATE SET pin_hash=EXCLUDED.pin_hash, issued_at=CURRENT_TIMESTAMP');
         $stmt->execute([$memberId,password_hash($password,PASSWORD_DEFAULT)]);
         $issued=['member_no'=>$member['member_no'],'password'=>$password];
-    } catch(Throwable $e) { $error=$e instanceof PDOException?'Database error. Ensure migration 005 was imported.':$e->getMessage(); }
+    } catch(Throwable $e) { $error=$e instanceof PDOException?'Database error. Confirm the PostgreSQL schema is installed.':$e->getMessage(); }
 }
 $members=$pdo->query('SELECT m.id,m.member_no,m.full_name,m.phone,(a.member_id IS NOT NULL) AS has_access FROM members m LEFT JOIN member_auth a ON a.member_id=m.id ORDER BY m.member_no')->fetchAll();
 page_header('Member Clocking Access');

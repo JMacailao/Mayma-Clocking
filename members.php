@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
         }
         throw new InvalidArgumentException('Unknown action.');
     } catch (PDOException $e) {
-        $error=$e->getCode()==='23000'?'Duplicate Member ID or member linked to race entries.':'Database error. Check that migration 003_members_manager.sql was imported.';
+        $error=str_starts_with((string)$e->getCode(), '23')?'Duplicate Member ID or member linked to race entries.':'Database error. Check the Supabase connection and PostgreSQL schema.';
     } catch (Throwable $e) {$error=$e->getMessage();}
 }
 $editing=null;
