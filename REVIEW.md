@@ -36,7 +36,7 @@ Added this report and `.gitignore`; no application fixes are included.
    in a transaction using the same locking protocol as `clock_submission`, then
    check clock events and perform the update atomically.
 
-5. **Low: duplicate opening tag emits literal text** — `clock.php:29` contains
+5. **Low: duplicate opening tag emits literal text** — `clock.php:28` contains
    `<?php<?php`. PHP treats the first sequence as inline output because it lacks
    the whitespace needed after an opening tag, so this passes lint but emits
    stray `<?php` text. Replace it with one opening tag.
