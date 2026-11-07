@@ -16,7 +16,7 @@ const stateTag = (value) => `<span class="tag ${escapeHTML(value)}">${escapeHTML
 async function getIdentity() {
   const {data:{session}}=await supabase.auth.getSession();
   if(!session) return null;
-  const {data:profile,error}=await supabase.from('app_profiles').select('id,role,member_id').eq('id',session.user.id).maybeSingle();
+  const {data:profile,error}=await supabase.from('app_profiles').select('id,role,member_id,username').eq('id',session.user.id).maybeSingle();
   if(error) throw error;
   return profile ? {session,user:session.user,profile} : {session,user:session.user,profile:null};
 }

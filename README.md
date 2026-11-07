@@ -34,6 +34,11 @@ and service-role keys out of this repository.
    are lowercase, 3–32 letters, numbers, dots, underscores or hyphens. Profiles
    can only be created or changed by the database owner in SQL Editor, so users
    cannot grant themselves admin access.
+5. For existing Auth users, change their Auth email to the matching synthetic
+   address in Authentication → Users, mark it confirmed, then set `username` on
+   their existing profile. For example: `update public.app_profiles set
+   username='clubadmin' where id='AUTH_USER_UUID';` Do this once per account before
+   using the username sign-in page.
 4. Publish this repository with GitHub Pages: repository **Settings → Pages**,
    select deploy from the `main` branch and `/ (root)`. The `index.html` landing
    page and folder pages will then be served as a static site.
