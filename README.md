@@ -1,95 +1,68 @@
-# Mayma Clocking — PHP + Supabase PostgreSQL
+# Mayma Clocking
 
-Member dashboard, race registration, barcode clocking, history, and provisional
-results backed by **Supabase PostgreSQL**. PHP sessions and password hashes still
-handle admin/member login; Supabase Auth is not used.
+A static club clocking app built with HTML, CSS, JavaScript and Supabase. It has
+separate folders for club administration and member pages. It uses Supabase
+Auth for sign-in and PostgreSQL row-level security for data access. No PHP
+server, Node runtime or database password is used by the browser app.
 
-This remains a prototype: barcode receipt time is not independently verified
-pigeon arrival. See [REVIEW.md](REVIEW.md) for remaining security findings.
+## Set up Supabase
 
-## Hosting requirements
+The project is configured in `assets/js/supabase.js` with the provided project
+URL and publishable key. Publishable keys are meant for browser use. Keep secret
+and service-role keys out of this repository.
 
-- PHP 8.1+ with PDO and `pdo_pgsql`, HTTPS, and a trusted CA bundle.
-- A Supabase project and a server-side database password.
-- PHP hosting is required. GitHub stores the source; GitHub Pages cannot execute
-  PHP. Switching to Supabase does not turn this into a static GitHub Pages site.
-- Node.js is only needed to run the optional PostgreSQL regression tests.
+1. In the Supabase SQL Editor for project `ddwzrjvlatdbwaiagxhp`, run `schema.sql`.
+   It enables RLS, creates role/profile helpers and restricts member clock
+   submissions to the database function. Existing member/race records are kept.
+2. In Supabase **Authentication → Users**, create an account for the club admin.
+   Create the member rows from the admin app after an admin signs in. Create
+   member accounts in Auth only after their member row exists.
+3. In Authentication → Users, copy the user's UUID. Assign the admin role in SQL:
 
-## Connect your Supabase project
+   ```sql
+   insert into public.app_profiles (id, role, member_id)
+   values ('AUTH_USER_UUID', 'admin', null);
+   ```
 
-Project: `ddwzrjvlatdbwaiagxhp` (API URL:
-`https://ddwzrjvlatdbwaiagxhp.supabase.co`).
+   Assign a member account to a member row with:
 
-1. In that project's SQL Editor, run [schema.sql](schema.sql) as the database owner
-   on a fresh database. It creates the seven application tables, indexes, update
-   triggers and row-level security. It does not drop tables or import MySQL data.
-2. In **Connect**, select the direct connection or **Session pooler**. For hosts
-   without IPv6, use the Session pooler and copy its exact host and username.
-   The pooler username is normally `postgres.<project-ref>`; do not invent a
-   region/host. Use session mode because PHP uses prepared statements and
-   transactions.
-3. Set these **server environment variables** on your PHP host:
+   ```sql
+   insert into public.app_profiles (id, role, member_id)
+   values ('AUTH_USER_UUID', 'member', 1);
+   ```
 
-   | Variable | Direct connection value |
-   | --- | --- |
-   | `DB_HOST` | `db.ddwzrjvlatdbwaiagxhp.supabase.co` |
-   | `DB_PORT` | `5432` |
-   | `DB_NAME` | `postgres` |
-   | `DB_USER` | `postgres` |
-   | `DB_PASSWORD` | Your project's database password, entered privately |
-   | `DB_SSLROOTCERT` | Path to your host's trusted CA bundle or the Supabase database CA |
+   Replace the example UUID and member ID with the actual values. Profiles can
+   only be created or changed by the database owner in SQL Editor. This prevents
+   users from granting themselves admin access.
+4. Publish this repository with GitHub Pages: repository **Settings → Pages**,
+   select deploy from the `main` branch and `/ (root)`. The `index.html` landing
+   page and folder pages will then be served as a static site.
 
-   The connection enforces `sslmode=verify-full`. Install the correct trusted
-   certificate if verification fails; do not disable TLS verification. Linux
-   defaults to `/etc/ssl/certs/ca-certificates.crt`. For a pooler connection,
-   replace the direct host/user/port with the values in **Connect**.
-4. Restrict access to `setup.php` while creating the first administrator. Then
-   disable public access to setup. Open `login.php` for admin login; issue member
-   passwords through **Member Access**, then use `member_login.php`.
-5. Keep SQL files, tests, Git metadata and local configuration inaccessible from
-   the public web. Only the PHP host receives database credentials.
+## Pages
 
-[.env.example](.env.example) lists the variables. PHP does **not** automatically
-load `.env` files: configure the process environment using your hosting controls.
-Never commit a real `.env` or put a database password in browser JavaScript.
+- `index.html`: club portal landing page.
+- `pages/login/index.html`: shared admin/member sign-in.
+- `pages/admin/dashboard/`: club overview.
+- `pages/admin/members/`: member and loft records.
+- `pages/admin/race-points/`: release locations.
+- `pages/admin/races/`: race schedules and status.
+- `pages/admin/entries/`: registered pigeons and barcodes.
+- `pages/admin/clocking/`: admin receipts.
+- `pages/admin/results/`: provisional leaderboard.
+- `pages/member/dashboard/`: a member's open races.
+- `pages/member/clocking/`: member barcode clocking and camera scan.
+- `pages/member/history/`: that member's receipts.
 
-`NEXT_PUBLIC_SUPABASE_URL` and the publishable key are intended for a JavaScript
-client. They are not PostgreSQL credentials and are not used by this PHP server.
-No Supabase service-role key is needed. RLS is enabled without browser access
-policies; anonymous/authenticated API clients cannot read these application
-tables. The server connects as the database owner, which bypasses RLS, so all
-member authorization continues to be enforced in PHP.
+## Important
 
-## Existing installations
-
-The old MySQL upgrade scripts are retained under `migrations/legacy_mysql/` for
-reference only. **Do not run them in Supabase.** This version uses a fresh
-PostgreSQL schema; it does not automatically migrate an existing MySQL database.
-For existing production data, back it up and plan a separate transfer preserving
-IDs, foreign keys, UTC timestamps and password hashes, then reset identity
-sequences. Do not switch a populated installation until that transfer is tested.
-
-## Development and validation
-
-After setting the server environment and installing `pdo_pgsql`, a local-only
-server can run with `php -S 127.0.0.1:8000 -t .`. For deployment, use HTTPS and a
-production PHP web server; do not expose the development server publicly.
-
-- PHP syntax: `find . -path ./node_modules -prune -o -name '*.php' -exec php -l {} \;`
-- Database regression tests: `npm ci && npm test`.
-
-Tests use PGlite's embedded PostgreSQL engine and SQL extracted from application
-files. They exercise schema installation/repeatability, member ownership and
-case-sensitive barcodes, receipt IDs, duplicate clocks, password upserts,
-dashboard/history/results queries, update triggers, constraints and Data API
-role restrictions. They do not establish live Supabase connectivity, PHP PDO
-compatibility, camera behavior; verify these on the PHP host.
-
-## Security and limitations
-
-- The existing review's public bootstrap, login throttling, session revocation
-  and concurrent entry-edit findings remain outstanding. The duplicate PHP tag
-  in `clock.php` was corrected during this migration.
-- All receipt timestamps are generated by PostgreSQL in UTC; display uses
-  Asia/Manila. Barcodes are compared case-sensitively and remain private.
-- Test authentication and race workflows before public deployment.
+- Supabase Auth accounts are managed in the Supabase dashboard. Sign-in uses
+  email and password; the app does not offer public sign-up.
+- The SQL policies grant admin access only to profiles assigned `admin` by the
+  database owner. Members can see their own profile, member record, race entries
+  and clock receipts. The `submit_member_clock` function checks the member,
+  barcode, race status and release time, then writes a server timestamp.
+- Clocking receipts are provisional evidence of server receipt time, not
+  independently verified pigeon arrival.
+- Existing PHP/MySQL files and SMS support have been removed. Supabase schema
+  setup preserves existing race data but does not transfer old password hashes;
+  create new Supabase Auth users and assign their profiles as above.

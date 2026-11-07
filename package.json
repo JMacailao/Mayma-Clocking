@@ -1,6 +1,0 @@
-{
-  "name": "mayma-clocking-database-tests",
-  "private": true,
-  "scripts": { "test": "node --test tests/postgres.test.cjs" },
-  "devDependencies": { "@electric-sql/pglite": "0.3.14" }
-}
