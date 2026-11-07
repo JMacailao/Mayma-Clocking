@@ -1,4 +1,4 @@
--- Mayma Clocking: Firebase Authentication + Supabase PostgreSQL, static client.
+-- Mayma Clocking: Supabase Auth + PostgreSQL, static HTML/CSS/JS client.
 -- Run once in Supabase SQL Editor as the project database owner.
 -- Existing race data tables are preserved. This file adds app profiles and safe
 -- policies; it does not remove existing rows or migrate user passwords.
@@ -75,7 +75,7 @@ CREATE INDEX IF NOT EXISTS idx_race_entries_race ON public.race_entries(race_id)
 CREATE INDEX IF NOT EXISTS idx_race_entries_member ON public.race_entries(member_id);
 
 CREATE TABLE IF NOT EXISTS public.app_profiles (
-  id text PRIMARY KEY,
+  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   username text UNIQUE CHECK (username IS NULL OR username ~ '^[a-z0-9][a-z0-9_.-]{2,31}$'),
   role text NOT NULL CHECK (role IN ('admin','member')),
   member_id bigint UNIQUE REFERENCES public.members(id) ON DELETE CASCADE,
@@ -83,22 +83,18 @@ CREATE TABLE IF NOT EXISTS public.app_profiles (
   CONSTRAINT app_profiles_member_role CHECK ((role='member' AND member_id IS NOT NULL) OR (role='admin' AND member_id IS NULL))
 );
 
--- Convert prior Supabase Auth UUID profiles to text IDs. Firebase UIDs are strings
--- and are not stored in auth.users.
-ALTER TABLE public.app_profiles DROP CONSTRAINT IF EXISTS app_profiles_id_fkey;
-ALTER TABLE public.app_profiles ALTER COLUMN id TYPE text USING id::text;
 -- Add usernames safely when upgrading a project that already ran the prior schema.
 ALTER TABLE public.app_profiles ADD COLUMN IF NOT EXISTS username text;
 CREATE UNIQUE INDEX IF NOT EXISTS app_profiles_username_unique ON public.app_profiles (lower(username)) WHERE username IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION public.current_app_role()
 RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
-  SELECT p.role FROM public.app_profiles p WHERE p.id = ((SELECT auth.jwt()) ->> 'sub')
+  SELECT p.role FROM public.app_profiles p WHERE p.id = (SELECT auth.uid())
 $$;
 CREATE OR REPLACE FUNCTION public.current_member_id()
 RETURNS bigint LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
   SELECT p.member_id FROM public.app_profiles p
-  WHERE p.id = ((SELECT auth.jwt()) ->> 'sub') AND p.role = 'member'
+  WHERE p.id = (SELECT auth.uid()) AND p.role = 'member'
 $$;
 CREATE OR REPLACE FUNCTION public.is_app_admin()
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
@@ -120,7 +116,7 @@ ALTER TABLE public.clock_events ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS profile_read_self_or_admin ON public.app_profiles;
 CREATE POLICY profile_read_self_or_admin ON public.app_profiles
-  FOR SELECT TO authenticated USING (id=((SELECT auth.jwt()) ->> 'sub') OR public.is_app_admin());
+  FOR SELECT TO authenticated USING (id=(SELECT auth.uid()) OR public.is_app_admin());
 DROP POLICY IF EXISTS members_read_authorized ON public.members;
 CREATE POLICY members_read_authorized ON public.members
   FOR SELECT TO authenticated USING (public.is_app_admin() OR id=public.current_member_id());
@@ -252,10 +248,14 @@ GRANT EXECUTE ON FUNCTION public.has_admin_account() TO anon, authenticated;
 CREATE OR REPLACE FUNCTION public.bootstrap_first_admin(p_username text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
-  v_user_id text := (SELECT auth.jwt() ->> 'sub');
+  v_user_id uuid := (SELECT auth.uid());
   v_username text := lower(trim(p_username));
+  v_auth_email text;
 BEGIN
-  IF v_user_id IS NULL THEN RAISE EXCEPTION 'Sign in with Firebase to create the first administrator.' USING ERRCODE='42501'; END IF;
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'Sign in to create the first administrator.' USING ERRCODE='42501'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id=v_user_id AND u.email_confirmed_at IS NOT NULL) THEN
+    RAISE EXCEPTION 'Confirm your email address before creating the administrator account.' USING ERRCODE='42501';
+  END IF;
   IF v_username !~ '^[a-z0-9][a-z0-9_.-]{2,31}$' THEN
     RAISE EXCEPTION 'Username must be 3–32 letters, numbers, dots, hyphens or underscores.' USING ERRCODE='22023';
   END IF;
@@ -263,9 +263,13 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.app_profiles p WHERE p.role='admin') THEN
     RAISE EXCEPTION 'The administrator account has already been created.' USING ERRCODE='42501';
   END IF;
+  v_auth_email := v_username || '@users.mayma.invalid';
   IF EXISTS (SELECT 1 FROM public.app_profiles p WHERE lower(p.username)=v_username) THEN
     RAISE EXCEPTION 'That username is already in use.' USING ERRCODE='23505';
   END IF;
+  UPDATE auth.users SET email=v_auth_email, email_confirmed_at=COALESCE(email_confirmed_at, now()), updated_at=now()
+    WHERE id=v_user_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Authentication account not found.' USING ERRCODE='42501'; END IF;
   INSERT INTO public.app_profiles(id,username,role,member_id)
     VALUES(v_user_id,v_username,'admin',NULL);
   RETURN jsonb_build_object('status','created','username',v_username);
