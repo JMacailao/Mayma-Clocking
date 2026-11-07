@@ -1,15 +1,8 @@
 <?php
-/** Shared clock submission service, used by member web and SMS gateways. */
+/** Barcode clock submission service for the member web pages. */
 require_once __DIR__.'/bootstrap.php';
-function phone_normalize(string $phone): string {
-    $digits=preg_replace('/[^0-9+]/','',$phone);
-    if (str_starts_with($digits,'+')) $digits=substr($digits,1);
-    if (preg_match('/^09\d{9}$/D',$digits)) return '63'.substr($digits,1);
-    if (preg_match('/^639\d{9}$/D',$digits)) return $digits;
-    return '';
-}
 function clock_submission(PDO $pdo, int $raceId, string $code, int $memberId, string $source): array {
-    if ($raceId<1 || $memberId<1 || !in_array($source,['barcode','sms'],true)) throw new InvalidArgumentException('Invalid submission.');
+    if ($raceId<1 || $memberId<1 || $source !== 'barcode') throw new InvalidArgumentException('Invalid submission.');
     $code=trim($code);
     if ($code==='' || strlen($code)>120) throw new InvalidArgumentException('Invalid barcode length.');
     // Lock the entry and check the unique clock record atomically; do not use client/device timestamps.

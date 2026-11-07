@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS clock_events (
  race_entry_id BIGINT NOT NULL,
  pigeon_ring VARCHAR(80) NOT NULL,
  received_at_utc TIMESTAMP(6) WITHOUT TIME ZONE NOT NULL,
- source VARCHAR(20) CHECK (source IN ('admin_manual','barcode','sms')) NOT NULL DEFAULT 'admin_manual',
+ source VARCHAR(20) CHECK (source IN ('admin_manual','barcode')) NOT NULL DEFAULT 'admin_manual',
  verification VARCHAR(20) CHECK (verification IN ('provisional','verified','rejected')) NOT NULL DEFAULT 'provisional',
  created_by_admin_id BIGINT NULL,
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -84,11 +84,6 @@ CREATE TABLE IF NOT EXISTS member_auth (
  pin_hash VARCHAR(255) NOT NULL,
  issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  CONSTRAINT fk_member_auth_member FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS sms_receipts (
- provider_message_id VARCHAR(180) PRIMARY KEY,
- sender_phone VARCHAR(20) NOT NULL,
- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_race_point_location ON race_points (location);
 CREATE INDEX IF NOT EXISTS idx_race_point_sector ON race_points (sector);
@@ -123,13 +118,12 @@ ALTER TABLE public.races ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.race_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clock_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.member_auth ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.sms_receipts ENABLE ROW LEVEL SECURITY;
 DO $$
 DECLARE role_name text;
 BEGIN
     FOREACH role_name IN ARRAY ARRAY['anon', 'authenticated'] LOOP
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
-            EXECUTE format('REVOKE ALL ON TABLE public.admins, public.members, public.race_points, public.races, public.race_entries, public.clock_events, public.member_auth, public.sms_receipts FROM %I', role_name);
+            EXECUTE format('REVOKE ALL ON TABLE public.admins, public.members, public.race_points, public.races, public.race_entries, public.clock_events, public.member_auth FROM %I', role_name);
         END IF;
     END LOOP;
 END;

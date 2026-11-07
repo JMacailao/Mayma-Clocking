@@ -50,13 +50,11 @@ test('PostgreSQL schema and application SQL', async () => {
     const insert = queryFrom('clocking_service.php', 'INSERT INTO clock_events');
     const receipt = await db.query(insert,[1,'RING1',time,'barcode']);
     assert.equal(receipt.rows[0].id,1);
-    await assert.rejects(db.query(insert,[1,'OTHER-RING',time,'sms']), e => e.code === '23505');
+    await assert.rejects(db.query(insert,[1,'RING1',time,'sms']), e => e.code === '23514');
+    await assert.rejects(db.query(insert,[1,'OTHER-RING',time,'barcode']), e => e.code === '23505');
     const upsert = queryFrom('member_access.php','INSERT INTO member_auth');
     await db.query(upsert,[1,'first-hash']); await db.query(upsert,[1,'reset-hash']);
     assert.equal((await db.query('SELECT pin_hash FROM member_auth')).rows[0].pin_hash,'reset-hash');
-    const mark = queryFrom('sms_webhook.php','INSERT INTO sms_receipts');
-    await db.query(mark,['message-1','639123456789']); await db.query(mark,['message-1','639123456789']);
-    assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM sms_receipts')).rows[0].n,1);
     const races = await db.query(queryFrom('races.php','SELECT r.*, p.sector'));
     assert.equal(Number(races.rows[0].entry_count),1);
     const dashboard = await db.query(queryFrom('member_dashboard.php','SELECT r.id,r.name'),[1]);
@@ -68,7 +66,7 @@ test('PostgreSQL schema and application SQL', async () => {
     await db.exec("UPDATE members SET full_name='Updated' WHERE id=1");
     assert.ok((await db.query('SELECT updated_at >= created_at AS touched FROM members WHERE id=1')).rows[0].touched);
     const tables = await db.query("SELECT relname, relrowsecurity FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind='r'");
-    assert.equal(tables.rows.length,8);
+    assert.equal(tables.rows.length,7);
     assert.ok(tables.rows.every(t => t.relrowsecurity));
     for (const role of ['anon','authenticated']) {
       await db.exec(`SET ROLE ${role}`);
