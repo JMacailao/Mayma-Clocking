@@ -7,41 +7,49 @@ server, Node runtime or database password is used by the browser app.
 
 ## Set up Supabase
 
-The project is configured in `assets/js/supabase.js` with the provided project
-URL and publishable key. Publishable keys are meant for browser use. Keep secret
-and service-role keys out of this repository.
+The project URL and publishable key are configured in `assets/js/supabase.js`.
+The publishable key is safe in browser code; never add a service-role key.
 
 1. In the Supabase SQL Editor for project `ddwzrjvlatdbwaiagxhp`, run `schema.sql`.
-   It enables RLS, creates role/profile helpers and restricts member clock
-   submissions to the database function. Existing member/race records are kept.
-2. Create a Supabase Auth user for each person. Use the username-only account method below.
-   Create member rows from the admin app before creating a member account.
-3. In Authentication → Users, copy the user's UUID. Assign the admin role in SQL:
-
-   ```sql
-   insert into public.app_profiles (id, username, role, member_id)
-   values ('AUTH_USER_UUID', 'clubadmin', 'admin', null);
-   ```
-
-   Assign a member account to a member row with:
+   It creates the app tables when the database is fresh, enables row-level
+   security and adds the protected clocking and first-admin setup functions.
+   Existing race and member records are kept.
+2. In Supabase **Authentication → URL Configuration**, add the deployed login
+   page to the allowed redirect URLs. For GitHub Pages, it ends with
+   `/Mayma-Clocking/pages/login/index.html`. Keep email sign-up and email
+   confirmation enabled so the first administrator proves access to their email.
+3. Open the site. With no admin in the database, it displays **Create your
+   admin** and asks for a username, email and password. Confirm the email link to
+   finish setup. After setup, the account signs in with username and password.
+4. Create member records in the admin app. For each member, create a Supabase Auth
+   user in **Authentication → Users** using
+   `<lowercase-username>@users.mayma.invalid` and a temporary password. Mark the
+   account confirmed. Then copy the Auth user's UUID and assign the member row:
 
    ```sql
    insert into public.app_profiles (id, username, role, member_id)
    values ('AUTH_USER_UUID', 'member01', 'member', 1);
    ```
 
-   Replace the example UUID, username and member ID with actual values. Usernames
-   are lowercase, 3–32 letters, numbers, dots, underscores or hyphens. Profiles
-   can only be created or changed by the database owner in SQL Editor, so users
-   cannot grant themselves admin access.
-5. For existing Auth users, change their Auth email to the matching synthetic
-   address in Authentication → Users, mark it confirmed, then set `username` on
-   their existing profile. For example: `update public.app_profiles set
-   username='clubadmin' where id='AUTH_USER_UUID';` Do this once per account before
-   using the username sign-in page.
-4. Publish this repository with GitHub Pages: repository **Settings → Pages**,
-   select deploy from the `main` branch and `/ (root)`. The `index.html` landing
-   page and folder pages will then be served as a static site.
+   Replace the example UUID, username and member ID. Usernames are lowercase,
+   3–32 characters using letters, numbers, dots, underscores or hyphens. Profile
+   changes are restricted to the database owner, so a member cannot promote
+   themselves to admin.
+5. Publish this repository with GitHub Pages: repository **Settings → Pages**,
+   select deploy from the `main` branch and `/ (root)`.
+
+Supabase Auth uses an email identifier underneath username sign-in. Once the
+first admin verifies their real email, the database securely changes the Auth
+identifier to a non-deliverable username alias. Members use the same alias when
+their Auth account is created. Users only see and enter their username. An
+administrator must reset passwords in the Supabase dashboard because the alias
+cannot receive password recovery emails.
+
+If `schema.sql` was already run from an earlier version, run it again to add the
+username column and first-admin function. Existing profile rows need usernames.
+For each existing account, change its Auth email to
+`<lowercase-username>@users.mayma.invalid` in Authentication → Users, confirm it,
+and update `app_profiles.username` in SQL Editor before using username sign-in.
 
 ## Pages
 
@@ -60,14 +68,9 @@ and service-role keys out of this repository.
 
 ## Important
 
-- Sign-in asks only for a username and password. Supabase Auth requires an email
-  identifier underneath, so the app maps each username to the reserved,
-  non-deliverable address `username@users.mayma.invalid`. Users never enter or
-  see this address. In Authentication → Users, create the Auth account using
-  that exact synthetic address and mark it confirmed; do not use a real email.
-  Password resets must be done by an administrator in the Supabase dashboard
-  because the synthetic address cannot receive email. The app has no public
-  sign-up flow.
+- The first admin setup is shown only while the database has no admin profile.
+  Supabase email confirmation verifies the initial real email before the setup
+  function grants admin access. Later sign-in asks for username and password.
 - The SQL policies grant admin access only to profiles assigned `admin` by the
   database owner. Members can see their own profile, member record, race entries
   and clock receipts. The `submit_member_clock` function checks the member,
@@ -76,4 +79,4 @@ and service-role keys out of this repository.
   independently verified pigeon arrival.
 - Existing PHP/MySQL files and SMS support have been removed. Supabase schema
   setup preserves existing race data but does not transfer old password hashes;
-  create new Supabase Auth users and assign their profiles as above.
+  create new Supabase Auth users and assign member profiles as above.
