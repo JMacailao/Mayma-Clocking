@@ -10,7 +10,7 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.columns
              WHERE table_schema='public' AND table_name='app_profiles'
-               AND column_name='id' AND data_type='text') THEN
+               AND column_name='id' AND data_type='text') OR to_regclass('public.clubs') IS NOT NULL THEN
     RAISE EXCEPTION 'The Firebase version was applied. Run supabase-auth.sql instead of schema.sql.';
   END IF;
 END $$;

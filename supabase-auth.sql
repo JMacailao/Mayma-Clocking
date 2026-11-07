@@ -7,6 +7,16 @@
 -- Safe to re-run.
 BEGIN;
 
+-- Do not run this after multi-club.sql: it would remove the club columns.
+DO $$
+BEGIN
+  IF to_regclass('public.clubs') IS NOT NULL AND EXISTS (
+       SELECT 1 FROM information_schema.columns WHERE table_schema='public'
+       AND table_name='app_profiles' AND column_name='id' AND data_type='uuid') THEN
+    RAISE EXCEPTION 'multi-club.sql was already applied. Do not run supabase-auth.sql again.';
+  END IF;
+END $$;
+
 -- 1. Drop every policy so column/function changes below cannot be blocked ----------
 DO $$
 DECLARE r record;
