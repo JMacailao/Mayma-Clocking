@@ -14,13 +14,12 @@ The publishable key is safe in browser code; never add a service-role key.
    It creates the app tables when the database is fresh, enables row-level
    security, and adds protected clocking and first-admin setup functions.
 2. In **Authentication → Sign In / Providers → Email**, enable email sign-ups
-   and turn **Confirm email** off. This lets the first admin create an account
-   without waiting for email delivery.
-3. Open the site and choose a username and password (8 or more characters).
-   The first confirmed account becomes the administrator. Once setup finishes,
-   turn email confirmation back on if desired. Do the first setup while you
-   control access to the site: the first person to claim an empty database
-   becomes its administrator.
+   and turn **Confirm email** off. Supabase Auth controls email confirmation;
+   the website cannot disable it from browser code.
+3. Open the site while `app_profiles` has no admin. Create the super admin using
+   an email and password (8 or more characters). There is no email-confirmation
+   step when the Supabase setting above is off. The first person to complete
+   setup becomes the administrator, so do this before sharing the site.
 4. Create member records in the admin app. In **Authentication → Users**, add
    each member using `<lowercase-username>@users.mayma.invalid` and a temporary
    password, then mark the account confirmed. Assign the Auth user to the member
@@ -40,10 +39,10 @@ The publishable key is safe in browser code; never add a service-role key.
 5. Publish this repository with GitHub Pages: repository **Settings → Pages**,
    select deploy from the `main` branch and `/ (root)`.
 
-Supabase Auth needs an email identifier internally, so the app uses the reserved
-address `username@users.mayma.invalid` behind the scenes. Users only enter their
-username and password. These addresses cannot receive password-reset emails;
-an administrator must reset passwords in the Supabase dashboard.
+The super admin signs in with their email and password. Member accounts use the
+reserved internal address `username@users.mayma.invalid`; members sign in with
+their username and password. These member aliases cannot receive password-reset
+emails, so an administrator must reset member passwords in Supabase Auth.
 
 
 ## Pages
