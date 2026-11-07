@@ -67,7 +67,7 @@ async function initCrud(view,table) {
   const isMembers=table==='members';const columns=isMembers?[{key:'member_no',label:'Member ID'},{key:'full_name',label:'Name'},{key:'loft_name',label:'Loft'},{key:'paid',label:'Paid',render:r=>r.paid?'Yes':'No'}]:[{key:'location',label:'Location'},{key:'sector',label:'Sector'},{key:'latitude',label:'Latitude'},{key:'longitude',label:'Longitude'}];
   view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">${isMembers?'CLUB DIRECTORY':'RELEASE LOCATIONS'}</span><h2>${isMembers?'Members & lofts':'Race points'}</h2><p>${isMembers?'Maintain member records and loft coordinates.':'Save release points for new race schedules.'}</p></div><span class="count-pill" data-count>— records</span></div><section class="panel"><div class="panel-heading"><h3 data-form-title>${isMembers?'Add a member':'Add a race point'}</h3></div>${genericForm(fields[table])}</section><section class="panel"><div class="panel-heading"><h3>${isMembers?'Member list':'Saved locations'}</h3></div><div data-table></div></section>`;
   bindGeneric(view,table,fields[table],columns);
-  
+
 }
 async function racesPage(view) {
   const {data:points,error}=await supabase.from('race_points').select('id,location,sector,latitude,longitude').order('location');if(error)throw error;
