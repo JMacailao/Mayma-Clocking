@@ -1,49 +1,32 @@
 # Mayma Clocking
 
-A static club clocking app built with HTML, CSS, JavaScript and Supabase. It has
-separate folders for club administration and member pages. It uses Supabase
-Auth for sign-in and PostgreSQL row-level security for data access. No PHP
-server, Node runtime or database password is used by the browser app.
+A static club clocking app built with HTML, CSS, JavaScript and **Supabase only**
+(Supabase Auth + PostgreSQL). People sign in with a **username and password**, never
+an email address.
 
-## Set up Supabase
+## Set up
 
-The project URL and publishable key are configured in `assets/js/supabase.js`.
-The publishable key is safe in browser code; never add a service-role key.
+1. Open your Supabase project (`ddwzrjvlatdbwaiagxhp`) → **SQL Editor**.
+2. **Fresh database:** run `schema.sql`, then `supabase-auth.sql`.
+   **Already ran the Firebase version:** just run `supabase-auth.sql`; it switches
+   everything back to Supabase Auth. Firebase is no longer used and can be ignored.
+3. Open the site. On a fresh database the login page asks you to **create the
+   superadmin account** (username + password, 8+ characters). This screen appears only
+   once, while the database has no administrator. After that there is no public
+   registration.
+4. Publish with GitHub Pages: repository **Settings → Pages**, branch `main`, `/ (root)`.
 
-1. In the Supabase SQL Editor for project `ddwzrjvlatdbwaiagxhp`, run `schema.sql`.
-   It creates the app tables when the database is fresh, enables row-level
-   security, and adds protected clocking and first-admin setup functions.
-2. In **Authentication → Sign In / Providers → Email**, enable email sign-ups
-   and turn **Confirm email** off. Supabase Auth controls email confirmation;
-   the website cannot disable it from browser code.
-3. Open the site while `app_profiles` has no admin. Create the super admin using
-   an email and password (8 or more characters). There is no email-confirmation
-   step when the Supabase setting above is off. The first person to complete
-   setup becomes the administrator, so do this before sharing the site.
-4. Create member records in the admin app. In **Authentication → Users**, add
-   each member using `<lowercase-username>@users.mayma.invalid` and a temporary
-   password, then mark the account confirmed. Assign the Auth user to the member
-   row in SQL Editor:
+No Supabase Auth settings need changing: no email provider, no "Confirm email" switch.
 
-   ```sql
-   insert into public.app_profiles (id, username, role, member_id)
-   select id, 'member01', 'member', 1
-   from auth.users
-   where email = 'member01@users.mayma.invalid';
-   ```
-
-   Replace the example username and member ID. Usernames are lowercase,
-   3–32 characters using letters, numbers, dots, underscores or hyphens. Profile
-   changes are restricted to the database owner, so members cannot promote
-   themselves to admin.
-5. Publish this repository with GitHub Pages: repository **Settings → Pages**,
-   select deploy from the `main` branch and `/ (root)`.
-
-The super admin signs in with their email and password. Member accounts use the
-reserved internal address `username@users.mayma.invalid`; members sign in with
-their username and password. These member aliases cannot receive password-reset
-emails, so an administrator must reset member passwords in Supabase Auth.
-
+## Using it
+- **Add members:** Admin → Members. Fill in the details and an optional login
+  username and password, or use **Create login** / **Reset password** in the list.
+  Deleting a member deletes their login.
+- Usernames are lowercase, 3–32 characters: letters, numbers, dots, underscores or hyphens.
+- Supabase Auth needs an email-shaped identifier internally, so the app uses
+  `username@users.mayma.invalid` behind the scenes. Those addresses cannot receive
+  email; an administrator resets passwords from the Members page.
+- Logins created in the Firebase version stop working; the superadmin is created again.
 
 ## Pages
 
@@ -62,15 +45,9 @@ emails, so an administrator must reset member passwords in Supabase Auth.
 
 ## Important
 
-- The first-admin form is shown only while the database has no admin profile.
-  Configure Supabase Auth email confirmation as described above before setup;
-  the first signed-in account claims the admin role exactly once.
-- The SQL policies grant admin access only to profiles assigned `admin` by the
-  database owner. Members can see their own profile, member record, race entries
-  and clock receipts. The `submit_member_clock` function checks the member,
-  barcode, race status and release time, then writes a server timestamp.
-- Clocking receipts are provisional evidence of server receipt time, not
-  independently verified pigeon arrival.
-- Existing PHP/MySQL files and SMS support have been removed. Supabase schema
-  setup preserves existing race data but does not transfer old password hashes;
-  create new Supabase Auth users and assign member profiles as above.
+- Row-level security: administrators manage everything; members only see their own
+  record, entries and receipts. Members cannot promote themselves.
+- `submit_member_clock` and `admin_record_clock` check the member, barcode, race
+  status and release time, then write a server timestamp.
+- Clocking receipts are provisional evidence of server receipt time.
+- Never put a service-role key in browser code.
