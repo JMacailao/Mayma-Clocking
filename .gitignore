@@ -1,0 +1,10 @@
+# Local credentials and runtime files
+.env
+.env.*
+!.env.example
+/config.local.php
+/storage/*
+!/storage/.htaccess
+*.log
+/vendor/
+/node_modules/
