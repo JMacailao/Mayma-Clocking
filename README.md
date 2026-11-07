@@ -14,26 +14,26 @@ and service-role keys out of this repository.
 1. In the Supabase SQL Editor for project `ddwzrjvlatdbwaiagxhp`, run `schema.sql`.
    It enables RLS, creates role/profile helpers and restricts member clock
    submissions to the database function. Existing member/race records are kept.
-2. In Supabase **Authentication → Users**, create an account for the club admin.
-   Create the member rows from the admin app after an admin signs in. Create
-   member accounts in Auth only after their member row exists.
+2. Create a Supabase Auth user for each person. Use the username-only account method below.
+   Create member rows from the admin app before creating a member account.
 3. In Authentication → Users, copy the user's UUID. Assign the admin role in SQL:
 
    ```sql
-   insert into public.app_profiles (id, role, member_id)
-   values ('AUTH_USER_UUID', 'admin', null);
+   insert into public.app_profiles (id, username, role, member_id)
+   values ('AUTH_USER_UUID', 'clubadmin', 'admin', null);
    ```
 
    Assign a member account to a member row with:
 
    ```sql
-   insert into public.app_profiles (id, role, member_id)
-   values ('AUTH_USER_UUID', 'member', 1);
+   insert into public.app_profiles (id, username, role, member_id)
+   values ('AUTH_USER_UUID', 'member01', 'member', 1);
    ```
 
-   Replace the example UUID and member ID with the actual values. Profiles can
-   only be created or changed by the database owner in SQL Editor. This prevents
-   users from granting themselves admin access.
+   Replace the example UUID, username and member ID with actual values. Usernames
+   are lowercase, 3–32 letters, numbers, dots, underscores or hyphens. Profiles
+   can only be created or changed by the database owner in SQL Editor, so users
+   cannot grant themselves admin access.
 4. Publish this repository with GitHub Pages: repository **Settings → Pages**,
    select deploy from the `main` branch and `/ (root)`. The `index.html` landing
    page and folder pages will then be served as a static site.
@@ -55,8 +55,14 @@ and service-role keys out of this repository.
 
 ## Important
 
-- Supabase Auth accounts are managed in the Supabase dashboard. Sign-in uses
-  email and password; the app does not offer public sign-up.
+- Sign-in asks only for a username and password. Supabase Auth requires an email
+  identifier underneath, so the app maps each username to the reserved,
+  non-deliverable address `username@users.mayma.invalid`. Users never enter or
+  see this address. In Authentication → Users, create the Auth account using
+  that exact synthetic address and mark it confirmed; do not use a real email.
+  Password resets must be done by an administrator in the Supabase dashboard
+  because the synthetic address cannot receive email. The app has no public
+  sign-up flow.
 - The SQL policies grant admin access only to profiles assigned `admin` by the
   database owner. Members can see their own profile, member record, race entries
   and clock receipts. The `submit_member_clock` function checks the member,

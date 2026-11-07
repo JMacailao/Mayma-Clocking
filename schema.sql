@@ -76,11 +76,16 @@ CREATE INDEX IF NOT EXISTS idx_race_entries_member ON public.race_entries(member
 
 CREATE TABLE IF NOT EXISTS public.app_profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  username text UNIQUE CHECK (username IS NULL OR username ~ '^[a-z0-9][a-z0-9_.-]{2,31}$'),
   role text NOT NULL CHECK (role IN ('admin','member')),
   member_id bigint UNIQUE REFERENCES public.members(id) ON DELETE CASCADE,
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT app_profiles_member_role CHECK ((role='member' AND member_id IS NOT NULL) OR (role='admin' AND member_id IS NULL))
 );
+
+-- Add usernames safely when upgrading a project that already ran the prior schema.
+ALTER TABLE public.app_profiles ADD COLUMN IF NOT EXISTS username text;
+CREATE UNIQUE INDEX IF NOT EXISTS app_profiles_username_unique ON public.app_profiles (lower(username)) WHERE username IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION public.current_app_role()
 RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
