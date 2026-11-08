@@ -72,6 +72,13 @@ video#camera[hidden]{display:none}
 /* DMS coordinate entry and its live map preview */
 .coordinate-axis{grid-column:1/-1;display:grid;grid-template-columns:112px minmax(0,1fr);align-items:center;gap:14px;margin:2px 0}
 .coordinate-name{color:#33413a;font-size:13px;font-weight:650}
+.coordinate-decimal-fields{grid-column:1/-1;padding:15px;border:1px solid var(--line);border-radius:9px;background:#fafbf8}
+.coordinate-decimal-heading{display:flex;align-items:center;gap:10px}
+.coordinate-decimal-heading h3{margin:0;font-size:13px}
+.coordinate-decimal-heading>span{padding:4px 8px;border-radius:12px;background:#edf3ef;color:var(--green);font-size:10px;font-weight:700}
+.coordinate-decimal-fields>p{margin:6px 0 12px;color:var(--muted);font-size:11px;line-height:1.45}
+.coordinate-decimal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+.coordinate-decimal-grid .field{min-width:0}
 .coordinate-values{display:grid;grid-template-columns:88px minmax(68px,.75fr) minmax(68px,.75fr) minmax(90px,1fr);align-items:center;gap:9px;min-width:0}
 .coordinate-hemispheres{display:flex;align-items:center;gap:10px}
 .hemisphere-choice{display:inline-flex;align-items:center;gap:4px;color:#4f5e55;font-size:12px;font-weight:600;cursor:pointer}
@@ -100,6 +107,7 @@ video#camera[hidden]{display:none}
 .map-placeholder-mark svg{width:21px;height:21px}
 @media(max-width:720px){
   .coordinate-axis{grid-template-columns:1fr;gap:7px}
+  .coordinate-decimal-grid{grid-template-columns:1fr}
   .coordinate-values{grid-template-columns:68px repeat(3,minmax(0,1fr));gap:6px}
   .coordinate-part{gap:3px;font-size:12px}
   .coordinate-part input{height:46px;padding:0 6px;font-size:16px}
