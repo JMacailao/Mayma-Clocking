@@ -46,6 +46,10 @@ email-shaped identifier internally, so the app uses `username@users.mayma.invali
 behind the scenes. The superadmin resets club passwords; club administrators can
 change usernames and passwords for their own member and team accounts.
 
+The coordinate picker uses Google Maps JavaScript API in the browser. Restrict its
+browser key to the deployed website referrer and the Maps JavaScript API only; the
+static app must include that public browser key in `assets/js/app.js`.
+
 Data that existed before clubs were introduced is kept in a club named **Default club**.
 Create a club account with exactly that name to hand the old data to that club.
 

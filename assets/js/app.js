@@ -95,15 +95,20 @@ function coordinateMapHTML(fieldsList=[]) {
   const addressAction=addressTarget?'<div class="coordinate-map-tools"><button class="button secondary" type="button" data-get-address>Get Address</button><span data-address-status aria-live="polite">Click Get Address to fill coordinates and address from your current location.</span></div>':'';
   return `<section class="coordinate-map" data-coordinate-map data-address-target="${addressTarget}" aria-label="Satellite map preview">${addressAction}<div class="coordinate-map-heading"><div><h3>Satellite map</h3><p data-map-status aria-live="polite">Loading satellite imagery…</p><p class="map-interaction-hint">Tap or click the map to set coordinates. Drag to pan; use the plus and minus controls or scroll to zoom.</p></div><a data-map-link target="_blank" rel="noopener noreferrer" hidden>Open satellite map ↗</a></div><div class="coordinate-map-frame"><div class="coordinate-map-placeholder" data-map-placeholder><span class="map-placeholder-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.7"/></svg></span><span>Loading satellite imagery…</span></div><div class="coordinate-map-canvas" data-map-canvas hidden></div></div></section>`;
 }
-let leafletPromise=null;
-function loadLeaflet(){
-  if(window.L?.map)return Promise.resolve(window.L);
-  if(!leafletPromise){
-    const stylesheetReady=new Promise((resolve,reject)=>{const link=document.createElement('link');link.rel='stylesheet';link.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';link.dataset.leafletStyles='';link.onload=resolve;link.onerror=()=>reject(new Error('The map styles could not be loaded.'));document.head.append(link);});
-    const scriptReady=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';script.crossOrigin='anonymous';script.dataset.leafletScript='';script.onload=resolve;script.onerror=()=>reject(new Error('The map library could not be loaded.'));document.head.append(script);});
-    leafletPromise=Promise.all([stylesheetReady,scriptReady]).then(()=>window.L).catch(error=>{leafletPromise=null;throw error;});
-  }
-  return leafletPromise;
+const GOOGLE_MAPS_API_KEY='AIzaSyCmS46FCOenSNiQViPU03PMpkExfbH_GgU';
+let googleMapsPromise=null;
+function loadGoogleMaps(){
+  if(window.google?.maps?.Map)return Promise.resolve(window.google.maps);
+  if(!googleMapsPromise)googleMapsPromise=new Promise((resolve,reject)=>{
+    const callbackName='maymaGoogleMapsReady';
+    window[callbackName]=()=>{delete window[callbackName];resolve(window.google.maps);};
+    window.gm_authFailure=()=>{
+      document.querySelectorAll('[data-coordinate-map] [data-map-status]').forEach(status=>{status.textContent='Google Maps rejected the API key. Check API enablement, billing, and website restrictions.';});
+    };
+    const script=document.createElement('script');script.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&callback=${callbackName}&v=weekly`;script.async=true;script.dataset.googleMapsScript='';
+    script.onerror=()=>{delete window[callbackName];reject(new Error('Google Maps could not load. Check your internet connection and API key restrictions.'));};document.head.append(script);
+  }).catch(error=>{googleMapsPromise=null;throw error;});
+  return googleMapsPromise;
 }
 function fieldHTML([key,label,type,required],value='') {const id=`field-${key}`;if(type==='coordinates')return coordinateFieldHTML(key,label,value);if(type==='select')return `<label class="field"><span>${label}</span><select id="${id}" name="${key}"><option value="0">No</option><option value="1">Yes</option></select></label>`;return `<label class="field"><span>${label}</span><input id="${id}" name="${key}" type="${type}" ${type==='number'?`step="any" ${key==='latitude'?'min="-90" max="90"':key==='longitude'?'min="-180" max="180"':''}`:''} ${required?'required':''} value="${escapeHTML(value??'')}"></label>`;}
 function genericForm(fieldsList,button='Save') {const hasCoordinates=fieldsList.some(([, ,type])=>type==='coordinates');return `<form class="form-grid" id="record-form">${fieldsList.map(f=>fieldHTML(f)).join('')}${hasCoordinates?decimalCoordinateFields(fieldsList):''}${hasCoordinates?coordinateMapHTML(fieldsList):''}<div class="form-actions"><button class="button primary" type="submit">${button}</button><button class="button secondary" id="cancel-edit" type="button" hidden>Cancel</button></div></form>`;}
@@ -127,27 +132,25 @@ function bindCoordinateEditor(form) {
   const displaySatelliteMap=async(latitude,longitude)=>{
     const request=++mapRequest;canvas.hidden=false;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent='Loading satellite imagery…';
     try{
-      const L=await loadLeaflet();if(request!==mapRequest||!canvas.isConnected)return;
+      const maps=await loadGoogleMaps();if(request!==mapRequest||!canvas.isConnected)return;
       const point=[latitude,longitude],pointKey=point.map(value=>value.toFixed(7)).join(',');
       if(!mapInstance){
-        mapInstance=L.map(canvas,{center:point,zoom:15,zoomControl:true,scrollWheelZoom:true,dragging:true,touchZoom:true,doubleClickZoom:true});
-        const imagery=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'});
-        imagery.on('tileerror',()=>{if(canvas.isConnected)status.textContent='Satellite imagery could not load. Check your internet connection.';});
-        imagery.addTo(mapInstance);mapMarker=L.marker(point).addTo(mapInstance);
-        mapInstance.on('click',event=>{
-          set('latitude',event.latlng.lat);set('longitude',event.latlng.lng);refresh(true);
+        mapInstance=new maps.Map(canvas,{center:{lat:latitude,lng:longitude},zoom:15,mapTypeId:'satellite',mapTypeControl:true,streetViewControl:false,fullscreenControl:true,zoomControl:true,gestureHandling:'greedy'});
+        mapMarker=new maps.Marker({position:{lat:latitude,lng:longitude},map:mapInstance,title:'Selected location'});
+        mapInstance.addListener('click',event=>{
+          if(!event.latLng)return;
+          set('latitude',event.latLng.lat());set('longitude',event.latLng.lng());refresh(true);
           if(addressStatus)addressStatus.textContent='Map point selected. Coordinates are filled; update the address if needed.';
         });
       }else{
-        mapInstance.invalidateSize({pan:false});
-        mapMarker.setLatLng(point);
-        if(lastMapPoint!==pointKey)mapInstance.setView(point,mapInstance.getZoom(),{animate:false});
+        mapMarker.setPosition({lat:latitude,lng:longitude});
+        if(lastMapPoint!==pointKey)mapInstance.setCenter({lat:latitude,lng:longitude});
       }
       lastMapPoint=pointKey;placeholder.hidden=true;
-      requestAnimationFrame(()=>{if(request===mapRequest)mapInstance?.invalidateSize({pan:false});});
+      requestAnimationFrame(()=>{if(request===mapRequest&&mapInstance)maps.event.trigger(mapInstance,'resize');});
     }catch(error){
       if(request!==mapRequest)return;
-      canvas.hidden=true;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent='Satellite map could not load. Check your connection and try again.';status.textContent='The satellite map is unavailable right now.';console.error('Satellite map could not load:',error);
+      canvas.hidden=true;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent='Google Maps satellite imagery could not load. Check your connection and API key setup.';status.textContent=error.message||'Google Maps is unavailable right now.';console.error('Google Maps could not load:',error);
     }
   };
   const defaultMapPoint=[12.8797,121.7740];
@@ -162,7 +165,7 @@ function bindCoordinateEditor(form) {
     if(values.some(value=>!value.valid)){
       mapLink.hidden=true;status.textContent='Tap the satellite map to choose a location, or enter both coordinates above.';
       if(!mapInstance){canvas.hidden=false;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent='Loading the satellite map. Tap anywhere on it to choose coordinates.';mapTimer=setTimeout(()=>displaySatelliteMap(...defaultMapPoint),0);}
-      else{canvas.hidden=false;placeholder.hidden=true;requestAnimationFrame(()=>mapInstance?.invalidateSize({pan:false}));}
+      else{canvas.hidden=false;placeholder.hidden=true;requestAnimationFrame(()=>{if(mapInstance)google.maps.event.trigger(mapInstance,'resize');});}
       return;
     }
     const latitude=values.find((_,index)=>axes[index].dataset.coordinateAxis==='latitude').value,longitude=values.find((_,index)=>axes[index].dataset.coordinateAxis==='longitude').value;
