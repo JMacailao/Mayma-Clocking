@@ -77,10 +77,12 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/admin/race-points/`: release locations.
 - `pages/admin/races/`: race schedules and status.
 - `pages/admin/entries/`: registered pigeons and barcodes, with photo/PDF race-sheet
-  OCR, barcode decoding, Excel template export/import, an editable review table, and
-  checks for registered members and stickers. Photo/PDF scans and `.xlsx`, `.xls`, or
-  `.csv` imports use the same review flow; invalid rows remain visible with their
-  errors highlighted before saving.
+  OCR for printed and handwritten IDs/rings, barcode decoding, Excel template
+  export/import, an editable review table, and checks for registered members and
+  stickers. Photo/PDF scans and `.xlsx`, `.xls`, or
+  `.csv` imports use the same review flow; embedded barcode pictures in the `.xlsx`
+  Barcode Number column are decoded into their rows. Invalid rows remain visible with
+  their errors highlighted before saving.
 - `pages/admin/clocking/`: admin receipts.
 - `pages/admin/results/`: provisional leaderboard.
 - `pages/member/dashboard/`: a member's open races.
