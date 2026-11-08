@@ -93,7 +93,7 @@ function decimalCoordinateFields(fieldsList=[]) {
 function coordinateMapHTML(fieldsList=[]) {
   const addressTarget=fieldsList.some(([key])=>key==='address')?'address':'';
   const addressAction=addressTarget?'<div class="coordinate-map-tools"><button class="button secondary" type="button" data-get-address>Get Address</button><span data-address-status aria-live="polite">Click Get Address to fill coordinates and address from your current location.</span></div>':'';
-  return `<section class="coordinate-map" data-coordinate-map data-address-target="${addressTarget}" aria-label="Satellite map preview">${addressAction}<div class="coordinate-map-heading"><div><h3>Satellite map</h3><p data-map-status aria-live="polite">Enter coordinates to load satellite imagery.</p><p class="map-interaction-hint">Tap or click the map to set coordinates. Drag to pan; use the plus and minus controls or scroll to zoom.</p></div><a data-map-link target="_blank" rel="noopener noreferrer" hidden>Open satellite map ↗</a></div><div class="coordinate-map-frame"><div class="coordinate-map-placeholder" data-map-placeholder><span class="map-placeholder-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.7"/></svg></span><span>Enter both coordinates to load satellite imagery.</span></div><div class="coordinate-map-canvas" data-map-canvas hidden></div></div></section>`;
+  return `<section class="coordinate-map" data-coordinate-map data-address-target="${addressTarget}" aria-label="Satellite map preview">${addressAction}<div class="coordinate-map-heading"><div><h3>Satellite map</h3><p data-map-status aria-live="polite">Loading satellite imagery…</p><p class="map-interaction-hint">Tap or click the map to set coordinates. Drag to pan; use the plus and minus controls or scroll to zoom.</p></div><a data-map-link target="_blank" rel="noopener noreferrer" hidden>Open satellite map ↗</a></div><div class="coordinate-map-frame"><div class="coordinate-map-placeholder" data-map-placeholder><span class="map-placeholder-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.7"/></svg></span><span>Loading satellite imagery…</span></div><div class="coordinate-map-canvas" data-map-canvas hidden></div></div></section>`;
 }
 let leafletPromise=null;
 function loadLeaflet(){
@@ -150,10 +150,20 @@ function bindCoordinateEditor(form) {
       canvas.hidden=true;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent='Satellite map could not load. Check your connection and try again.';status.textContent='The satellite map is unavailable right now.';console.error('Satellite map could not load:',error);
     }
   };
+  const defaultMapPoint=[12.8797,121.7740];
   const refresh=(immediate=false)=>{
     clearTimeout(mapTimer);const values=axes.map(readAxis),problem=values.find(value=>value.error);
-    if(problem||values.some(value=>!value.valid)){
-      mapRequest++;canvas.hidden=true;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent=problem?'Check the coordinate values above.':'Enter both coordinates to load satellite imagery.';mapLink.hidden=true;status.textContent=problem?problem.error:'Enter both coordinates to load satellite imagery.';return;
+    if(problem){
+      mapLink.hidden=true;
+      if(mapInstance){canvas.hidden=false;placeholder.hidden=true;}
+      else{canvas.hidden=false;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent='Loading the satellite map. Correct the coordinate or tap the map to choose a new location.';mapTimer=setTimeout(()=>displaySatelliteMap(...defaultMapPoint),0);}
+      status.textContent=problem.error;return;
+    }
+    if(values.some(value=>!value.valid)){
+      mapLink.hidden=true;status.textContent='Tap the satellite map to choose a location, or enter both coordinates above.';
+      if(!mapInstance){canvas.hidden=false;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent='Loading the satellite map. Tap anywhere on it to choose coordinates.';mapTimer=setTimeout(()=>displaySatelliteMap(...defaultMapPoint),0);}
+      else{canvas.hidden=false;placeholder.hidden=true;requestAnimationFrame(()=>mapInstance?.invalidateSize({pan:false}));}
+      return;
     }
     const latitude=values.find((_,index)=>axes[index].dataset.coordinateAxis==='latitude').value,longitude=values.find((_,index)=>axes[index].dataset.coordinateAxis==='longitude').value;
     const mapUrl=new URL('https://www.google.com/maps/@');mapUrl.searchParams.set('api','1');mapUrl.searchParams.set('map_action','map');mapUrl.searchParams.set('center',`${latitude},${longitude}`);mapUrl.searchParams.set('zoom','17');mapUrl.searchParams.set('basemap','satellite');
