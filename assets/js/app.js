@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js';
-const signOutUser = () => supabase.auth.signOut();
+const signOutUser = async() => {const {error}=await supabase.auth.signOut({scope:'local'});if(error)throw error;};
 
 const body = document.body;
 const BASE = body.dataset.base || '../../';
@@ -59,7 +59,7 @@ async function guard(role,active) {
     if(identity.profile.role!==role&&!staffOnAdminPage) { location.href=homeFor(identity.profile.role); return null; }
     body.classList.toggle('member-body',role==='member');
     document.querySelector('#app-shell').innerHTML=`<aside class="sidebar"><a class="brand" href="${homeFor(role)}"><span class="brand-mark">✳</span><span>Mayma<span class="brand-sub">RACE CLOCKING</span></span></a><div class="nav-label">${role==='superadmin'?'SUPERADMIN':identity.profile.role==='admin'?'MANAGEMENT':identity.profile.role==='staff'?'STAFF':'MEMBER AREA'}</div><nav>${role==='superadmin'?superadminNav(active):role==='admin'?adminNav(active,identity.profile.role==='admin'):memberNav(active)}</nav><div class="sidebar-bottom"><div class="signed-in"><span class="avatar">${escapeHTML((identity.profile.username||'M')[0].toUpperCase())}</span><span class="signed-email">${escapeHTML(identity.profile.username||'Account')}</span></div><button class="nav-link signout" id="sign-out"><span class="nav-icon">↪</span>Sign out</button></div></aside><main class="main"><div class="nav-backdrop" id="nav-backdrop"></div><header class="topbar"><div class="topbar-left"><button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open menu">☰</button><div><div class="eyebrow">${escapeHTML(role==='superadmin'?'SUPERADMIN':(identity.club?.name||'PIGEON RACING CLUB').toUpperCase())}</div><h1>${escapeHTML(document.body.dataset.title||'Race clocking')}</h1></div></div><div class="topbar-right"><span class="live-dot"></span><span>Supabase connected</span><span class="timezone">PH · UTC+8</span></div></header><div class="page-content"><div data-message class="notice" hidden></div><section class="page-view" data-view="${escapeHTML(body.dataset.view)}"></section><footer>Clock receipts are recorded by Supabase server time and remain provisional until verified by the club.</footer></div></main>${role==='member'?memberBottomNav(active):''}`;
-    document.querySelector('#menu-toggle').onclick=()=>body.classList.toggle('nav-open');document.querySelector('#nav-backdrop').onclick=()=>body.classList.remove('nav-open');document.querySelector('#sign-out').addEventListener('click',async()=>{await signOutUser();location.href=url('pages/login/index.html');});
+    document.querySelector('#menu-toggle').onclick=()=>body.classList.toggle('nav-open');document.querySelector('#nav-backdrop').onclick=()=>body.classList.remove('nav-open');document.querySelector('#sign-out').addEventListener('click',async(event)=>{const button=event.currentTarget;if(button.disabled)return;button.disabled=true;button.setAttribute('aria-busy','true');button.querySelector('.nav-icon').textContent='…';try{await Promise.race([signOutUser(),new Promise(resolve=>setTimeout(resolve,1800))]);}catch(error){console.warn('Supabase local sign-out failed; redirecting to sign-in:',error);}finally{location.replace(url('pages/login/index.html'));}});
     return identity;
   } catch(error){fail(error);return null;}
 }
@@ -88,13 +88,23 @@ function coordinateFieldHTML(key,label,value='') {
 function coordinateMapHTML(fieldsList=[]) {
   const addressTarget=fieldsList.some(([key])=>key==='address')?'address':'';
   const addressAction=addressTarget?'<div class="coordinate-map-tools"><button class="button secondary" type="button" data-get-address>Get Address</button><span data-address-status aria-live="polite">Click Get Address to fill coordinates and address from your current location.</span></div>':'';
-  return `<section class="coordinate-map" data-coordinate-map data-address-target="${addressTarget}" aria-label="Coordinate map preview">${addressAction}<div class="coordinate-map-heading"><div><h3>Static map preview</h3><p data-map-status aria-live="polite">Enter coordinates to show the map preview. Use the map link to pan or zoom.</p></div><a data-map-link target="_blank" rel="noopener noreferrer" hidden>Open in OpenStreetMap ↗</a></div><div class="coordinate-map-frame"><div class="coordinate-map-placeholder" data-map-placeholder><span class="map-placeholder-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.7"/></svg></span><span>Enter both coordinates to show the map.</span></div><iframe data-map-frame title="Static map preview for the entered coordinates" tabindex="-1" aria-hidden="true" referrerpolicy="strict-origin-when-cross-origin" hidden></iframe></div></section>`;
+  return `<section class="coordinate-map" data-coordinate-map data-address-target="${addressTarget}" aria-label="Satellite map preview">${addressAction}<div class="coordinate-map-heading"><div><h3>Satellite map</h3><p data-map-status aria-live="polite">Enter coordinates to load satellite imagery.</p><p class="map-interaction-hint">Drag to pan; use the plus and minus controls or scroll to zoom.</p></div><a data-map-link target="_blank" rel="noopener noreferrer" hidden>Open satellite map ↗</a></div><div class="coordinate-map-frame"><div class="coordinate-map-placeholder" data-map-placeholder><span class="map-placeholder-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.7"/></svg></span><span>Enter both coordinates to load satellite imagery.</span></div><div class="coordinate-map-canvas" data-map-canvas hidden></div></div></section>`;
+}
+let leafletPromise=null;
+function loadLeaflet(){
+  if(window.L?.map)return Promise.resolve(window.L);
+  if(!leafletPromise){
+    const stylesheetReady=new Promise((resolve,reject)=>{const link=document.createElement('link');link.rel='stylesheet';link.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';link.dataset.leafletStyles='';link.onload=resolve;link.onerror=()=>reject(new Error('The map styles could not be loaded.'));document.head.append(link);});
+    const scriptReady=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';script.crossOrigin='anonymous';script.dataset.leafletScript='';script.onload=resolve;script.onerror=()=>reject(new Error('The map library could not be loaded.'));document.head.append(script);});
+    leafletPromise=Promise.all([stylesheetReady,scriptReady]).then(()=>window.L).catch(error=>{leafletPromise=null;throw error;});
+  }
+  return leafletPromise;
 }
 function fieldHTML([key,label,type,required],value='') {const id=`field-${key}`;if(type==='coordinates')return coordinateFieldHTML(key,label,value);if(type==='select')return `<label class="field"><span>${label}</span><select id="${id}" name="${key}"><option value="0">No</option><option value="1">Yes</option></select></label>`;return `<label class="field"><span>${label}</span><input id="${id}" name="${key}" type="${type}" ${type==='number'?`step="any" ${key==='latitude'?'min="-90" max="90"':key==='longitude'?'min="-180" max="180"':''}`:''} ${required?'required':''} value="${escapeHTML(value??'')}"></label>`;}
 function genericForm(fieldsList,button='Save') {const hasCoordinates=fieldsList.some(([, ,type])=>type==='coordinates');return `<form class="form-grid" id="record-form">${fieldsList.map(f=>fieldHTML(f)).join('')}${hasCoordinates?coordinateMapHTML(fieldsList):''}<div class="form-actions"><button class="button primary" type="submit">${button}</button><button class="button secondary" id="cancel-edit" type="button" hidden>Cancel</button></div></form>`;}
 function bindCoordinateEditor(form) {
   const axes=[...form.querySelectorAll('[data-coordinate-axis]')],preview=form.querySelector('[data-coordinate-map]');if(!axes.length||!preview)return {set(){},refresh(){},validate(){return true;}};
-  const status=preview.querySelector('[data-map-status]'),frame=preview.querySelector('[data-map-frame]'),placeholder=preview.querySelector('[data-map-placeholder]'),mapLink=preview.querySelector('[data-map-link]'),addressButton=preview.querySelector('[data-get-address]'),addressStatus=preview.querySelector('[data-address-status]');let mapTimer=null,lastAddressLookup=0;
+  const status=preview.querySelector('[data-map-status]'),canvas=preview.querySelector('[data-map-canvas]'),placeholder=preview.querySelector('[data-map-placeholder]'),mapLink=preview.querySelector('[data-map-link]'),addressButton=preview.querySelector('[data-get-address]'),addressStatus=preview.querySelector('[data-address-status]');let mapTimer=null,lastAddressLookup=0,mapInstance=null,mapMarker=null,lastMapPoint=null,mapRequest=0;
   const readAxis=axis=>{
     const degree=axis.querySelector('[data-coordinate-part="degrees"]'),minute=axis.querySelector('[data-coordinate-part="minutes"]'),second=axis.querySelector('[data-coordinate-part="seconds"]'),hidden=axis.querySelector('[data-coordinate-value]'),hemisphere=axis.querySelector('input[type="radio"]:checked')?.value||'N',limit=Number(axis.dataset.coordinateLimit);
     const fields=[degree,minute,second];fields.forEach(field=>{field.setCustomValidity('');field.removeAttribute('aria-invalid');});
@@ -104,18 +114,37 @@ function bindCoordinateEditor(form) {
     if(error){degree.setCustomValidity(error);degree.setAttribute('aria-invalid','true');hidden.value='';return {valid:false,error};}
     const magnitude=d+(m/60)+(s/3600),sign=(hemisphere==='S'||hemisphere==='W')?-1:1,decimal=Number((magnitude*sign).toFixed(7));hidden.value=decimal.toFixed(7);return {valid:true,value:decimal};
   };
+  const displaySatelliteMap=async(latitude,longitude)=>{
+    const request=++mapRequest;canvas.hidden=false;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent='Loading satellite imagery…';
+    try{
+      const L=await loadLeaflet();if(request!==mapRequest||!canvas.isConnected)return;
+      const point=[latitude,longitude],pointKey=point.map(value=>value.toFixed(7)).join(',');
+      if(!mapInstance){
+        mapInstance=L.map(canvas,{center:point,zoom:15,zoomControl:true,scrollWheelZoom:true,dragging:true,touchZoom:true,doubleClickZoom:true});
+        const imagery=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'});
+        imagery.on('tileerror',()=>{if(canvas.isConnected)status.textContent='Satellite imagery could not load. Check your internet connection.';});
+        imagery.addTo(mapInstance);mapMarker=L.marker(point).addTo(mapInstance);
+      }else{
+        mapInstance.invalidateSize({pan:false});
+        mapMarker.setLatLng(point);
+        if(lastMapPoint!==pointKey)mapInstance.setView(point,mapInstance.getZoom(),{animate:false});
+      }
+      lastMapPoint=pointKey;placeholder.hidden=true;
+      requestAnimationFrame(()=>{if(request===mapRequest)mapInstance?.invalidateSize({pan:false});});
+    }catch(error){
+      if(request!==mapRequest)return;
+      canvas.hidden=true;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent='Satellite map could not load. Check your connection and try again.';status.textContent='The satellite map is unavailable right now.';console.error('Satellite map could not load:',error);
+    }
+  };
   const refresh=(immediate=false)=>{
     clearTimeout(mapTimer);const values=axes.map(readAxis),problem=values.find(value=>value.error);
     if(problem||values.some(value=>!value.valid)){
-      frame.hidden=true;frame.removeAttribute('src');placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent=problem?'Check the coordinate values above.':'Enter both coordinates to show the static map preview.';mapLink.hidden=true;status.textContent=problem?problem.error:'Enter both coordinates to show the static map preview.';return;
+      mapRequest++;canvas.hidden=true;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent=problem?'Check the coordinate values above.':'Enter both coordinates to load satellite imagery.';mapLink.hidden=true;status.textContent=problem?problem.error:'Enter both coordinates to load satellite imagery.';return;
     }
     const latitude=values.find((_,index)=>axes[index].dataset.coordinateAxis==='latitude').value,longitude=values.find((_,index)=>axes[index].dataset.coordinateAxis==='longitude').value;
-    const pointUrl=new URL('https://www.openstreetmap.org/'),embedUrl=new URL('https://www.openstreetmap.org/export/embed.html'),padding=0.015;
-    pointUrl.searchParams.set('mlat',latitude);pointUrl.searchParams.set('mlon',longitude);pointUrl.hash=`map=15/${latitude}/${longitude}`;
-    const west=Math.max(-180,longitude-padding),south=Math.max(-90,latitude-padding),east=Math.min(180,longitude+padding),north=Math.min(90,latitude+padding);
-    const bbox=[west,south,east,north].map(value=>Number(value.toFixed(7))).join(',');embedUrl.searchParams.set('bbox',bbox);embedUrl.searchParams.set('layer','mapnik');embedUrl.searchParams.set('marker',`${latitude},${longitude}`);
-    mapLink.href=pointUrl.toString();mapLink.hidden=false;frame.title=`Static map preview at ${latitude}, ${longitude}`;frame.hidden=true;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent='Updating map preview…';status.textContent=`Static preview at ${latitude.toFixed(6)}, ${longitude.toFixed(6)}.`;
-    mapTimer=setTimeout(()=>{frame.src=embedUrl.toString();frame.hidden=false;placeholder.hidden=true;},immediate?0:450);
+    const mapUrl=new URL('https://www.google.com/maps/@');mapUrl.searchParams.set('api','1');mapUrl.searchParams.set('map_action','map');mapUrl.searchParams.set('center',`${latitude},${longitude}`);mapUrl.searchParams.set('zoom','17');mapUrl.searchParams.set('basemap','satellite');
+    mapLink.href=mapUrl.toString();mapLink.hidden=false;status.textContent=`Satellite view at ${latitude.toFixed(6)}, ${longitude.toFixed(6)}.`;
+    mapTimer=setTimeout(()=>displaySatelliteMap(latitude,longitude),immediate?0:450);
   };
   const set=(key,value)=>{
     const axis=axes.find(item=>item.dataset.coordinateAxis===key);if(!axis)return;const parts=decimalToDms(value,key);

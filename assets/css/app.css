@@ -90,10 +90,11 @@ video#camera[hidden]{display:none}
 .coordinate-map-heading p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}
 .coordinate-map-heading a{min-height:40px;display:inline-flex;align-items:center;color:var(--green);font-size:12px;font-weight:650;white-space:nowrap}
 .coordinate-map-heading a[hidden]{display:none}
-.coordinate-map-frame{position:relative;min-height:250px;overflow:hidden;border:1px solid var(--line);border-radius:9px;background:#eef1eb}
-.coordinate-map-frame iframe{display:block;width:100%;height:280px;border:0;background:#eef1eb;pointer-events:none}
-.coordinate-map-frame iframe[hidden]{display:none}
-.coordinate-map-placeholder{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:10px;padding:22px;color:#69766d;text-align:center;font-size:12px}
+.map-interaction-hint{margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.4}
+.coordinate-map-frame{position:relative;height:300px;overflow:hidden;border:1px solid var(--line);border-radius:9px;background:#eef1eb}
+.coordinate-map-canvas{width:100%;height:100%;background:#e8ece5}
+.coordinate-map-canvas[hidden]{display:none}
+.coordinate-map-placeholder{position:absolute;z-index:1000;inset:0;display:grid;place-content:center;justify-items:center;gap:10px;padding:22px;background:#eef1eb;color:#69766d;text-align:center;font-size:12px}
 .coordinate-map-placeholder[hidden]{display:none}
 .map-placeholder-mark{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#e2ece4;color:var(--green)}
 .map-placeholder-mark svg{width:21px;height:21px}
@@ -106,8 +107,7 @@ video#camera[hidden]{display:none}
   .coordinate-map-heading a{min-height:44px}
   .coordinate-map-tools{align-items:flex-start;flex-direction:column;gap:5px}
   .coordinate-map-tools .button{min-height:44px}
-  .coordinate-map-frame{min-height:220px}
-  .coordinate-map-frame iframe{height:240px}
+  .coordinate-map-frame{height:260px}
 }
 @media(max-width:360px){.coordinate-values{grid-template-columns:58px repeat(3,minmax(0,1fr));gap:4px}.coordinate-part input{padding:0 4px}}
 
