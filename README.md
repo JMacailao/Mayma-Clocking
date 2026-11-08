@@ -63,7 +63,9 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/superadmin/stickers/generate/`: generate batches that register their unique
   barcode numbers automatically, then export a 20-per-A4 Word sheet or print it.
 - `pages/admin/dashboard/`: club overview.
-- `pages/admin/members/`: member and loft records.
+- `pages/admin/members/`: member and loft records, with `.xlsx`, `.xls`, and `.csv`
+  import. The Excel template lists required columns; imports validate duplicates and
+  coordinates before saving and do not create login accounts.
 - `pages/admin/users/`: create, edit credentials, disable and reactivate administrator or staff accounts.
 - `pages/admin/race-points/`: release locations.
 - `pages/admin/races/`: race schedules and status.

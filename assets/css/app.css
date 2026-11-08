@@ -246,3 +246,10 @@ video#camera[hidden]{display:none}
 .sticker-cell strong{display:block;color:#111;font-size:15px;line-height:1.2;font-variant-numeric:tabular-nums}
 .sticker-cell.sticker-empty{background:#fafbf9}
 @media(max-width:720px){.sticker-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.sticker-actions .button{min-width:0}.sticker-preview-page{min-width:580px;padding:9px}.sticker-preview{margin-right:-4px}.sticker-cell{height:68px;padding:4px}.sticker-cell svg{height:38px}.sticker-cell strong{font-size:12px}}
+
+.member-list-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.member-import-panel .panel-heading{align-items:flex-start}
+.member-import-panel .panel-heading>div{max-width:760px}
+.member-import-panel .panel-heading p{margin:6px 0 0;color:var(--muted);line-height:1.5}
+.import-issue-list{margin:9px 0 0;padding-left:20px;line-height:1.6}
+@media(max-width:720px){.member-list-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.member-list-actions>[data-add-member]{grid-column:1/-1}.member-list-actions .button{width:100%;min-width:0}}

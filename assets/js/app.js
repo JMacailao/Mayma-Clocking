@@ -112,6 +112,66 @@ function loadGoogleMaps(){
 }
 function fieldHTML([key,label,type,required],value='') {const id=`field-${key}`;if(type==='coordinates')return coordinateFieldHTML(key,label,value);if(type==='select')return `<label class="field"><span>${label}</span><select id="${id}" name="${key}"><option value="0">No</option><option value="1">Yes</option></select></label>`;return `<label class="field"><span>${label}</span><input id="${id}" name="${key}" type="${type}" ${type==='number'?`step="any" ${key==='latitude'?'min="-90" max="90"':key==='longitude'?'min="-180" max="180"':''}`:''} ${required?'required':''} value="${escapeHTML(value??'')}"></label>`;}
 function genericForm(fieldsList,button='Save') {const hasCoordinates=fieldsList.some(([, ,type])=>type==='coordinates');return `<form class="form-grid" id="record-form">${fieldsList.map(f=>fieldHTML(f)).join('')}${hasCoordinates?decimalCoordinateFields(fieldsList):''}${hasCoordinates?coordinateMapHTML(fieldsList):''}<div class="form-actions"><button class="button primary" type="submit">${button}</button><button class="button secondary" id="cancel-edit" type="button" hidden>Cancel</button></div></form>`;}
+let spreadsheetParserPromise=null;
+function loadSpreadsheetParser(){
+  if(window.XLSX?.read)return Promise.resolve(window.XLSX);
+  if(!spreadsheetParserPromise)spreadsheetParserPromise=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');script.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';script.crossOrigin='anonymous';script.dataset.sheetjs='';
+    script.onload=()=>window.XLSX?.read?resolve(window.XLSX):reject(new Error('The Excel reader did not load.'));
+    script.onerror=()=>reject(new Error('Could not load the Excel reader. Check your internet connection.'));
+    document.head.append(script);
+  }).catch(error=>{spreadsheetParserPromise=null;document.querySelector('[data-sheetjs]')?.remove();throw error;});
+  return spreadsheetParserPromise;
+}
+const memberImportAliases={
+  member_no:['memberid','memberno','membernumber','id'],
+  full_name:['fullname','membername','name'],
+  first_name:['firstname','givenname'],
+  middle_name:['middlename'],
+  last_name:['lastname','surname','familyname'],
+  loft_name:['loftname','loft'],
+  address:['address','homeaddress'],
+  phone:['phone','phonenumber','contactnumber','mobile'],
+  paid:['paid','membershippaid','paymentstatus','membershipstatus'],
+  latitude:['latitude','lat','latitudedd','latitudedecimal','latitudedecimaldegrees'],
+  longitude:['longitude','lon','lng','long','longitudedd','longitudedecimal','longitudedecimaldegrees']
+};
+const normalizeImportHeader=value=>String(value??'').toLowerCase().replace(/[^a-z0-9]/g,'');
+function parseMemberWorksheet(XLSX,arrayBuffer){
+  const workbook=XLSX.read(arrayBuffer,{type:'array',cellDates:false});
+  if(!workbook.SheetNames?.length)throw new Error('The Excel file has no worksheet.');
+  const sheet=workbook.Sheets[workbook.SheetNames[0]],matrix=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false,blankrows:false});
+  if(!matrix.length)throw new Error('The first worksheet is empty.');
+  const headerRowIndex=matrix.slice(0,10).findIndex(row=>{
+    const headers=new Set(row.map(normalizeImportHeader));
+    const has=key=>memberImportAliases[key].some(alias=>headers.has(normalizeImportHeader(alias)));
+    return has('member_no')&&has('loft_name')&&has('latitude')&&has('longitude')&&(has('full_name')||(has('first_name')&&has('last_name')));
+  });
+  if(headerRowIndex<0)throw new Error('Could not find the member column headings in the first 10 rows. Include Member ID, Full name (or First name and Last name), Loft name, Latitude, and Longitude.');
+  const header=matrix[headerRowIndex].map(normalizeImportHeader),columns={};
+  for(const [field,aliases] of Object.entries(memberImportAliases))columns[field]=header.findIndex(value=>aliases.some(alias=>value===normalizeImportHeader(alias)));
+  const cell=(row,field)=>{const index=columns[field];return index<0?'':String(row[index]??'').trim();};
+  const dataRows=matrix.slice(headerRowIndex+1).map((row,index)=>({row,rowNumber:headerRowIndex+index+2})).filter(item=>item.row.some(value=>String(value??'').trim()!==''));
+  if(dataRows.length>500)throw new Error('Import up to 500 members at a time. Split this worksheet into smaller batches.');
+  const members=[],issues=[],seen=new Set();
+  for(const item of dataRows){
+    const row=item.row,errors=[],memberNo=cell(row,'member_no'),firstName=cell(row,'first_name'),middleName=cell(row,'middle_name'),lastName=cell(row,'last_name');
+    const fullName=cell(row,'full_name')||[firstName,middleName,lastName].filter(Boolean).join(' '),loftName=cell(row,'loft_name');
+    const latitudeText=cell(row,'latitude'),longitudeText=cell(row,'longitude'),latitude=Number(latitudeText),longitude=Number(longitudeText);
+    if(!memberNo)errors.push('Member ID is missing.');else if(memberNo.length>40)errors.push('Member ID exceeds 40 characters.');
+    if(!fullName)errors.push('Full name or first and last name is required.');else if(fullName.length>180)errors.push('Full name exceeds 180 characters.');
+    if(!loftName)errors.push('Loft name is missing.');else if(loftName.length>180)errors.push('Loft name exceeds 180 characters.');
+    if(!latitudeText||!Number.isFinite(latitude)||latitude < -90||latitude > 90)errors.push('Latitude must be a decimal value from -90 to 90.');
+    if(!longitudeText||!Number.isFinite(longitude)||longitude < -180||longitude > 180)errors.push('Longitude must be a decimal value from -180 to 180.');
+    for(const [value,label,max] of [[firstName,'First name',180],[middleName,'Middle name',180],[lastName,'Last name',180],[cell(row,'address'),'Address',500],[cell(row,'phone'),'Phone',40]])if(value.length>max)errors.push(`${label} exceeds ${max} characters.`);
+    const paidText=cell(row,'paid').toLowerCase();let paid=0;
+    if(['yes','y','true','1','paid'].includes(paidText))paid=1;else if(['','no','n','false','0','unpaid'].includes(paidText))paid=0;else errors.push('Membership paid must be Yes/No or 1/0.');
+    if(memberNo){const normalized=memberNo.toLocaleLowerCase();if(seen.has(normalized))errors.push('Member ID appears more than once in this file.');else seen.add(normalized);}
+    if(errors.length){issues.push({rowNumber:item.rowNumber,errors});continue;}
+    members.push({__rowNumber:item.rowNumber,member_no:memberNo,full_name:fullName,first_name:firstName||null,middle_name:middleName||null,last_name:lastName||null,loft_name:loftName,address:cell(row,'address')||null,phone:cell(row,'phone')||null,paid,latitude:Number(latitude.toFixed(7)),longitude:Number(longitude.toFixed(7))});
+  }
+  return {members,issues,dataRows:dataRows.length};
+}
 function bindCoordinateEditor(form) {
   const axes=[...form.querySelectorAll('[data-coordinate-axis]')],preview=form.querySelector('[data-coordinate-map]');if(!axes.length||!preview)return {set(){},refresh(){},validate(){return true;}};
   const status=preview.querySelector('[data-map-status]'),canvas=preview.querySelector('[data-map-canvas]'),placeholder=preview.querySelector('[data-map-placeholder]'),mapLink=preview.querySelector('[data-map-link]'),addressButton=preview.querySelector('[data-get-address]'),addressStatus=preview.querySelector('[data-address-status]');let mapTimer=null,lastAddressLookup=0,mapInstance=null,mapMarker=null,lastMapPoint=null,mapRequest=0;
@@ -211,7 +271,7 @@ function bindCoordinateEditor(form) {
   return {set,refresh,validate(){refresh(true);const values=axes.map(readAxis);values.forEach((value,index)=>{if(value.missing){const degree=axes[index].querySelector('[data-coordinate-part="degrees"]');degree.setCustomValidity('Enter this coordinate as DMS or decimal degrees.');degree.setAttribute('aria-invalid','true');}});return values.every(value=>value.valid);}};
 }
 function bindGeneric(view,table,fieldsList,columns,defaults={},withAccounts=false) {
-  const records=[];const form=view.querySelector('#record-form');let editing=null;const coordinateEditor=bindCoordinateEditor(form),memberFormPanel=view.querySelector('[data-member-form-panel]'),addMemberButton=view.querySelector('[data-add-member]');
+  const records=[];const form=view.querySelector('#record-form');let editing=null;const coordinateEditor=bindCoordinateEditor(form),memberFormPanel=view.querySelector('[data-member-form-panel]'),addMemberButton=view.querySelector('[data-add-member]'),importPanel=view.querySelector('[data-member-import-panel]'),importFile=view.querySelector('#member-import-file');let pendingImportRows=[];
   const setMemberFormOpen=open=>{if(!memberFormPanel)return;memberFormPanel.hidden=!open;addMemberButton.hidden=open;};
   if(addMemberButton)addMemberButton.onclick=()=>{editing=null;form.reset();coordinateEditor.refresh(true);form.querySelectorAll('[data-account-field]').forEach(el=>el.hidden=false);form.querySelector('#cancel-edit').hidden=false;form.querySelector('[type=submit]').textContent='Save';view.querySelector('[data-form-title]').textContent='Add a member';setMemberFormOpen(true);memberFormPanel.scrollIntoView({behavior:'smooth',block:'start'});};
   const redraw=()=>{
@@ -227,6 +287,55 @@ function bindGeneric(view,table,fieldsList,columns,defaults={},withAccounts=fals
     view.querySelectorAll('[data-delete]').forEach(btn=>btn.onclick=async()=>{if(!confirm(withAccounts?'Delete this member and their login?':'Delete this record?'))return;const {error}=await supabase.from(table).delete().eq('id',btn.dataset.delete);if(error){message(dbError(error),'error');return;}await load();message('Record deleted.','success');});
   };
   async function load(){const {data,error}=await supabase.from(table).select('*').order('id',{ascending:false});if(error){fail(error);return;}if(withAccounts){const {data:profiles}=await supabase.from('app_profiles').select('id,username,member_id').eq('role','member');const byMember=new Map((profiles||[]).map(p=>[String(p.member_id),{user_id:p.id,username:p.username}]));(data||[]).forEach(r=>Object.assign(r,byMember.get(String(r.id))||{username:null,user_id:null}));}records.splice(0,records.length,...(data||[]));view.querySelector('[data-count]').textContent=`${records.length} records`;redraw();}
+  if(importPanel&&importFile){
+    const openButton=view.querySelector('[data-open-member-import]'),summary=importPanel.querySelector('[data-import-summary]'),errorsNode=importPanel.querySelector('[data-import-errors]'),previewNode=importPanel.querySelector('[data-import-preview]'),importButton=importPanel.querySelector('[data-confirm-member-import]');
+    const showImportPreview=(rows,issues)=>{
+      pendingImportRows=rows;summary.textContent=`${rows.length} ready · ${issues.length} issue${issues.length===1?'':'s'}`;
+      errorsNode.innerHTML=issues.length?`<div class="notice error"><strong>Fix these spreadsheet rows before importing:</strong><ul class="import-issue-list">${issues.slice(0,20).map(issue=>`<li>Row ${escapeHTML(issue.rowNumber)}: ${issue.errors.map(escapeHTML).join(' ')}</li>`).join('')}${issues.length>20?`<li>And ${issues.length-20} more issue(s).</li>`:''}</ul></div>`:'';
+      previewNode.innerHTML=rows.length?`<p class="small">Previewing the first ${Math.min(rows.length,8)} of ${rows.length} members. Imports create member records only; they do not create login accounts.</p>${tableRows(rows.slice(0,8),[{key:'member_no',label:'Member ID'},{key:'full_name',label:'Full name'},{key:'loft_name',label:'Loft name'},{key:'latitude',label:'Latitude'},{key:'longitude',label:'Longitude'}],'No member rows found.',false)}`:'<p class="small">No valid member rows to preview.</p>';
+      importButton.disabled=!rows.length||issues.length>0;importPanel.hidden=false;importPanel.scrollIntoView({behavior:'smooth',block:'start'});
+    };
+    openButton.onclick=()=>importFile.click();
+    view.querySelector('[data-download-member-template]').onclick=async event=>{
+      const button=event.currentTarget;button.disabled=true;
+      try{
+        const XLSX=await loadSpreadsheetParser(),workbook=XLSX.utils.book_new(),sheet=XLSX.utils.aoa_to_sheet([['Member ID','Full name','First name','Middle name','Last name','Loft name','Address','Phone','Membership paid','Latitude','Longitude']]);
+        sheet['!cols']=[{wch:18},{wch:26},{wch:18},{wch:18},{wch:18},{wch:24},{wch:32},{wch:18},{wch:18},{wch:14},{wch:14}];
+        XLSX.utils.book_append_sheet(workbook,sheet,'Members');XLSX.writeFile(workbook,'mayma-members-template.xlsx');
+        message('Excel template downloaded. Fill one member per row; coordinates must be decimal degrees.','success');
+      }catch(error){message(error.message||'Could not create the Excel template.','error');}
+      finally{button.disabled=false;}
+    };
+    importFile.onchange=async()=>{
+      const file=importFile.files?.[0];if(!file)return;
+      importPanel.hidden=false;summary.textContent='Reading file…';errorsNode.innerHTML='';previewNode.innerHTML='';importButton.disabled=true;
+      try{
+        if(file.size>10*1024*1024)throw new Error('Choose an Excel file smaller than 10 MB.');
+        const XLSX=await loadSpreadsheetParser(),parsed=parseMemberWorksheet(XLSX,await file.arrayBuffer()),issues=[...parsed.issues];
+        if(!parsed.dataRows)issues.push({rowNumber:'—',errors:['No member rows were found below the heading row.']});
+        if(parsed.members.length){
+          const existing=new Set();
+          for(let offset=0;offset<parsed.members.length;offset+=100){
+            const batch=parsed.members.slice(offset,offset+100).map(member=>member.member_no),{data,error}=await supabase.from('members').select('member_no').in('member_no',batch);
+            if(error)throw error;(data||[]).forEach(member=>existing.add(member.member_no.toLocaleLowerCase()));
+          }
+          parsed.members.forEach(member=>{if(existing.has(member.member_no.toLocaleLowerCase()))issues.push({rowNumber:member.__rowNumber,errors:[`Member ID ${member.member_no} already exists in this club.`]});});
+        }
+        showImportPreview(parsed.members,issues);
+      }catch(error){showImportPreview([],[{rowNumber:'—',errors:[error.message||'Could not read this file.']}]);}
+      finally{importFile.value='';}
+    };
+    importPanel.querySelector('[data-cancel-member-import]').onclick=()=>{pendingImportRows=[];importPanel.hidden=true;importFile.value='';};
+    importButton.onclick=async()=>{
+      if(!pendingImportRows.length)return;
+      if(!confirm(`Import ${pendingImportRows.length} member records into this club? No login accounts will be created.`))return;
+      importButton.disabled=true;importButton.textContent='Importing…';
+      const rows=pendingImportRows.map(({__rowNumber,...member})=>member),{error}=await supabase.from('members').insert(rows);
+      importButton.textContent='Import members';
+      if(error){importButton.disabled=false;message(dbError(error),'error');return;}
+      const imported=rows.length;pendingImportRows=[];importPanel.hidden=true;await load();message(`${imported} member${imported===1?'':'s'} imported successfully. Create member login accounts separately if needed.`,'success');
+    };
+  }
   form.onsubmit=async event=>{event.preventDefault();if(!coordinateEditor.validate()){message('Check the latitude and longitude values, then try again.','error');form.reportValidity();return;}const data=Object.fromEntries(fieldsList.map(([key,,type])=>{const value=form.elements.namedItem(key).value;return [key,type==='number'||type==='coordinates'?Number(value):key==='paid'?Number(value):value.trim()||null];}));Object.assign(data,defaults);const accUser=withAccounts?(form.elements.namedItem('account_username')?.value||'').trim().toLowerCase():'',accPass=withAccounts?(form.elements.namedItem('account_password')?.value||''):'';if(!editing&&withAccounts&&(accUser||accPass)&&(!accUser||accPass.length<8)){message('To create a login, enter a username and a password of 8 or more characters.','error');return;}if(!editing&&withAccounts&&accUser&&!USERNAME_RE.test(accUser)){message(USERNAME_HELP,'error');return;}if(!editing&&withAccounts&&accUser&&!confirm(`Create the member and a login for ${accUser}?`))return;const result=editing?await supabase.from(table).update(data).eq('id',editing.id):await supabase.from(table).insert(data).select('id').single();if(result.error){message(dbError(result.error),'error');return;}let accountNote='';if(!editing&&withAccounts&&accUser&&accPass){const {error:accError}=await supabase.rpc('admin_create_member_account',{p_member_id:result.data.id,p_username:accUser,p_password:accPass});accountNote=accError?` Member saved, but the login failed: ${authError(accError)} Use “Create login” in the list to retry.`:` Login created for ${accUser}.`;}form.reset();coordinateEditor.refresh(true);editing=null;form.querySelectorAll('[data-account-field]').forEach(el=>el.hidden=false);view.querySelector('#cancel-edit').hidden=true;form.querySelector('[type=submit]').textContent='Save';if(memberFormPanel)view.querySelector('[data-form-title]').textContent='Add a member';await load();setMemberFormOpen(false);message('Saved.'+accountNote,accountNote.includes('failed')?'error':'success');if(accountNote&&!accountNote.includes('failed'))alert(`Member account created. Username: ${accUser}`);};
   view.querySelector('#cancel-edit').onclick=()=>{form.reset();coordinateEditor.refresh(true);editing=null;form.querySelectorAll('[data-account-field]').forEach(el=>el.hidden=false);view.querySelector('#cancel-edit').hidden=true;form.querySelector('[type=submit]').textContent='Save';if(memberFormPanel)view.querySelector('[data-form-title]').textContent='Add a member';setMemberFormOpen(false);};load();
 }
@@ -391,8 +500,9 @@ async function initCrud(view,table,canManageAccounts) {
   const accountFields=isMembers&&canManageAccounts?'<label class="field" data-account-field><span>Login username (optional)</span><input name="account_username" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]{2,31}" autocomplete="off" autocapitalize="none" spellcheck="false"></label><label class="field" data-account-field><span>Login password (8+ characters)</span><input name="account_password" type="password" minlength="8" autocomplete="new-password"></label>':'';
   const formMarkup=genericForm(fields[table]).replace('<div class="form-actions">',`${accountFields}<div class="form-actions">`);
   const formPanel=`<section class="panel" ${isMembers?'data-member-form-panel hidden':''}><div class="panel-heading"><h3 data-form-title>${isMembers?'Add a member':'Add a race point'}</h3></div>${formMarkup}</section>`;
-  const listPanel=`<section class="panel"><div class="panel-heading"><h3>${isMembers?'Member list':'Saved locations'}</h3>${isMembers?'<button class="button primary" type="button" data-add-member>＋ Add member</button>':''}</div><div data-table></div></section>`;
-  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">${isMembers?'CLUB DIRECTORY':'RELEASE LOCATIONS'}</span><h2>${isMembers?'Members & lofts':'Race points'}</h2><p>${isMembers?'Maintain member records and loft coordinates.':'Save release points for new race schedules.'}</p></div><span class="count-pill" data-count>— records</span></div>${isMembers?`${listPanel}${formPanel}`:`${formPanel}${listPanel}`}`;
+  const listPanel=`<section class="panel"><div class="panel-heading"><h3>${isMembers?'Member list':'Saved locations'}</h3>${isMembers?'<div class="member-list-actions"><button class="button secondary" type="button" data-download-member-template>Excel template</button><button class="button secondary" type="button" data-open-member-import>Import Excel</button><input id="member-import-file" type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden><button class="button primary" type="button" data-add-member>＋ Add member</button></div>':''}</div><div data-table></div></section>`;
+  const importPanel=isMembers?`<section class="panel member-import-panel" data-member-import-panel hidden><div class="panel-heading"><div><h3>Excel import preview</h3><p class="small">Reads the first worksheet using its first row of column headings. Required: Member ID, Full name, Loft name, Latitude, Longitude.</p></div><span class="count-pill" data-import-summary></span></div><div data-import-errors></div><div data-import-preview></div><div class="form-actions"><button class="button secondary" type="button" data-cancel-member-import>Cancel</button><button class="button primary" type="button" data-confirm-member-import disabled>Import members</button></div></section>`:'';
+  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">${isMembers?'CLUB DIRECTORY':'RELEASE LOCATIONS'}</span><h2>${isMembers?'Members & lofts':'Race points'}</h2><p>${isMembers?'Maintain member records and loft coordinates.':'Save release points for new race schedules.'}</p></div><span class="count-pill" data-count>— records</span></div>${isMembers?`${listPanel}${importPanel}${formPanel}`:`${formPanel}${listPanel}`}`;
   bindGeneric(view,table,fields[table],columns,{},isMembers&&canManageAccounts);
 }
 
