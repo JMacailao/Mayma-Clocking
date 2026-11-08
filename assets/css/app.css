@@ -7,3 +7,4 @@
 
 
 .login-divider{display:flex;align-items:center;gap:12px;margin:22px 0 14px;color:var(--muted);font-size:12px}.login-divider::before,.login-divider::after{content:'';flex:1;height:1px;background:var(--line)}
+.tag.inactive{background:#f7ece9;color:#a35547}.text-button:disabled{opacity:.45;cursor:not-allowed}

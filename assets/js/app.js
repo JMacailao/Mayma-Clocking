@@ -18,19 +18,20 @@ const stateTag = (value) => `<span class="tag ${escapeHTML(value)}">${escapeHTML
 async function getIdentity() {
   const {data:{session}}=await supabase.auth.getSession();
   if(!session) return null;
-  const {data:profile,error}=await supabase.from('app_profiles').select('id,role,member_id,username,club_id').eq('id',session.user.id).maybeSingle();
+  const {data:profile,error}=await supabase.from('app_profiles').select('id,role,member_id,username,club_id,is_active').eq('id',session.user.id).maybeSingle();
   if(error) throw error;
   let club=null;
   if(profile?.club_id){const {data}=await supabase.from('clubs').select('id,name').eq('id',profile.club_id).maybeSingle();club=data;}
   return {session,user:session.user,profile:profile||null,club};
 }
-const homeFor = (role) => url(role==='superadmin'?'pages/superadmin/clubs/index.html':role==='admin'?'pages/admin/dashboard/index.html':'pages/member/dashboard/index.html');
+const homeFor = (role) => url(role==='superadmin'?'pages/superadmin/clubs/index.html':['admin','staff'].includes(role)?'pages/admin/dashboard/index.html':'pages/member/dashboard/index.html');
 function superadminNav(active) {
   const links=[['clubs','Club accounts','pages/superadmin/clubs/index.html','⌂']];
   return links.map(([key,label,href,icon])=>`<a class="nav-link ${active===key?'active':''}" ${active===key?'aria-current="page"':''} href="${url(href)}"><span class="nav-icon">${icon}</span>${label}</a>`).join('');
 }
-function adminNav(active) {
+function adminNav(active,canManageAccounts) {
   const links=[['dashboard','Overview','pages/admin/dashboard/index.html','◧'],['members','Members','pages/admin/members/index.html','♙'],['race-points','Race points','pages/admin/race-points/index.html','⌖'],['races','Races','pages/admin/races/index.html','◷'],['entries','Race entries','pages/admin/entries/index.html','▤'],['clocking','Clocking','pages/admin/clocking/index.html','◉'],['results','Results','pages/admin/results/index.html','↗']];
+  if(canManageAccounts)links.push(['users','Team accounts','pages/admin/users/index.html','♧']);
   return links.map(([key,label,href,icon])=>`<a class="nav-link ${active===key?'active':''}" ${active===key?'aria-current="page"':''} href="${url(href)}"><span class="nav-icon">${icon}</span>${label}</a>`).join('');
 }
 function memberNav(active) {
@@ -42,8 +43,10 @@ async function guard(role,active) {
     const identity=await getIdentity();
     if(!identity) { location.href=url('pages/login/index.html'); return null; }
     if(!identity.profile) { await signOutUser(); document.querySelector('#app-shell').innerHTML=`<main class="loading"><strong>This account is not set up yet.</strong><span>Ask your administrator to finish setting up your account.</span><a class="button primary" href="${url('pages/login/index.html')}">Return to sign in</a></main>`; return null; }
-    if(identity.profile.role!==role) { location.href=homeFor(identity.profile.role); return null; }
-    document.querySelector('#app-shell').innerHTML=`<aside class="sidebar"><a class="brand" href="${homeFor(role)}"><span class="brand-mark">✳</span><span>Mayma<span class="brand-sub">RACE CLOCKING</span></span></a><div class="nav-label">${role==='superadmin'?'SUPERADMIN':role==='admin'?'MANAGEMENT':'MEMBER AREA'}</div><nav>${role==='superadmin'?superadminNav(active):role==='admin'?adminNav(active):memberNav(active)}</nav><div class="sidebar-bottom"><div class="signed-in"><span class="avatar">${escapeHTML((identity.profile.username||'M')[0].toUpperCase())}</span><span class="signed-email">${escapeHTML(identity.profile.username||'Account')}</span></div><button class="nav-link signout" id="sign-out"><span class="nav-icon">↪</span>Sign out</button></div></aside><main class="main"><div class="nav-backdrop" id="nav-backdrop"></div><header class="topbar"><div class="topbar-left"><button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open menu">☰</button><div><div class="eyebrow">${escapeHTML(role==='superadmin'?'SUPERADMIN':(identity.club?.name||'PIGEON RACING CLUB').toUpperCase())}</div><h1>${escapeHTML(document.body.dataset.title||'Race clocking')}</h1></div></div><div class="topbar-right"><span class="live-dot"></span><span>Supabase connected</span><span class="timezone">PH · UTC+8</span></div></header><div class="page-content"><div data-message class="notice" hidden></div><section class="page-view" data-view="${escapeHTML(body.dataset.view)}"></section><footer>Clock receipts are recorded by Supabase server time and remain provisional until verified by the club.</footer></div></main>`;
+    if(identity.profile.is_active===false) { await signOutUser(); document.querySelector('#app-shell').innerHTML=`<main class="loading"><strong>This account is disabled.</strong><span>Ask your club administrator to reactivate it.</span><a class="button primary" href="${url('pages/login/index.html')}">Return to sign in</a></main>`; return null; }
+    const staffOnAdminPage=role==='admin'&&identity.profile.role==='staff'&&body.dataset.view!=='team-users';
+    if(identity.profile.role!==role&&!staffOnAdminPage) { location.href=homeFor(identity.profile.role); return null; }
+    document.querySelector('#app-shell').innerHTML=`<aside class="sidebar"><a class="brand" href="${homeFor(role)}"><span class="brand-mark">✳</span><span>Mayma<span class="brand-sub">RACE CLOCKING</span></span></a><div class="nav-label">${role==='superadmin'?'SUPERADMIN':identity.profile.role==='admin'?'MANAGEMENT':identity.profile.role==='staff'?'STAFF':'MEMBER AREA'}</div><nav>${role==='superadmin'?superadminNav(active):role==='admin'?adminNav(active,identity.profile.role==='admin'):memberNav(active)}</nav><div class="sidebar-bottom"><div class="signed-in"><span class="avatar">${escapeHTML((identity.profile.username||'M')[0].toUpperCase())}</span><span class="signed-email">${escapeHTML(identity.profile.username||'Account')}</span></div><button class="nav-link signout" id="sign-out"><span class="nav-icon">↪</span>Sign out</button></div></aside><main class="main"><div class="nav-backdrop" id="nav-backdrop"></div><header class="topbar"><div class="topbar-left"><button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open menu">☰</button><div><div class="eyebrow">${escapeHTML(role==='superadmin'?'SUPERADMIN':(identity.club?.name||'PIGEON RACING CLUB').toUpperCase())}</div><h1>${escapeHTML(document.body.dataset.title||'Race clocking')}</h1></div></div><div class="topbar-right"><span class="live-dot"></span><span>Supabase connected</span><span class="timezone">PH · UTC+8</span></div></header><div class="page-content"><div data-message class="notice" hidden></div><section class="page-view" data-view="${escapeHTML(body.dataset.view)}"></section><footer>Clock receipts are recorded by Supabase server time and remain provisional until verified by the club.</footer></div></main>`;
     document.querySelector('#menu-toggle').onclick=()=>body.classList.toggle('nav-open');document.querySelector('#nav-backdrop').onclick=()=>body.classList.remove('nav-open');document.querySelector('#sign-out').addEventListener('click',async()=>{await signOutUser();location.href=url('pages/login/index.html');});
     return identity;
   } catch(error){fail(error);return null;}
@@ -103,11 +106,60 @@ async function dashboard(view) {
   const {data:races,error}=await supabase.from('races').select('id,name,status,release_location,release_at_utc').order('id',{ascending:false}).limit(5);if(error)throw error;
   view.innerHTML=`<div class="welcome-row"><div><span class="eyebrow">RACE DESK</span><h2>Your club at a glance</h2><p>Manage members, schedules, pigeon entries, and clock receipts.</p></div><a class="button primary" href="${url('pages/admin/races/index.html')}">＋ Create a race</a></div><div class="stats-grid">${results.map(([label,count],i)=>`<article class="stat-card"><div class="stat-label"><span class="stat-glyph">${['♙','⌖','◷','▤'][i]}</span>${label}</div><strong>${count.toLocaleString()}</strong><span class="stat-foot">Current records</span></article>`).join('')}</div><section class="panel"><div class="panel-heading"><div><span class="eyebrow">SCHEDULE</span><h2>Recent races</h2></div><a class="quiet-link" href="${url('pages/admin/races/index.html')}">All races ↗</a></div>${tableRows(races||[],[{key:'name',label:'Race'},{key:'release_location',label:'Release point'},{key:'release_at_utc',label:'Release time',render:r=>escapeHTML(formatDate(r.release_at_utc))},{key:'status',label:'Status',render:r=>stateTag(r.status)}],'Create a race schedule to begin.')}</section>`;
 }
-async function initCrud(view,table) {
-  const isMembers=table==='members';const columns=isMembers?[{key:'member_no',label:'Member ID'},{key:'full_name',label:'Name'},{key:'loft_name',label:'Loft'},{key:'paid',label:'Paid',render:r=>r.paid?'Yes':'No'},{key:'username',label:'Login',render:r=>r.username?`${escapeHTML(r.username)} <button class="text-button" data-reset="${escapeHTML(r.id)}">Reset password</button>`:`<button class="text-button" data-login="${escapeHTML(r.id)}">Create login</button>`}]:[{key:'location',label:'Location'},{key:'sector',label:'Sector'},{key:'latitude',label:'Latitude'},{key:'longitude',label:'Longitude'}];
-  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">${isMembers?'CLUB DIRECTORY':'RELEASE LOCATIONS'}</span><h2>${isMembers?'Members & lofts':'Race points'}</h2><p>${isMembers?'Maintain member records and loft coordinates.':'Save release points for new race schedules.'}</p></div><span class="count-pill" data-count>— records</span></div><section class="panel"><div class="panel-heading"><h3 data-form-title>${isMembers?'Add a member':'Add a race point'}</h3></div>${genericForm(fields[table]).replace('<div class="form-actions">',isMembers?'<label class="field" data-account-field><span>Login username (optional)</span><input name="account_username" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]{2,31}" autocomplete="off" autocapitalize="none" spellcheck="false"></label><label class="field" data-account-field><span>Login password (8+ characters)</span><input name="account_password" type="password" minlength="8" autocomplete="new-password"></label><div class="form-actions">':'<div class="form-actions">')}</section><section class="panel"><div class="panel-heading"><h3>${isMembers?'Member list':'Saved locations'}</h3></div><div data-table></div></section>`;
-  bindGeneric(view,table,fields[table],columns,{},isMembers);
+async function initCrud(view,table,canManageAccounts) {
+  const isMembers=table==='members';
+  const columns=isMembers?[
+    {key:'member_no',label:'Member ID'},
+    {key:'full_name',label:'Name'},
+    {key:'loft_name',label:'Loft'},
+    {key:'paid',label:'Paid',render:r=>r.paid?'Yes':'No'},
+    ...(canManageAccounts?[{key:'username',label:'Login',render:r=>r.username?`${escapeHTML(r.username)} <button class="text-button" data-reset="${escapeHTML(r.id)}">Reset password</button>`:`<button class="text-button" data-login="${escapeHTML(r.id)}">Create login</button>`}]:[])
+  ]:[{key:'location',label:'Location'},{key:'sector',label:'Sector'},{key:'latitude',label:'Latitude'},{key:'longitude',label:'Longitude'}];
+  const accountFields=isMembers&&canManageAccounts?'<label class="field" data-account-field><span>Login username (optional)</span><input name="account_username" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]{2,31}" autocomplete="off" autocapitalize="none" spellcheck="false"></label><label class="field" data-account-field><span>Login password (8+ characters)</span><input name="account_password" type="password" minlength="8" autocomplete="new-password"></label>':'';
+  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">${isMembers?'CLUB DIRECTORY':'RELEASE LOCATIONS'}</span><h2>${isMembers?'Members & lofts':'Race points'}</h2><p>${isMembers?'Maintain member records and loft coordinates.':'Save release points for new race schedules.'}</p></div><span class="count-pill" data-count>— records</span></div><section class="panel"><div class="panel-heading"><h3 data-form-title>${isMembers?'Add a member':'Add a race point'}</h3></div>${genericForm(fields[table]).replace('<div class="form-actions">',`${accountFields}<div class="form-actions">`)}</section><section class="panel"><div class="panel-heading"><h3>${isMembers?'Member list':'Saved locations'}</h3></div><div data-table></div></section>`;
+  bindGeneric(view,table,fields[table],columns,{},isMembers&&canManageAccounts);
+}
 
+async function teamAccountsPage(view,identity) {
+  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">CLUB ACCESS</span><h2>Team accounts</h2><p>Create another administrator or staff login for this club.</p></div><span class="count-pill" data-team-count>— accounts</span></div><section class="panel"><div class="panel-heading"><h3>Create a team account</h3></div><form class="form-grid" id="team-account-form"><label class="field"><span>Username</span><input name="username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]{2,31}" autocomplete="off" autocapitalize="none" spellcheck="false" required></label><label class="field"><span>Password · 8 or more characters</span><input name="password" type="password" minlength="8" autocomplete="new-password" required></label><label class="field"><span>Role</span><select name="role"><option value="staff">Staff · routine club work</option><option value="admin">Administrator · manage team accounts</option></select></label><div class="form-actions"><button class="button primary" type="submit">Create account</button></div></form></section><section class="panel"><div class="panel-heading"><div><h3>Club team</h3><p class="muted small">Staff can manage members, races, entries, and clocking. Administrators can also manage team accounts.</p></div></div><div data-team-table></div></section>`;
+  const form=view.querySelector('#team-account-form');
+  const table=view.querySelector('[data-team-table]');
+  async function load(){
+    const {data,error}=await supabase.from('app_profiles').select('id,username,role,is_active').eq('club_id',identity.profile.club_id).in('role',['admin','staff']).order('username');
+    if(error)throw error;
+    view.querySelector('[data-team-count]').textContent=`${data.length} account${data.length===1?'':'s'}`;
+    table.innerHTML=`<div class="table-scroll"><table><thead><tr><th>Username</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>${data.length?data.map(user=>`<tr><td>${escapeHTML(user.username)}</td><td>${escapeHTML(titleCase(user.role))}</td><td>${stateTag(user.is_active?'active':'inactive')}</td><td class="row-actions"><button class="text-button" data-team-reset="${escapeHTML(user.id)}">Reset password</button><button class="text-button ${user.is_active?'danger-text':''}" data-team-active="${escapeHTML(user.id)}" data-next-active="${user.is_active?'false':'true'}" ${user.id===identity.profile.id&&user.is_active?'disabled title="You cannot disable your own account"':''}>${user.is_active?'Disable':'Reactivate'}</button></td></tr>`).join(''):'<tr><td colspan="4" class="empty-cell">No team accounts found.</td></tr>'}</tbody></table></div>`;
+    table.querySelectorAll('[data-team-reset]').forEach(button=>button.onclick=async()=>{
+      const password=prompt('Enter a new password (8 or more characters):')||'';
+      if(!password)return;
+      if(password.length<8){message('Password must be at least 8 characters.','error');return;}
+      const {error}=await supabase.rpc('admin_set_team_password',{p_user_id:button.dataset.teamReset,p_password:password});
+      if(error){message(authError(error),'error');return;}
+      message('Team account password updated.','success');
+    });
+    table.querySelectorAll('[data-team-active]').forEach(button=>button.onclick=async()=>{
+      const active=button.dataset.nextActive==='true';
+      if(!confirm(`${active?'Reactivate':'Disable'} this team account?`))return;
+      const {error}=await supabase.rpc('admin_set_team_active',{p_user_id:button.dataset.teamActive,p_active:active});
+      if(error){message(authError(error),'error');return;}
+      await load();
+      message(`Team account ${active?'reactivated':'disabled'}.`,'success');
+    });
+  }
+  form.onsubmit=async event=>{
+    event.preventDefault();
+    const username=form.elements.username.value.trim().toLowerCase();
+    const password=form.elements.password.value;
+    const role=form.elements.role.value;
+    if(!USERNAME_RE.test(username)){message(USERNAME_HELP,'error');return;}
+    if(password.length<8){message('Password must be at least 8 characters.','error');return;}
+    const button=form.querySelector('[type="submit]');button.disabled=true;button.textContent='Creating…';
+    const {error}=await supabase.rpc('admin_create_team_account',{p_username:username,p_password:password,p_role:role});
+    button.disabled=false;button.textContent='Create account';
+    if(error){message(authError(error),'error');return;}
+    form.reset();await load();message(`${titleCase(role)} account created for ${username}.`,'success');
+  };
+  await load();
 }
 async function racesPage(view) {
   const {data:points,error}=await supabase.from('race_points').select('id,location,sector,latitude,longitude').order('location');if(error)throw error;
@@ -177,8 +229,9 @@ function renderSignIn(container){
  form.onsubmit=async event=>{event.preventDefault();const username=form.elements.username.value.trim().toLowerCase();if(!USERNAME_RE.test(username)){loginMessage(container,USERNAME_HELP,'error');return;}const button=form.querySelector('button');button.disabled=true;button.textContent='Signing in…';
   const {data,error}=await supabase.auth.signInWithPassword({email:`${username}@users.mayma.invalid`,password:form.elements.password.value});
   if(error){button.disabled=false;button.textContent='Sign in →';loginMessage(container,'Sign-in failed. Check your username and password.','error');return;}
-  const {data:profile,error:profileError}=await supabase.from('app_profiles').select('role,username').eq('id',data.user.id).maybeSingle();
+  const {data:profile,error:profileError}=await supabase.from('app_profiles').select('role,username,is_active').eq('id',data.user.id).maybeSingle();
   if(profileError||!profile||profile.username!==username){await signOutUser();button.disabled=false;button.textContent='Sign in →';loginMessage(container,'This account is not set up for the clocking app. Ask your administrator.','error');return;}
+  if(profile.is_active===false){await signOutUser();button.disabled=false;button.textContent='Sign in →';loginMessage(container,'This account is disabled. Ask your club administrator to reactivate it.','error');return;}
   location.href=homeFor(profile.role);};
 }
 function renderSuperAdmin(container){
@@ -197,5 +250,5 @@ function renderSuperAdmin(container){
 }
 function loginMessage(container,text,kind){const node=container.querySelector('[data-login-message]');node.textContent=text;node.className=`notice ${kind}`;node.hidden=false;}
 
-async function main(){if(body.dataset.view==='login'){loginPage();return;}const role=body.dataset.role,active=body.dataset.active;const identity=await guard(role,active);if(!identity)return;const view=document.querySelector('.page-view');try{const page=body.dataset.view;if(page==='clubs'&&role==='superadmin')await clubsPage(view);else if(page==='dashboard'&&role==='admin')await dashboard(view);else if(page==='members'||page==='race-points')await initCrud(view,page==='members'?'members':'race_points');else if(page==='races')await racesPage(view);else if(page==='entries')await entriesPage(view);else if(page==='clocking'&&role==='admin')await clockPage(view,identity);else if(page==='results')await resultsPage(view);else if(page==='dashboard'&&role==='member')await memberDashboard(view,identity);else if(page==='member-clocking')await memberClock(view,identity);else if(page==='history')await memberHistory(view,identity);}catch(error){fail(error);}}
+async function main(){if(body.dataset.view==='login'){loginPage();return;}const role=body.dataset.role,active=body.dataset.active;const identity=await guard(role,active);if(!identity)return;const view=document.querySelector('.page-view');try{const page=body.dataset.view;if(page==='clubs'&&role==='superadmin')await clubsPage(view);else if(page==='team-users'&&role==='admin'&&identity.profile.role==='admin')await teamAccountsPage(view,identity);else if(page==='dashboard'&&role==='admin')await dashboard(view);else if(page==='members'||page==='race-points')await initCrud(view,page==='members'?'members':'race_points',identity.profile.role==='admin');else if(page==='races')await racesPage(view);else if(page==='entries')await entriesPage(view);else if(page==='clocking'&&role==='admin')await clockPage(view,identity);else if(page==='results')await resultsPage(view);else if(page==='dashboard'&&role==='member')await memberDashboard(view,identity);else if(page==='member-clocking')await memberClock(view,identity);else if(page==='history')await memberHistory(view,identity);}catch(error){fail(error);}}
 main();

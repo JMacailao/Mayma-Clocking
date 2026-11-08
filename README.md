@@ -8,8 +8,10 @@ an email address.
 
 - **Superadmin**: created once, on first run of a fresh database. The superadmin only
   manages club accounts (Club accounts page). It cannot see any club's members or races.
-- **Club account** (administrator): created by the superadmin with a club name, username
-  and password. It manages its own members, race points, races, entries and clocking.
+- **Club administrator**: created by the superadmin with a club name, username and
+  password. It manages its club's records and can create more administrators or staff.
+- **Staff**: created by a club administrator. Staff can manage routine member, race,
+  entry and clocking records, but cannot create or manage accounts.
 - **Member**: created by the club account. Members see only their own records.
 
 Every club-owned row carries a `club_id`, and Supabase row-level security enforces it,
@@ -21,12 +23,14 @@ requests in the browser.
 1. Open your Supabase project (`ddwzrjvlatdbwaiagxhp`) → **SQL Editor** and run, in order:
    1. `schema.sql` — **only for a brand-new database** (skip if you already ran it)
    2. `supabase-auth.sql` — skip if you already ran it
-   3. `multi-club.sql` — adds clubs, `club_id` and the superadmin module
+   3. `multi-club.sql` — adds clubs, `club_id`, roles and team-account management. Run
+      it again after future SQL updates; it is safe to re-run.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.
 3. As superadmin, open **Club accounts** and create a login for each club.
-4. Each club signs in with its own username and password and adds its members.
+4. Each club administrator signs in, creates staff or additional administrators on
+   **Team accounts**, then manages the club's members and races.
 5. Publish with GitHub Pages: repository **Settings → Pages**, branch `main`, `/ (root)`.
 
 No Supabase Auth settings need changing and no email is used. Supabase Auth needs an
@@ -43,6 +47,7 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/login/index.html`: shared admin/member sign-in.
 - `pages/admin/dashboard/`: club overview.
 - `pages/admin/members/`: member and loft records.
+- `pages/admin/users/`: create, reset, disable and reactivate administrator or staff accounts.
 - `pages/admin/race-points/`: release locations.
 - `pages/admin/races/`: race schedules and status.
 - `pages/admin/entries/`: registered pigeons and barcodes.
@@ -54,8 +59,9 @@ Create a club account with exactly that name to hand the old data to that club.
 
 ## Important
 
-- Row-level security: administrators manage everything; members only see their own
-  record, entries and receipts. Members cannot promote themselves.
+- Row-level security scopes staff and administrators to their own club. Only an
+  administrator can manage team accounts; members only see their own record, entries
+  and receipts. Users cannot promote themselves. A club must keep one active admin.
 - `submit_member_clock` and `admin_record_clock` check the member, barcode, race
   status and release time, then write a server timestamp.
 - Clocking receipts are provisional evidence of server receipt time.

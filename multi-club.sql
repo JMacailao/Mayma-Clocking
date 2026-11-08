@@ -1,6 +1,7 @@
 -- Mayma Clocking: multi-club. Run AFTER supabase-auth.sql. Safe to re-run.
 --   superadmin  : created on first run of the app; manages club accounts only.
---   admin       : a club account (one per club); sees and manages only its own club.
+--   admin       : manages its own club, including team accounts.
+--   staff        : manages routine club records, but not accounts.
 --   member      : belongs to a club; sees only their own records.
 -- Every club-owned table carries club_id, and row-level security enforces it.
 BEGIN;
@@ -44,6 +45,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS clubs_name_unique ON public.clubs (lower(name)
 ALTER TABLE public.clubs ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE public.app_profiles ADD COLUMN IF NOT EXISTS club_id bigint REFERENCES public.clubs(id);
+ALTER TABLE public.app_profiles ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
+UPDATE public.app_profiles SET is_active=true WHERE is_active IS NULL;
+ALTER TABLE public.app_profiles ALTER COLUMN is_active SET DEFAULT true;
+ALTER TABLE public.app_profiles ALTER COLUMN is_active SET NOT NULL;
 ALTER TABLE public.members      ADD COLUMN IF NOT EXISTS club_id bigint REFERENCES public.clubs(id);
 ALTER TABLE public.race_points  ADD COLUMN IF NOT EXISTS club_id bigint REFERENCES public.clubs(id);
 ALTER TABLE public.races        ADD COLUMN IF NOT EXISTS club_id bigint REFERENCES public.clubs(id);
@@ -72,20 +77,25 @@ UPDATE public.app_profiles SET role='superadmin' WHERE role='admin' AND club_id 
 ALTER TABLE public.app_profiles ADD CONSTRAINT app_profiles_role_shape CHECK (
   (role='superadmin' AND member_id IS NULL AND club_id IS NULL) OR
   (role='admin'      AND member_id IS NULL AND club_id IS NOT NULL) OR
+  (role='staff'      AND member_id IS NULL AND club_id IS NOT NULL) OR
   (role='member'     AND member_id IS NOT NULL AND club_id IS NOT NULL));
 
 -- 3. Helper functions ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.current_app_role()
 RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
-  SELECT p.role FROM public.app_profiles p WHERE p.id = (SELECT auth.uid())
+  SELECT p.role FROM public.app_profiles p WHERE p.id = (SELECT auth.uid()) AND p.is_active
 $$;
 CREATE OR REPLACE FUNCTION public.current_member_id()
 RETURNS bigint LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
-  SELECT p.member_id FROM public.app_profiles p WHERE p.id = (SELECT auth.uid()) AND p.role = 'member'
+  SELECT p.member_id FROM public.app_profiles p WHERE p.id = (SELECT auth.uid()) AND p.role = 'member' AND p.is_active
 $$;
 CREATE OR REPLACE FUNCTION public.current_club_id()
 RETURNS bigint LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
-  SELECT p.club_id FROM public.app_profiles p WHERE p.id = (SELECT auth.uid())
+  SELECT p.club_id FROM public.app_profiles p WHERE p.id = (SELECT auth.uid()) AND p.is_active
+$$;
+CREATE OR REPLACE FUNCTION public.can_manage_club_data()
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT COALESCE(public.current_app_role() IN ('admin','staff'), false)
 $$;
 -- is_app_admin() = a CLUB administrator. The superadmin has no club data access.
 CREATE OR REPLACE FUNCTION public.is_app_admin()
@@ -97,9 +107,9 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
   SELECT COALESCE(public.current_app_role() = 'superadmin', false)
 $$;
 REVOKE ALL ON FUNCTION public.current_app_role(), public.current_member_id(), public.current_club_id(),
-  public.is_app_admin(), public.is_superadmin() FROM PUBLIC, anon;
+  public.is_app_admin(), public.can_manage_club_data(), public.is_superadmin() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.current_app_role(), public.current_member_id(), public.current_club_id(),
-  public.is_app_admin(), public.is_superadmin() TO authenticated;
+  public.is_app_admin(), public.can_manage_club_data(), public.is_superadmin() TO authenticated;
 
 -- 4. club_id becomes mandatory and fills itself from the signed-in club ----------------------------
 ALTER TABLE public.members     ALTER COLUMN club_id SET DEFAULT public.current_club_id();
@@ -128,36 +138,36 @@ CREATE POLICY profile_read ON public.app_profiles
 
 CREATE POLICY members_read ON public.members
   FOR SELECT TO authenticated
-  USING ((public.is_app_admin() AND club_id = public.current_club_id()) OR id = public.current_member_id());
+  USING ((public.can_manage_club_data() AND club_id = public.current_club_id()) OR id = public.current_member_id());
 CREATE POLICY members_admin_write ON public.members
   FOR ALL TO authenticated
-  USING (public.is_app_admin() AND club_id = public.current_club_id())
-  WITH CHECK (public.is_app_admin() AND club_id = public.current_club_id());
+  USING (public.can_manage_club_data() AND club_id = public.current_club_id())
+  WITH CHECK (public.can_manage_club_data() AND club_id = public.current_club_id());
 
 CREATE POLICY points_read ON public.race_points
   FOR SELECT TO authenticated USING (club_id = public.current_club_id());
 CREATE POLICY points_admin_write ON public.race_points
   FOR ALL TO authenticated
-  USING (public.is_app_admin() AND club_id = public.current_club_id())
-  WITH CHECK (public.is_app_admin() AND club_id = public.current_club_id());
+  USING (public.can_manage_club_data() AND club_id = public.current_club_id())
+  WITH CHECK (public.can_manage_club_data() AND club_id = public.current_club_id());
 
 CREATE POLICY races_read ON public.races
   FOR SELECT TO authenticated USING (club_id = public.current_club_id());
 CREATE POLICY races_admin_write ON public.races
   FOR ALL TO authenticated
-  USING (public.is_app_admin() AND club_id = public.current_club_id())
-  WITH CHECK (public.is_app_admin() AND club_id = public.current_club_id());
+  USING (public.can_manage_club_data() AND club_id = public.current_club_id())
+  WITH CHECK (public.can_manage_club_data() AND club_id = public.current_club_id());
 
 CREATE POLICY entries_read ON public.race_entries
   FOR SELECT TO authenticated
   USING (member_id = public.current_member_id()
-    OR (public.is_app_admin() AND EXISTS (
+    OR (public.can_manage_club_data() AND EXISTS (
          SELECT 1 FROM public.races r WHERE r.id = race_entries.race_id AND r.club_id = public.current_club_id())));
 CREATE POLICY entries_admin_write ON public.race_entries
   FOR ALL TO authenticated
-  USING (public.is_app_admin() AND EXISTS (
+  USING (public.can_manage_club_data() AND EXISTS (
          SELECT 1 FROM public.races r WHERE r.id = race_entries.race_id AND r.club_id = public.current_club_id()))
-  WITH CHECK (public.is_app_admin()
+  WITH CHECK (public.can_manage_club_data()
     AND EXISTS (SELECT 1 FROM public.races r WHERE r.id = race_entries.race_id AND r.club_id = public.current_club_id())
     AND EXISTS (SELECT 1 FROM public.members m WHERE m.id = race_entries.member_id AND m.club_id = public.current_club_id()));
 
@@ -167,13 +177,13 @@ CREATE POLICY clocks_read ON public.clock_events
     SELECT 1 FROM public.race_entries e JOIN public.races r ON r.id = e.race_id
     WHERE e.id = clock_events.race_entry_id
       AND (e.member_id = public.current_member_id()
-           OR (public.is_app_admin() AND r.club_id = public.current_club_id()))));
+           OR (public.can_manage_club_data() AND r.club_id = public.current_club_id()))));
 CREATE POLICY clocks_admin_write ON public.clock_events
   FOR ALL TO authenticated
-  USING (public.is_app_admin() AND EXISTS (
+  USING (public.can_manage_club_data() AND EXISTS (
     SELECT 1 FROM public.race_entries e JOIN public.races r ON r.id = e.race_id
     WHERE e.id = clock_events.race_entry_id AND r.club_id = public.current_club_id()))
-  WITH CHECK (public.is_app_admin() AND EXISTS (
+  WITH CHECK (public.can_manage_club_data() AND EXISTS (
     SELECT 1 FROM public.race_entries e JOIN public.races r ON r.id = e.race_id
     WHERE e.id = clock_events.race_entry_id AND r.club_id = public.current_club_id()));
 
@@ -190,7 +200,7 @@ DECLARE
   v_now timestamp without time zone;
   v_clock public.clock_events%ROWTYPE;
 BEGIN
-  IF NOT public.is_app_admin() THEN RAISE EXCEPTION 'Club administrator account required.' USING ERRCODE='42501'; END IF;
+  IF NOT public.can_manage_club_data() THEN RAISE EXCEPTION 'Club administrator or staff account required.' USING ERRCODE='42501'; END IF;
   SELECT e.* INTO v_entry FROM public.race_entries e WHERE e.id=p_entry_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Race entry not found.' USING ERRCODE='22023'; END IF;
   SELECT r.* INTO v_race FROM public.races r WHERE r.id=v_entry.race_id;
@@ -346,5 +356,70 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.admin_set_member_password(bigint,text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.admin_set_member_password(bigint,text) TO authenticated;
+
+-- 9. Club administrators manage team accounts; staff cannot administer accounts ---------------------
+CREATE OR REPLACE FUNCTION public.admin_create_team_account(p_username text, p_password text, p_role text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_id uuid; v_username text := lower(trim(p_username));
+BEGIN
+  IF NOT public.is_app_admin() THEN RAISE EXCEPTION 'Club administrator account required.' USING ERRCODE='42501'; END IF;
+  IF p_role IS NULL OR p_role NOT IN ('admin','staff') THEN RAISE EXCEPTION 'Choose admin or staff.' USING ERRCODE='22023'; END IF;
+  IF v_username IS NULL OR v_username !~ '^[a-z0-9][a-z0-9_.-]{2,31}$' THEN
+    RAISE EXCEPTION 'Username must be 3–32 letters, numbers, dots, hyphens or underscores.' USING ERRCODE='22023';
+  END IF;
+  IF p_password IS NULL OR length(p_password) < 8 THEN
+    RAISE EXCEPTION 'Password must be at least 8 characters.' USING ERRCODE='22023';
+  END IF;
+  v_id := public._create_auth_user(v_username, p_password);
+  INSERT INTO public.app_profiles(id, username, role, member_id, club_id, is_active)
+    VALUES (v_id, v_username, p_role, NULL, public.current_club_id(), true);
+  RETURN jsonb_build_object('status','created','username',v_username,'role',p_role);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.admin_create_team_account(text,text,text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_create_team_account(text,text,text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.admin_set_team_password(p_user_id uuid, p_password text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_user uuid;
+BEGIN
+  IF NOT public.is_app_admin() THEN RAISE EXCEPTION 'Club administrator account required.' USING ERRCODE='42501'; END IF;
+  IF p_password IS NULL OR length(p_password) < 8 THEN
+    RAISE EXCEPTION 'Password must be at least 8 characters.' USING ERRCODE='22023';
+  END IF;
+  SELECT p.id INTO v_user FROM public.app_profiles p
+   WHERE p.id=p_user_id AND p.club_id=public.current_club_id() AND p.role IN ('admin','staff');
+  IF v_user IS NULL THEN RAISE EXCEPTION 'Team account not found.' USING ERRCODE='22023'; END IF;
+  UPDATE auth.users SET encrypted_password=extensions.crypt(p_password, extensions.gen_salt('bf')), updated_at=now() WHERE id=v_user;
+  RETURN jsonb_build_object('status','updated');
+END;
+$$;
+REVOKE ALL ON FUNCTION public.admin_set_team_password(uuid,text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_set_team_password(uuid,text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.admin_set_team_active(p_user_id uuid, p_active boolean)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_role text;
+BEGIN
+  IF NOT public.is_app_admin() THEN RAISE EXCEPTION 'Club administrator account required.' USING ERRCODE='42501'; END IF;
+  IF p_active IS NULL THEN RAISE EXCEPTION 'Choose whether the account should be active.' USING ERRCODE='22023'; END IF;
+  LOCK TABLE public.app_profiles IN EXCLUSIVE MODE;
+  SELECT p.role INTO v_role FROM public.app_profiles p
+   WHERE p.id=p_user_id AND p.club_id=public.current_club_id() AND p.role IN ('admin','staff') FOR UPDATE;
+  IF v_role IS NULL THEN RAISE EXCEPTION 'Team account not found.' USING ERRCODE='22023'; END IF;
+  IF p_user_id=(SELECT auth.uid()) AND NOT p_active THEN
+    RAISE EXCEPTION 'You cannot disable your own account.' USING ERRCODE='22023';
+  END IF;
+  IF v_role='admin' AND NOT p_active
+     AND (SELECT count(*) FROM public.app_profiles p
+           WHERE p.club_id=public.current_club_id() AND p.role='admin' AND p.is_active) <= 1 THEN
+    RAISE EXCEPTION 'A club must keep at least one active administrator.' USING ERRCODE='22023';
+  END IF;
+  UPDATE public.app_profiles SET is_active=p_active WHERE id=p_user_id;
+  RETURN jsonb_build_object('status',CASE WHEN p_active THEN 'enabled' ELSE 'disabled' END);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.admin_set_team_active(uuid,boolean) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_set_team_active(uuid,boolean) TO authenticated;
 
 COMMIT;
