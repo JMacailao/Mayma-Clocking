@@ -48,8 +48,9 @@ CREATE TABLE IF NOT EXISTS public.races (
   release_location varchar(180) NOT NULL,
   release_latitude numeric(10,7) NOT NULL CHECK (release_latitude BETWEEN -90 AND 90),
   release_longitude numeric(10,7) NOT NULL CHECK (release_longitude BETWEEN -180 AND 180),
-  release_at_utc timestamp without time zone NOT NULL,
+  release_at_utc timestamp without time zone,
   status varchar(10) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','open','closed')),
+  CONSTRAINT races_open_requires_release_time CHECK (status <> 'open' OR release_at_utc IS NOT NULL),
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS public.race_entries (

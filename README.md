@@ -33,6 +33,9 @@ requests in the browser.
    6. `sticker-barcodes.sql` — enables global barcode registration, automatic batch
       registration, and registered-barcode checks on race entries. Run it after
       `multi-club.sql`; it is safe to re-run.
+   7. `race-release-time.sql` — allows schedules to be saved before their release time
+      is known, while requiring a release time before a race can be opened. Run it
+      for existing databases; it is safe to re-run.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.
