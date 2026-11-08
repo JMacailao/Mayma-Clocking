@@ -135,6 +135,78 @@ function loadSpreadsheetParser(){
   }).catch(error=>{spreadsheetParserPromise=null;document.querySelector('[data-sheetjs]')?.remove();throw error;});
   return spreadsheetParserPromise;
 }
+let documentOcrPromise=null;
+function loadDocumentOCR(){
+  if(window.Tesseract?.createWorker)return Promise.resolve(window.Tesseract);
+  if(!documentOcrPromise)documentOcrPromise=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';script.crossOrigin='anonymous';script.dataset.tesseract='';
+    script.onload=()=>window.Tesseract?.createWorker?resolve(window.Tesseract):reject(new Error('The document reader did not load.'));
+    script.onerror=()=>reject(new Error('Could not load the document reader. Check your internet connection.'));
+    document.head.append(script);
+  }).catch(error=>{documentOcrPromise=null;document.querySelector('[data-tesseract]')?.remove();throw error;});
+  return documentOcrPromise;
+}
+async function documentFileToCanvas(file){
+  if(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf')){
+    const pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+    const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+    const page=await pdf.getPage(1),initial=page.getViewport({scale:1.7}),scale=Math.min(1,2600/Math.max(initial.width,initial.height)),viewport=page.getViewport({scale:1.7*scale});
+    const canvas=document.createElement('canvas');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+    await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;return canvas;
+  }
+  if(!file.type.startsWith('image/'))throw new Error('Choose a photo or a PDF document.');
+  let bitmap=null,image=null,objectUrl=null,width,height;
+  try{
+    if(window.createImageBitmap){try{bitmap=await createImageBitmap(file);width=bitmap.width;height=bitmap.height;}catch{bitmap=null;}}
+    if(!bitmap){objectUrl=URL.createObjectURL(file);image=new Image();image.src=objectUrl;if(image.decode)await image.decode();else await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;});width=image.naturalWidth;height=image.naturalHeight;}
+    const scale=Math.min(1,2600/Math.max(width,height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(width*scale));canvas.height=Math.max(1,Math.round(height*scale));
+    canvas.getContext('2d',{willReadFrequently:true}).drawImage(bitmap||image,0,0,canvas.width,canvas.height);return canvas;
+  }finally{bitmap?.close();if(objectUrl)URL.revokeObjectURL(objectUrl);}
+}
+function rotateDocumentCanvas(source,rotation){
+  const sideways=rotation%180!==0,canvas=document.createElement('canvas');canvas.width=sideways?source.height:source.width;canvas.height=sideways?source.width:source.height;
+  const context=canvas.getContext('2d',{willReadFrequently:true});context.translate(canvas.width/2,canvas.height/2);context.rotate(rotation*Math.PI/180);context.drawImage(source,-source.width/2,-source.height/2);return canvas;
+}
+function documentGridRules(canvas){
+  const {width,height}=canvas,rgba=canvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,width,height).data,xDark=new Uint32Array(width),yDark=new Uint32Array(height);let xSamples=0,ySamples=0;
+  for(let y=0;y<height;y+=2){for(let x=0;x<width;x+=2){const i=(y*width+x)*4,gray=rgba[i]*.299+rgba[i+1]*.587+rgba[i+2]*.114;if(gray<145){xDark[x]++;yDark[y]++;}}}
+  xSamples=Math.ceil(height/2);ySamples=Math.ceil(width/2);
+  const collect=(counts,samples,size)=>{
+    const density=Array.from(counts,amount=>amount/samples),peaks=[];
+    for(let i=4;i<size-4;i+=2){const value=(density[i-2]+density[i]+density[i+2])/3;if(value<.35||value<density[i-4]||value<density[i+4])continue;peaks.push({position:i,strength:value});}
+    const merged=[];for(const peak of peaks){const previous=merged[merged.length-1];if(previous&&peak.position-previous.position<=Math.max(7,size*.004)){if(peak.strength>previous.strength)merged[merged.length-1]=peak;}else merged.push(peak);}
+    return merged;
+  };
+  return {vertical:collect(xDark,xSamples,width),horizontal:collect(yDark,ySamples,height)};
+}
+function entrySheetRowsFromOCR(ocrData,canvas){
+  const rules=documentGridRules(canvas),fallback=[0,.13,.35,.55,.76,1].map(ratio=>Math.round(canvas.width*ratio));
+  let columns=fallback;
+  if(rules.vertical.length>=6){columns=rules.vertical.sort((a,b)=>b.strength-a.strength).slice(0,6).sort((a,b)=>a.position-b.position).map(rule=>rule.position);}
+  const allWords=ocrData.words?.length?ocrData.words:(ocrData.lines||[]).flatMap(line=>line.words||[]),wordCenterY=word=>(word.bbox.y0+word.bbox.y1)/2;
+  let groups=[];
+  if(rules.horizontal.length>=3){
+    const yBounds=[0,...rules.horizontal.map(rule=>rule.position),canvas.height];
+    for(let index=1;index<yBounds.length;index++){const top=yBounds[index-1],bottom=yBounds[index];if(bottom-top<12)continue;const words=allWords.filter(word=>wordCenterY(word)>=top&&wordCenterY(word)<bottom);if(words.length)groups.push(words);}
+  }
+  if(!groups.length)groups=(ocrData.lines||[]).map(line=>line.words||[]).filter(words=>words.length);
+  if(!groups.length&&allWords.length){
+    const sorted=[...allWords].sort((a,b)=>wordCenterY(a)-wordCenterY(b)),lineHeight=sorted.map(word=>Math.max(1,word.bbox.y1-word.bbox.y0)).sort((a,b)=>a-b)[Math.floor(sorted.length/2)]||18;
+    for(const word of sorted){const center=wordCenterY(word),group=groups.find(row=>Math.abs(row.center-center)<lineHeight*1.8);if(group){const count=group.words.length;group.words.push(word);group.center=(group.center*count+center)/(count+1);}else groups.push({center,words:[word]});}
+    groups=groups.map(group=>Array.isArray(group)?group:group.words);
+  }
+  const cellText=(words,left,right)=>words.filter(word=>{const x=(word.bbox.x0+word.bbox.x1)/2;return x>=left&&x<right;}).sort((a,b)=>a.bbox.x0-b.bbox.x0).map(word=>String(word.text||'').trim()).filter(Boolean);
+  const results=[];
+  for(const words of groups){
+    const cells=Array.from({length:5},(_,index)=>cellText(words,columns[index],columns[index+1]));
+    if(!cells[1].length&&!cells[2].length&&!cells[4].length)continue;
+    const numberText=cells[0].join(' ').match(/\d{1,4}/)?.[0]||String(results.length+1),memberNo=cells[1].join(' ').trim(),ring=cells[2].join('').replace(/\s+/g,'').trim(),barcode=cells[4].join('').replace(/\s+/g,'').trim();
+    if(/^(?:no\.?|number|member|member\s*id|ring|barcode)$/i.test(`${memberNo} ${ring} ${barcode}`))continue;
+    results.push({id:`sheet-${Date.now()}-${results.length}-${Math.random().toString(36).slice(2,7)}`,sheetRow:numberText,member_no:memberNo,pigeon_ring:ring,barcode,errors:[],member:null});
+  }
+  return results;
+}
 const memberImportAliases={
   member_no:['memberid','memberno','membernumber','id'],
   full_name:['fullname','membername','name'],
@@ -605,11 +677,79 @@ async function racesPage(view) {
   view.querySelectorAll('[data-status]').forEach(el=>{const race=races.find(item=>item.id===Number(el.dataset.status));el.onchange=async()=>{if(el.value==='open'&&!race?.release_at_utc){el.value=race?.status||'draft';message('Add a release date and time before opening this race.','error');return;}const previous=race?.status||'draft';el.disabled=true;const {error}=await supabase.from('races').update({status:el.value}).eq('id',el.dataset.status);el.disabled=false;if(error){el.value=previous;message(dbError(error),'error');return;}if(race)race.status=el.value;message('Race status updated.','success');};});
 }
 function distanceMeters(lat1,lon1,lat2,lon2){const rad=n=>n*Math.PI/180;const a=Math.sin(rad(lat2-lat1)/2)**2+Math.cos(rad(lat1))*Math.cos(rad(lat2))*Math.sin(rad(lon2-lon1)/2)**2;return 6371008.8*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+function mountEntrySheetImport(view,races,members,entries){
+  const existingForm=view.querySelector('#entry-form'),submitHandler=existingForm?.onsubmit;
+  const raceOptions=races.map(race=>`<option value="${race.id}">${escapeHTML(race.name)}</option>`).join('');
+  const importPanel=`<section class="panel entry-sheet-panel"><div class="panel-heading"><div><h3>Scan or upload a race sheet</h3><p class="small">Reads the row number, member ID, ring, skips the next column, and reads the final barcode column. Review OCR results before saving.</p></div></div><div class="entry-sheet-controls"><label class="field"><span>Race schedule</span><select data-sheet-race><option value="">Choose a race</option>${raceOptions}</select></label><label class="field"><span>Document photo or PDF</span><input type="file" data-sheet-file accept="image/*,.pdf,application/pdf" capture="environment"><small class="small">PDF uploads read the first page. Use a clear photo; rotate the preview if the text is sideways.</small></label></div><div class="entry-sheet-actions"><button class="button secondary" type="button" data-rotate-sheet disabled>Rotate 90°</button><button class="button primary" type="button" data-read-sheet disabled>Read document</button></div><p class="entry-sheet-status" data-sheet-status aria-live="polite">Upload a photo or PDF to start.</p><div class="entry-sheet-preview" data-sheet-preview hidden><canvas data-sheet-preview-canvas></canvas></div><section class="entry-sheet-review" data-sheet-review hidden><div class="panel-heading"><div><h3>Review scanned entries</h3><p class="small">Correct OCR mistakes. Rows with an unknown member, unregistered barcode, or duplicate will be skipped.</p></div><span class="count-pill" data-sheet-count></span></div><div data-sheet-table></div><div class="form-actions"><button class="button secondary" type="button" data-clear-sheet>Clear scan</button><button class="button primary" type="button" data-save-sheet disabled>Save valid entries</button></div></section></section>`;
+  view.innerHTML=view.innerHTML.replace('<section class="panel"><h3>Register a pigeon</h3>',`${importPanel}<section class="panel"><h3>Register a pigeon</h3>`);
+  const newForm=view.querySelector('#entry-form');if(newForm&&submitHandler)newForm.onsubmit=submitHandler;
+  const registeredPanel=[...view.querySelectorAll('.panel')].find(panel=>panel.querySelector('h3')?.textContent==='Registered pigeons');
+  if(registeredPanel)registeredPanel.innerHTML='<div class="panel-heading"><h3>Registered pigeons</h3></div><div data-registered-entries></div>';
+  const fileInput=view.querySelector('[data-sheet-file]'),raceSelect=view.querySelector('[data-sheet-race]'),readButton=view.querySelector('[data-read-sheet]'),rotateButton=view.querySelector('[data-rotate-sheet]'),status=view.querySelector('[data-sheet-status]'),preview=view.querySelector('[data-sheet-preview]'),previewCanvas=view.querySelector('[data-sheet-preview-canvas]'),review=view.querySelector('[data-sheet-review]'),table=view.querySelector('[data-sheet-table]'),count=view.querySelector('[data-sheet-count]'),saveButton=view.querySelector('[data-save-sheet]');
+  if(!fileInput)return;
+  let sourceCanvas=null,rotation=0,rows=[],validationTimer=null,validationSequence=0;
+  const drawRegistered=()=>{const mapped=entries.map(entry=>({...entry,member:members.find(member=>member.id===entry.member_id),race:races.find(race=>race.id===entry.race_id)}));view.querySelector('[data-registered-entries]').innerHTML=tableRows(mapped,[{key:'race',label:'Race',render:item=>escapeHTML(item.race?.name||'—')},{key:'member',label:'Member',render:item=>`${escapeHTML(item.member?.member_no||'—')} · ${escapeHTML(item.member?.full_name||'')}`},{key:'pigeon_ring',label:'Ring'},{key:'barcode',label:'Barcode'},{key:'distance_m',label:'Distance',render:item=>`${number(item.distance_m)} m`}],'No pigeons registered.',false);};
+  drawRegistered();
+  const redrawRows=()=>{
+    review.hidden=!rows.length;count.textContent=`${rows.length} row${rows.length===1?'':'s'}`;
+    table.innerHTML=rows.length?`<div class="table-scroll entry-sheet-table"><table><thead><tr><th>Sheet row</th><th>Member ID</th><th>Ring</th><th>Barcode</th><th>Check</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr data-sheet-row="${escapeHTML(row.id)}"><td data-label="Sheet row"><span class="entry-sheet-row-number">${escapeHTML(row.sheetRow)}</span></td><td data-label="Member ID"><input class="entry-sheet-input" data-sheet-field="member_no" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.member_no)}" aria-label="Member ID, source row ${escapeHTML(row.sheetRow)}"></td><td data-label="Ring"><input class="entry-sheet-input" data-sheet-field="pigeon_ring" data-sheet-id="${escapeHTML(row.id)}" maxlength="80" value="${escapeHTML(row.pigeon_ring)}" aria-label="Ring number, source row ${escapeHTML(row.sheetRow)}"></td><td data-label="Barcode"><input class="entry-sheet-input" data-sheet-field="barcode" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.barcode)}" aria-label="Barcode, source row ${escapeHTML(row.sheetRow)}"></td><td data-label="Check"><span class="entry-sheet-row-status" data-sheet-row-status="${escapeHTML(row.id)}">Checking…</span></td><td data-label="Remove"><button class="text-button danger-text" type="button" data-remove-sheet-row="${escapeHTML(row.id)}">Remove</button></td></tr>`).join('')}</tbody></table></div>`:'';
+    table.querySelectorAll('[data-sheet-field]').forEach(input=>input.addEventListener('input',()=>{const row=rows.find(item=>item.id===input.dataset.sheetId);if(row)row[input.dataset.sheetField]=input.value;clearTimeout(validationTimer);validationTimer=setTimeout(()=>validateRows(),400);}));
+    table.querySelectorAll('[data-remove-sheet-row]').forEach(button=>button.onclick=()=>{rows=rows.filter(row=>row.id!==button.dataset.removeSheetRow);redrawRows();validateRows();});
+  };
+  async function validateRows(){
+    const sequence=++validationSequence,raceId=Number(raceSelect.value),codes=[...new Set(rows.map(row=>row.barcode.trim()).filter(code=>code&&code.length<=120))],registered=new Set();let registryError=null;
+    for(let offset=0;offset<codes.length;offset+=100){const {data,error}=await supabase.from('barcode_stickers').select('barcode_number').in('barcode_number',codes.slice(offset,offset+100));if(error){registryError=error;break;}for(const sticker of data||[])registered.add(sticker.barcode_number);}
+    if(sequence!==validationSequence)return;
+    const raceEntries=entries.filter(entry=>entry.race_id===raceId),seenRings=new Set(),seenCodes=new Set();let ready=0;
+    for(const row of rows){
+      const errors=[],memberCode=row.member_no.trim(),ring=row.pigeon_ring.trim().toUpperCase(),barcode=row.barcode.trim();
+      row.member=members.find(member=>String(member.member_no).trim().toUpperCase()===memberCode.toUpperCase())||members.find(member=>String(member.id)===memberCode)||null;
+      if(!raceId)errors.push('Choose a race.');
+      if(!memberCode||!row.member)errors.push('Member ID is not registered in this club.');
+      if(!ring)errors.push('Ring number is missing.');
+      if(!barcode)errors.push('Barcode is missing.');
+      if(barcode.length>120)errors.push('Barcode is longer than 120 characters.');
+      if(registryError&&barcode)errors.push('Could not verify the sticker registry. Check the connection.');
+      else if(barcode&&!registered.has(barcode))errors.push('Barcode is not registered by Super Admin.');
+      if(ring&&raceEntries.some(entry=>String(entry.pigeon_ring||'').toUpperCase()===ring))errors.push('Ring is already registered for this race.');
+      if(barcode&&raceEntries.some(entry=>entry.barcode===barcode))errors.push('Barcode is already registered for this race.');
+      if(ring&&seenRings.has(ring))errors.push('Ring is duplicated in this scan.');
+      if(barcode&&seenCodes.has(barcode))errors.push('Barcode is duplicated in this scan.');
+      if(ring)seenRings.add(ring);if(barcode)seenCodes.add(barcode);row.errors=errors;if(!errors.length)ready++;
+      const indicator=table.querySelector(`[data-sheet-row-status="${row.id}"]`);if(indicator){indicator.textContent=errors.length?errors.join(' '):'Ready to save';indicator.classList.toggle('has-error',errors.length>0);indicator.classList.toggle('is-ready',!errors.length);}
+    }
+    saveButton.disabled=!ready||!raceId;saveButton.textContent=ready?`Save ${ready} valid row${ready===1?'':'s'}`:'Save valid entries';count.textContent=`${rows.length} row${rows.length===1?'':'s'} · ${ready} ready`;
+  }
+  const drawPreview=()=>{if(!sourceCanvas)return;const rotated=rotateDocumentCanvas(sourceCanvas,rotation);previewCanvas.width=rotated.width;previewCanvas.height=rotated.height;previewCanvas.getContext('2d').drawImage(rotated,0,0);preview.hidden=false;rotateButton.disabled=false;readButton.disabled=false;};
+  fileInput.onchange=async()=>{const file=fileInput.files?.[0];if(!file)return;rows=[];redrawRows();readButton.disabled=true;rotateButton.disabled=true;status.textContent='Preparing the document…';try{sourceCanvas=await documentFileToCanvas(file);rotation=0;drawPreview();status.textContent=`${file.name} is ready. Rotate if needed, then read it.`;}catch(error){sourceCanvas=null;preview.hidden=true;status.textContent=error.message;message(error.message,'error');}};
+  rotateButton.onclick=()=>{rotation=(rotation+90)%360;drawPreview();status.textContent=`Preview rotated ${rotation}°. Read it when the text is upright.`;};
+  readButton.onclick=async()=>{
+    if(!sourceCanvas)return;if(!Number(raceSelect.value)){message('Choose the race schedule for this sheet first.','error');raceSelect.focus();return;}
+    readButton.disabled=true;rotateButton.disabled=true;status.textContent='Loading the document reader…';let worker=null;
+    try{
+      const OCR=await loadDocumentOCR();worker=await OCR.createWorker('eng',1,{workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',langPath:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int',logger:progress=>{if(progress.status==='recognizing text')status.textContent=`Reading document… ${Math.round((progress.progress||0)*100)}%`;else if(progress.status)status.textContent=`${progress.status}…`;}});
+      const rotated=rotateDocumentCanvas(sourceCanvas,rotation),result=await worker.recognize(rotated);rows=entrySheetRowsFromOCR(result.data,rotated);redrawRows();
+      if(!rows.length){status.textContent='No rows were detected. Rotate the document or use a clearer scan, then try again.';review.hidden=true;return;}
+      status.textContent=`Detected ${rows.length} row${rows.length===1?'':'s'}. OCR may misread handwriting; check the table before saving.`;await validateRows();review.scrollIntoView({behavior:'smooth',block:'start'});
+    }catch(error){status.textContent=error.message||'Could not read this document.';message(status.textContent,'error');}
+    finally{if(worker)await worker.terminate();readButton.disabled=!sourceCanvas;rotateButton.disabled=!sourceCanvas;}
+  };
+  raceSelect.onchange=()=>{if(rows.length)validateRows();};
+  view.querySelector('[data-clear-sheet]').onclick=()=>{rows=[];sourceCanvas=null;rotation=0;fileInput.value='';preview.hidden=true;review.hidden=true;readButton.disabled=true;rotateButton.disabled=true;saveButton.disabled=true;status.textContent='Upload a photo or PDF to start.';};
+  saveButton.onclick=async()=>{
+    await validateRows();const race=races.find(item=>item.id===Number(raceSelect.value)),valid=rows.filter(row=>!row.errors.length&&row.member),savedIds=new Set(valid.map(row=>row.id));if(!race||!valid.length){message('There are no valid rows to save. Correct the errors in the table.','error');return;}
+    const payload=valid.map(row=>({race_id:race.id,member_id:row.member.id,pigeon_ring:row.pigeon_ring.trim().toUpperCase(),barcode:row.barcode.trim(),pooling:0,category:'Open Category',race_type:'Regular Race/Set',distance_m:distanceMeters(race.release_latitude,race.release_longitude,row.member.latitude,row.member.longitude)}));
+    saveButton.disabled=true;saveButton.textContent='Saving…';const {error}=await supabase.from('race_entries').insert(payload);if(error){message(dbError(error),'error');await validateRows();return;}
+    entries.unshift(...payload.map((entry,index)=>({...entry,id:`sheet-entry-${Date.now()}-${index}`})));const skipped=rows.length-valid.length;rows=rows.filter(row=>!savedIds.has(row.id));drawRegistered();redrawRows();if(rows.length)await validateRows();else saveButton.disabled=true;
+    status.textContent=`Saved ${valid.length} pigeon${valid.length===1?'':'s'}${skipped?`; ${skipped} row${skipped===1?' was':'s were'} skipped because of errors.`:'.'}`;message(status.textContent,skipped?'info':'success');
+  };
+}
 async function entriesPage(view) {
   const [{data:races,error:a},{data:members,error:b}]=await Promise.all([supabase.from('races').select('*').order('id',{ascending:false}),supabase.from('members').select('id,member_no,full_name,loft_name,latitude,longitude').order('member_no')]);if(a||b)throw a||b;
   const {data:entries,error}=await supabase.from('race_entries').select('*').order('id',{ascending:false});if(error)throw error;
   view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">PIGEON ROSTER</span><h2>Race entries</h2><p>Register each pigeon once for the selected schedule.</p></div></div><section class="panel"><h3>Register a pigeon</h3><form id="entry-form" class="form-grid"><label class="field"><span>Race schedule</span><select name="race_id" required><option value="">Choose a race</option>${races.map(r=>`<option value="${r.id}">${escapeHTML(r.name)}</option>`).join('')}</select></label><label class="field"><span>Member</span><select name="member_id" required><option value="">Choose a member</option>${members.map(m=>`<option value="${m.id}">${escapeHTML(m.member_no)} · ${escapeHTML(m.full_name)}</option>`).join('')}</select></label><label class="field"><span>Ring number</span><input name="pigeon_ring" maxlength="80" required></label><label class="field"><span>Race barcode · global sticker</span><input name="barcode" maxlength="120" required autocomplete="off" autocapitalize="none" autocorrect="off" placeholder="Type or scan the registered number"><small class="small">Use a sticker registered by Super Admin. The same global barcode can be used by any club.</small></label><label class="field"><span>Category</span><select name="category"><option>Open Category</option><option>Young Bird</option><option>Old Bird</option><option>Special Category</option></select></label><label class="field"><span>Race type</span><select name="race_type"><option>Regular Race/Set</option><option>Training Toss</option><option>Special Race</option></select></label><label class="field"><span>Pooling</span><select name="pooling"><option value="0">No</option><option value="1">Yes</option></select></label><div class="form-actions"><button class="button primary">Save entry</button></div></form></section><section class="panel"><div class="panel-heading"><h3>Registered pigeons</h3></div>${tableRows(entries.map(e=>({...e,member:members.find(m=>m.id===e.member_id),race:races.find(r=>r.id===e.race_id)})),[{key:'race',label:'Race',render:r=>escapeHTML(r.race?.name||'—')},{key:'member',label:'Member',render:r=>`${escapeHTML(r.member?.member_no||'—')} · ${escapeHTML(r.member?.full_name||'')}`},{key:'pigeon_ring',label:'Ring'},{key:'barcode',label:'Barcode'},{key:'distance_m',label:'Distance',render:r=>`${number(r.distance_m)} m`}],'No pigeons registered.',false)}</section>`;
   view.querySelector('#entry-form').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,m=members.find(x=>x.id===Number(f.member_id.value)),r=races.find(x=>x.id===Number(f.race_id.value)),barcode=f.barcode.value.trim();if(!m||!r)return;const {data:sticker,error:stickerError}=await supabase.from('barcode_stickers').select('barcode_number').eq('barcode_number',barcode).maybeSingle();if(stickerError){message(stickerError.message.includes('barcode_stickers')?'The global sticker registry is not installed. Run sticker-barcodes.sql in Supabase SQL Editor.':stickerError.message,'error');return;}if(!sticker){message('This barcode is not registered. Ask the Super Admin to register it first.','error');return;}const {error}=await supabase.from('race_entries').insert({race_id:r.id,member_id:m.id,pigeon_ring:f.pigeon_ring.value.trim().toUpperCase(),barcode,pooling:Number(f.pooling.value),category:f.category.value,race_type:f.race_type.value,distance_m:distanceMeters(r.release_latitude,r.release_longitude,m.latitude,m.longitude)});if(error){message(dbError(error),'error');return;}location.reload();};
+  mountEntrySheetImport(view,races,members,entries);
 }
 async function clockPage(view,identity) {
  const [{data:races,error:a},{data:entries,error:b}]=await Promise.all([supabase.from('races').select('id,name,status,release_at_utc').eq('status','open').order('id',{ascending:false}),supabase.from('race_entries').select('id,race_id,member_id,pigeon_ring,barcode').order('id')]);if(a||b)throw a||b;

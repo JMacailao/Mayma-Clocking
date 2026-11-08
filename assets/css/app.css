@@ -259,3 +259,21 @@ video#camera[hidden]{display:none}
 .race-release-editor input:focus{outline:none;border-color:#6e9b83;box-shadow:0 0 0 3px #4f856517}
 .race-release-editor .button{min-height:40px;padding:0 12px;white-space:nowrap}
 @media(max-width:720px){.race-release-editor{grid-template-columns:minmax(0,1fr);min-width:0;width:100%}.race-release-editor input{min-height:44px;font-size:16px}.race-release-editor .button{width:100%}}
+
+.entry-sheet-panel>.panel-heading{align-items:flex-start}
+.entry-sheet-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}
+.entry-sheet-controls .field input[type=file]{height:auto;min-height:44px;padding:9px;background:#fbfcfa}
+.entry-sheet-actions{display:flex;align-items:center;gap:9px;margin-top:15px}
+.entry-sheet-status{margin:13px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+.entry-sheet-preview{max-height:62vh;overflow:auto;margin-top:14px;padding:10px;border:1px solid var(--line);border-radius:9px;background:#f8f9f6;text-align:center}
+.entry-sheet-preview canvas{display:block;width:auto;height:auto;max-width:100%;max-height:58vh;margin:auto;object-fit:contain}
+.entry-sheet-review{margin-top:21px;padding-top:20px;border-top:1px solid var(--line)}
+.entry-sheet-review .panel-heading{align-items:flex-start}
+.entry-sheet-table table{min-width:790px}
+.entry-sheet-input{width:100%;min-width:130px;min-height:40px;padding:0 9px;border:1px solid #dfe3dc;border-radius:7px;background:#fff;color:var(--ink);font-size:12px}
+.entry-sheet-input:focus{outline:none;border-color:#6e9b83;box-shadow:0 0 0 3px #4f856517}
+.entry-sheet-row-number{color:#68746c;font-weight:700;font-variant-numeric:tabular-nums}
+.entry-sheet-row-status{display:block;min-width:140px;color:#9f4e41;font-size:11px;line-height:1.45}
+.entry-sheet-row-status.is-ready{color:var(--green);font-weight:700}
+.entry-sheet-panel .form-actions{justify-content:flex-end}
+@media(max-width:720px){.entry-sheet-controls{grid-template-columns:1fr}.entry-sheet-actions{display:grid;grid-template-columns:1fr 1fr}.entry-sheet-actions .button{width:100%;min-width:0}.entry-sheet-input{min-width:0;min-height:44px;font-size:16px}.entry-sheet-table table{min-width:0}.entry-sheet-panel .form-actions{flex-direction:column-reverse;align-items:stretch}.entry-sheet-panel .form-actions .button{width:100%}}

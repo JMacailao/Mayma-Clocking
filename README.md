@@ -74,7 +74,9 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/admin/users/`: create, edit credentials, disable and reactivate administrator or staff accounts.
 - `pages/admin/race-points/`: release locations.
 - `pages/admin/races/`: race schedules and status.
-- `pages/admin/entries/`: registered pigeons and barcodes.
+- `pages/admin/entries/`: registered pigeons and barcodes, with photo/PDF race-sheet
+  OCR, an editable review table, and checks for registered members and stickers. PDF
+  uploads read the first page; handwritten OCR results should be checked before saving.
 - `pages/admin/clocking/`: admin receipts.
 - `pages/admin/results/`: provisional leaderboard.
 - `pages/member/dashboard/`: a member's open races.
