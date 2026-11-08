@@ -146,6 +146,33 @@ function loadDocumentOCR(){
   }).catch(error=>{documentOcrPromise=null;document.querySelector('[data-tesseract]')?.remove();throw error;});
   return documentOcrPromise;
 }
+let documentBarcodeReaderPromise=null;
+function loadDocumentBarcodeReader(){
+  if(!documentBarcodeReaderPromise)documentBarcodeReaderPromise=Promise.all([
+    import('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm'),
+    import('https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/+esm')
+  ]).then(([browserZXing,zxing])=>{
+    const hints=new Map();hints.set(zxing.DecodeHintType.POSSIBLE_FORMATS,[browserZXing.BarcodeFormat.CODE_128,browserZXing.BarcodeFormat.CODE_39,browserZXing.BarcodeFormat.EAN_13,browserZXing.BarcodeFormat.EAN_8,browserZXing.BarcodeFormat.UPC_A,browserZXing.BarcodeFormat.UPC_E,browserZXing.BarcodeFormat.ITF,browserZXing.BarcodeFormat.CODABAR,browserZXing.BarcodeFormat.QR_CODE,browserZXing.BarcodeFormat.DATA_MATRIX,browserZXing.BarcodeFormat.PDF_417,browserZXing.BarcodeFormat.AZTEC]);hints.set(zxing.DecodeHintType.TRY_HARDER,true);
+    return new browserZXing.BrowserMultiFormatReader(hints);
+  }).catch(error=>{documentBarcodeReaderPromise=null;throw error;});
+  return documentBarcodeReaderPromise;
+}
+async function scanSheetBarcodes(source,rows,reader,onProgress=()=>{}){
+  for(let index=0;index<rows.length;index++){
+    const row=rows[index],region=row.barcodeRegion;
+    if(!region){row.barcodeScanError='Barcode area could not be located. Enter or correct the barcode manually.';onProgress(index+1,rows.length);continue;}
+    const left=Math.max(0,Math.floor(region.left)),top=Math.max(0,Math.floor(region.top)),right=Math.min(source.width,Math.ceil(region.right)),bottom=Math.min(source.height,Math.ceil(region.bottom)),width=right-left,height=bottom-top;
+    if(width<8||height<8){row.barcodeScanError='Barcode area could not be located. Enter or correct the barcode manually.';onProgress(index+1,rows.length);continue;}
+    const scale=Math.min(3,Math.max(1,900/width)),crop=document.createElement('canvas');crop.width=Math.max(1,Math.round(width*scale));crop.height=Math.max(1,Math.round(height*scale));crop.getContext('2d').drawImage(source,left,top,width,height,0,0,crop.width,crop.height);
+    let result=null;
+    for(const angle of [0,90,270,180]){try{result=reader.decodeFromCanvas(angle?rotateDocumentCanvas(crop,angle):crop);break;}catch{}}
+    const value=result?.getText?.().trim().replace(/\s+/g,'')||'';
+    if(value){row.barcode=value;row.barcodeDetected=true;row.barcodeScanError='';}
+    else{row.barcodeDetected=false;row.barcodeScanError='Barcode image was not detected. Type or correct the barcode.';}
+    reader.reset?.();onProgress(index+1,rows.length);
+  }
+  return rows;
+}
 async function documentFileToCanvas(file){
   if(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf')){
     const pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs');
@@ -185,25 +212,28 @@ function entrySheetRowsFromOCR(ocrData,canvas){
   let columns=fallback;
   if(rules.vertical.length>=6){columns=rules.vertical.sort((a,b)=>b.strength-a.strength).slice(0,6).sort((a,b)=>a.position-b.position).map(rule=>rule.position);}
   const allWords=ocrData.words?.length?ocrData.words:(ocrData.lines||[]).flatMap(line=>line.words||[]),wordCenterY=word=>(word.bbox.y0+word.bbox.y1)/2;
-  let groups=[];
+  let groups=[],hasRowRules=false;
   if(rules.horizontal.length>=3){
     const yBounds=[0,...rules.horizontal.map(rule=>rule.position),canvas.height];
-    for(let index=1;index<yBounds.length;index++){const top=yBounds[index-1],bottom=yBounds[index];if(bottom-top<12)continue;const words=allWords.filter(word=>wordCenterY(word)>=top&&wordCenterY(word)<bottom);if(words.length)groups.push(words);}
+    for(let index=1;index<yBounds.length;index++){const top=yBounds[index-1],bottom=yBounds[index];if(bottom-top<12)continue;const words=allWords.filter(word=>wordCenterY(word)>=top&&wordCenterY(word)<bottom);if(words.length)groups.push({words,top,bottom});}
+    hasRowRules=groups.length>0;
   }
-  if(!groups.length)groups=(ocrData.lines||[]).map(line=>line.words||[]).filter(words=>words.length);
+  if(!groups.length)groups=(ocrData.lines||[]).map(line=>({words:line.words||[],top:line.bbox?.y0,bottom:line.bbox?.y1})).filter(group=>group.words.length);
   if(!groups.length&&allWords.length){
     const sorted=[...allWords].sort((a,b)=>wordCenterY(a)-wordCenterY(b)),lineHeight=sorted.map(word=>Math.max(1,word.bbox.y1-word.bbox.y0)).sort((a,b)=>a-b)[Math.floor(sorted.length/2)]||18;
-    for(const word of sorted){const center=wordCenterY(word),group=groups.find(row=>Math.abs(row.center-center)<lineHeight*1.8);if(group){const count=group.words.length;group.words.push(word);group.center=(group.center*count+center)/(count+1);}else groups.push({center,words:[word]});}
-    groups=groups.map(group=>Array.isArray(group)?group:group.words);
+    for(const word of sorted){const center=wordCenterY(word),group=groups.find(row=>Math.abs(row.center-center)<lineHeight*1.8);if(group){const count=group.words.length;group.words.push(word);group.center=(group.center*count+center)/(count+1);group.top=Math.min(group.top,word.bbox.y0);group.bottom=Math.max(group.bottom,word.bbox.y1);}else groups.push({center,top:word.bbox.y0,bottom:word.bbox.y1,words:[word]});}
   }
+  if(!hasRowRules&&groups.length===1){groups[0].top=0;groups[0].bottom=canvas.height;}
+  if(!hasRowRules&&groups.length>1){groups.sort((a,b)=>((a.top??wordCenterY(a.words[0]))+(a.bottom??wordCenterY(a.words[0])))-((b.top??wordCenterY(b.words[0]))+(b.bottom??wordCenterY(b.words[0]))));const centers=groups.map(group=>group.words.reduce((sum,word)=>sum+wordCenterY(word),0)/group.words.length);groups.forEach((group,index)=>{const center=centers[index],previous=index?centers[index-1]:null,next=index<centers.length-1?centers[index+1]:null;group.top=previous===null?Math.max(0,center-(next-center)/2):(previous+center)/2;group.bottom=next===null?Math.min(canvas.height,center+(center-previous)/2):(center+next)/2;});}
   const cellText=(words,left,right)=>words.filter(word=>{const x=(word.bbox.x0+word.bbox.x1)/2;return x>=left&&x<right;}).sort((a,b)=>a.bbox.x0-b.bbox.x0).map(word=>String(word.text||'').trim()).filter(Boolean);
   const results=[];
-  for(const words of groups){
+  for(const group of groups){
+    const words=group.words;
     const cells=Array.from({length:5},(_,index)=>cellText(words,columns[index],columns[index+1]));
-    if(!cells[1].length&&!cells[2].length&&!cells[4].length)continue;
-    const numberText=cells[0].join(' ').match(/\d{1,4}/)?.[0]||String(results.length+1),memberNo=cells[1].join(' ').trim(),ring=cells[2].join('').replace(/\s+/g,'').trim(),barcode=cells[4].join('').replace(/\s+/g,'').trim();
-    if(/^(?:no\.?|number|member|member\s*id|ring|barcode)$/i.test(`${memberNo} ${ring} ${barcode}`))continue;
-    results.push({id:`sheet-${Date.now()}-${results.length}-${Math.random().toString(36).slice(2,7)}`,sheetRow:numberText,member_no:memberNo,pigeon_ring:ring,barcode,errors:[],member:null});
+    if(!cells.some(cell=>cell.length))continue;
+    const numberText=cells[0].join(' ').match(/\d{1,4}/)?.[0]||String(results.length+1),memberNo=cells[1].join(' ').trim(),ring=cells[2].join('').replace(/\s+/g,'').trim(),barcode=cells[4].join('').replace(/\s+/g,'').trim(),allCellText=cells.flat().join(' ').toLowerCase();
+    if(!cells[0].join(' ').match(/\d/)&&/member/.test(allCellText)&&/ring/.test(allCellText)&&/barcode/.test(allCellText))continue;
+    results.push({id:`sheet-${Date.now()}-${results.length}-${Math.random().toString(36).slice(2,7)}`,sheetRow:numberText,member_no:memberNo,pigeon_ring:ring,barcode,barcodeDetected:false,barcodeScanError:'',barcodeRegion:{left:columns[4],right:columns[5],top:group.top??Math.min(...words.map(word=>word.bbox.y0)),bottom:group.bottom??Math.max(...words.map(word=>word.bbox.y1))},errors:[],member:null,saved:false});
   }
   return results;
 }
@@ -680,7 +710,7 @@ function distanceMeters(lat1,lon1,lat2,lon2){const rad=n=>n*Math.PI/180;const a=
 function mountEntrySheetImport(view,races,members,entries){
   const existingForm=view.querySelector('#entry-form'),submitHandler=existingForm?.onsubmit;
   const raceOptions=races.map(race=>`<option value="${race.id}">${escapeHTML(race.name)}</option>`).join('');
-  const importPanel=`<section class="panel entry-sheet-panel"><div class="panel-heading"><div><h3>Scan or upload a race sheet</h3><p class="small">Reads the row number, member ID, ring, skips the next column, and reads the final barcode column. Review OCR results before saving.</p></div></div><div class="entry-sheet-controls"><label class="field"><span>Race schedule</span><select data-sheet-race><option value="">Choose a race</option>${raceOptions}</select></label><label class="field"><span>Document photo or PDF</span><input type="file" data-sheet-file accept="image/*,.pdf,application/pdf" capture="environment"><small class="small">PDF uploads read the first page. Use a clear photo; rotate the preview if the text is sideways.</small></label></div><div class="entry-sheet-actions"><button class="button secondary" type="button" data-rotate-sheet disabled>Rotate 90°</button><button class="button primary" type="button" data-read-sheet disabled>Read document</button></div><p class="entry-sheet-status" data-sheet-status aria-live="polite">Upload a photo or PDF to start.</p><div class="entry-sheet-preview" data-sheet-preview hidden><canvas data-sheet-preview-canvas></canvas></div><section class="entry-sheet-review" data-sheet-review hidden><div class="panel-heading"><div><h3>Review scanned entries</h3><p class="small">Correct OCR mistakes. Rows with an unknown member, unregistered barcode, or duplicate will be skipped.</p></div><span class="count-pill" data-sheet-count></span></div><div data-sheet-table></div><div class="form-actions"><button class="button secondary" type="button" data-clear-sheet>Clear scan</button><button class="button primary" type="button" data-save-sheet disabled>Save valid entries</button></div></section></section>`;
+  const importPanel=`<section class="panel entry-sheet-panel"><div class="panel-heading"><div><h3>Scan or upload a race sheet</h3><p class="small">Reads the row number, member ID, and ring, skips the next column, and scans each barcode in the final column. Review every row before saving.</p></div></div><div class="entry-sheet-controls"><label class="field"><span>Race schedule</span><select data-sheet-race><option value="">Choose a race</option>${raceOptions}</select></label><label class="field"><span>Document photo or PDF</span><input type="file" data-sheet-file accept="image/*,.pdf,application/pdf" capture="environment"><small class="small">PDF uploads read the first page. Use a clear photo; rotate the preview if the text is sideways.</small></label></div><div class="entry-sheet-actions"><button class="button secondary" type="button" data-rotate-sheet disabled>Rotate 90°</button><button class="button primary" type="button" data-read-sheet disabled>Read sheet + scan barcodes</button></div><p class="entry-sheet-status" data-sheet-status aria-live="polite">Upload a photo or PDF to start.</p><div class="entry-sheet-preview" data-sheet-preview hidden><canvas data-sheet-preview-canvas></canvas></div><section class="entry-sheet-review" data-sheet-review hidden><div class="panel-heading"><div><h3>Review scanned entries</h3><p class="small">All detected rows stay in the table. Red rows show errors; fix them before saving those entries.</p></div><span class="count-pill" data-sheet-count></span></div><div data-sheet-table></div><div class="form-actions"><button class="button secondary" type="button" data-clear-sheet>Clear scan</button><button class="button primary" type="button" data-save-sheet disabled>Save valid entries</button></div></section></section>`;
   view.innerHTML=view.innerHTML.replace('<section class="panel"><h3>Register a pigeon</h3>',`${importPanel}<section class="panel"><h3>Register a pigeon</h3>`);
   const newForm=view.querySelector('#entry-form');if(newForm&&submitHandler)newForm.onsubmit=submitHandler;
   const registeredPanel=[...view.querySelectorAll('.panel')].find(panel=>panel.querySelector('h3')?.textContent==='Registered pigeons');
@@ -692,22 +722,25 @@ function mountEntrySheetImport(view,races,members,entries){
   drawRegistered();
   const redrawRows=()=>{
     review.hidden=!rows.length;count.textContent=`${rows.length} row${rows.length===1?'':'s'}`;
-    table.innerHTML=rows.length?`<div class="table-scroll entry-sheet-table"><table><thead><tr><th>Sheet row</th><th>Member ID</th><th>Ring</th><th>Barcode</th><th>Check</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr data-sheet-row="${escapeHTML(row.id)}"><td data-label="Sheet row"><span class="entry-sheet-row-number">${escapeHTML(row.sheetRow)}</span></td><td data-label="Member ID"><input class="entry-sheet-input" data-sheet-field="member_no" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.member_no)}" aria-label="Member ID, source row ${escapeHTML(row.sheetRow)}"></td><td data-label="Ring"><input class="entry-sheet-input" data-sheet-field="pigeon_ring" data-sheet-id="${escapeHTML(row.id)}" maxlength="80" value="${escapeHTML(row.pigeon_ring)}" aria-label="Ring number, source row ${escapeHTML(row.sheetRow)}"></td><td data-label="Barcode"><input class="entry-sheet-input" data-sheet-field="barcode" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.barcode)}" aria-label="Barcode, source row ${escapeHTML(row.sheetRow)}"></td><td data-label="Check"><span class="entry-sheet-row-status" data-sheet-row-status="${escapeHTML(row.id)}">Checking…</span></td><td data-label="Remove"><button class="text-button danger-text" type="button" data-remove-sheet-row="${escapeHTML(row.id)}">Remove</button></td></tr>`).join('')}</tbody></table></div>`:'';
-    table.querySelectorAll('[data-sheet-field]').forEach(input=>input.addEventListener('input',()=>{const row=rows.find(item=>item.id===input.dataset.sheetId);if(row)row[input.dataset.sheetField]=input.value;clearTimeout(validationTimer);validationTimer=setTimeout(()=>validateRows(),400);}));
+    table.innerHTML=rows.length?`<div class="table-scroll entry-sheet-table"><table><thead><tr><th>Sheet row</th><th>Member ID</th><th>Ring</th><th>Barcode</th><th>Error / status</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr data-sheet-row="${escapeHTML(row.id)}" class="${row.saved?'is-saved':row.errors?.length?'has-errors':''}"><td data-label="Sheet row"><span class="entry-sheet-row-number">${escapeHTML(row.sheetRow)}</span></td><td data-label="Member ID"><input class="entry-sheet-input" data-sheet-field="member_no" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.member_no)}" aria-label="Member ID, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Ring"><input class="entry-sheet-input" data-sheet-field="pigeon_ring" data-sheet-id="${escapeHTML(row.id)}" maxlength="80" value="${escapeHTML(row.pigeon_ring)}" aria-label="Ring number, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Barcode"><input class="entry-sheet-input" data-sheet-field="barcode" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.barcode)}" aria-label="Barcode, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Error / status"><span class="entry-sheet-row-status ${row.saved?'is-saved':row.errors?.length?'has-error':''}" data-sheet-row-status="${escapeHTML(row.id)}">${row.saved?'Saved':'Checking…'}</span></td><td data-label="Remove"><button class="text-button danger-text" type="button" data-remove-sheet-row="${escapeHTML(row.id)}" ${row.saved?'disabled':''}>Remove</button></td></tr>`).join('')}</tbody></table></div>`:'';
+    table.querySelectorAll('[data-sheet-field]').forEach(input=>input.addEventListener('input',()=>{const row=rows.find(item=>item.id===input.dataset.sheetId);if(row){row[input.dataset.sheetField]=input.value;if(input.dataset.sheetField==='barcode')row.barcodeScanError='';}clearTimeout(validationTimer);validationTimer=setTimeout(()=>validateRows(),400);}));
     table.querySelectorAll('[data-remove-sheet-row]').forEach(button=>button.onclick=()=>{rows=rows.filter(row=>row.id!==button.dataset.removeSheetRow);redrawRows();validateRows();});
   };
   async function validateRows(){
-    const sequence=++validationSequence,raceId=Number(raceSelect.value),codes=[...new Set(rows.map(row=>row.barcode.trim()).filter(code=>code&&code.length<=120))],registered=new Set();let registryError=null;
+    const sequence=++validationSequence,raceId=Number(raceSelect.value),codes=[...new Set(rows.filter(row=>!row.saved).map(row=>row.barcode.trim()).filter(code=>code&&code.length<=120))],registered=new Set();let registryError=null;
     for(let offset=0;offset<codes.length;offset+=100){const {data,error}=await supabase.from('barcode_stickers').select('barcode_number').in('barcode_number',codes.slice(offset,offset+100));if(error){registryError=error;break;}for(const sticker of data||[])registered.add(sticker.barcode_number);}
     if(sequence!==validationSequence)return;
-    const raceEntries=entries.filter(entry=>entry.race_id===raceId),seenRings=new Set(),seenCodes=new Set();let ready=0;
+    const raceEntries=entries.filter(entry=>entry.race_id===raceId),seenRings=new Set(),seenCodes=new Set();let ready=0,savedCount=0,errorCount=0;
     for(const row of rows){
+      const indicator=table.querySelector(`[data-sheet-row-status="${row.id}"]`),rowElement=table.querySelector(`[data-sheet-row="${row.id}"]`);
+      if(row.saved){row.errors=[];savedCount++;if(indicator){indicator.textContent='Saved';indicator.classList.remove('has-error','is-ready');indicator.classList.add('is-saved');}rowElement?.classList.remove('has-errors');rowElement?.classList.add('is-saved');continue;}
       const errors=[],memberCode=row.member_no.trim(),ring=row.pigeon_ring.trim().toUpperCase(),barcode=row.barcode.trim();
       row.member=members.find(member=>String(member.member_no).trim().toUpperCase()===memberCode.toUpperCase())||members.find(member=>String(member.id)===memberCode)||null;
       if(!raceId)errors.push('Choose a race.');
       if(!memberCode||!row.member)errors.push('Member ID is not registered in this club.');
       if(!ring)errors.push('Ring number is missing.');
-      if(!barcode)errors.push('Barcode is missing.');
+      if(!barcode)errors.push(row.barcodeScanError||'Barcode is missing.');
+      else if(row.barcodeScanError)errors.push(row.barcodeScanError);
       if(barcode.length>120)errors.push('Barcode is longer than 120 characters.');
       if(registryError&&barcode)errors.push('Could not verify the sticker registry. Check the connection.');
       else if(barcode&&!registered.has(barcode))errors.push('Barcode is not registered by Super Admin.');
@@ -715,10 +748,11 @@ function mountEntrySheetImport(view,races,members,entries){
       if(barcode&&raceEntries.some(entry=>entry.barcode===barcode))errors.push('Barcode is already registered for this race.');
       if(ring&&seenRings.has(ring))errors.push('Ring is duplicated in this scan.');
       if(barcode&&seenCodes.has(barcode))errors.push('Barcode is duplicated in this scan.');
-      if(ring)seenRings.add(ring);if(barcode)seenCodes.add(barcode);row.errors=errors;if(!errors.length)ready++;
-      const indicator=table.querySelector(`[data-sheet-row-status="${row.id}"]`);if(indicator){indicator.textContent=errors.length?errors.join(' '):'Ready to save';indicator.classList.toggle('has-error',errors.length>0);indicator.classList.toggle('is-ready',!errors.length);}
+      if(ring)seenRings.add(ring);if(barcode)seenCodes.add(barcode);row.errors=errors;if(!errors.length)ready++;else errorCount++;
+      if(indicator){indicator.textContent=errors.length?errors.join(' '):'Ready to save';indicator.classList.toggle('has-error',errors.length>0);indicator.classList.toggle('is-ready',!errors.length);indicator.classList.remove('is-saved');}
+      rowElement?.classList.toggle('has-errors',errors.length>0);rowElement?.classList.remove('is-saved');
     }
-    saveButton.disabled=!ready||!raceId;saveButton.textContent=ready?`Save ${ready} valid row${ready===1?'':'s'}`:'Save valid entries';count.textContent=`${rows.length} row${rows.length===1?'':'s'} · ${ready} ready`;
+    saveButton.disabled=!ready||!raceId;saveButton.textContent=ready?`Save ${ready} valid entr${ready===1?'y':'ies'}`:'Save valid entries';count.textContent=`${rows.length} items · ${savedCount} saved · ${ready} ready · ${errorCount} errors`;
   }
   const drawPreview=()=>{if(!sourceCanvas)return;const rotated=rotateDocumentCanvas(sourceCanvas,rotation);previewCanvas.width=rotated.width;previewCanvas.height=rotated.height;previewCanvas.getContext('2d').drawImage(rotated,0,0);preview.hidden=false;rotateButton.disabled=false;readButton.disabled=false;};
   fileInput.onchange=async()=>{const file=fileInput.files?.[0];if(!file)return;rows=[];redrawRows();readButton.disabled=true;rotateButton.disabled=true;status.textContent='Preparing the document…';try{sourceCanvas=await documentFileToCanvas(file);rotation=0;drawPreview();status.textContent=`${file.name} is ready. Rotate if needed, then read it.`;}catch(error){sourceCanvas=null;preview.hidden=true;status.textContent=error.message;message(error.message,'error');}};
@@ -730,18 +764,21 @@ function mountEntrySheetImport(view,races,members,entries){
       const OCR=await loadDocumentOCR();worker=await OCR.createWorker('eng',1,{workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',langPath:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int',logger:progress=>{if(progress.status==='recognizing text')status.textContent=`Reading document… ${Math.round((progress.progress||0)*100)}%`;else if(progress.status)status.textContent=`${progress.status}…`;}});
       const rotated=rotateDocumentCanvas(sourceCanvas,rotation),result=await worker.recognize(rotated);rows=entrySheetRowsFromOCR(result.data,rotated);redrawRows();
       if(!rows.length){status.textContent='No rows were detected. Rotate the document or use a clearer scan, then try again.';review.hidden=true;return;}
-      status.textContent=`Detected ${rows.length} row${rows.length===1?'':'s'}. OCR may misread handwriting; check the table before saving.`;await validateRows();review.scrollIntoView({behavior:'smooth',block:'start'});
+      status.textContent=`Detected ${rows.length} item${rows.length===1?'':'s'}. Scanning each barcode…`;
+      try{const barcodeReader=await loadDocumentBarcodeReader();await scanSheetBarcodes(rotated,rows,barcodeReader,(current,total)=>{status.textContent=`Scanning barcode images… ${current} of ${total}`;});}
+      catch(error){console.warn('Race-sheet barcode decoding is unavailable:',error);rows.forEach(row=>{row.barcodeDetected=false;row.barcodeScanError='Barcode scanner could not load. Type or confirm this barcode manually.';});}
+      redrawRows();status.textContent=`Scanned ${rows.length} item${rows.length===1?'':'s'}. Red rows show the errors to fix; review the OCR values before saving.`;await validateRows();review.scrollIntoView({behavior:'smooth',block:'start'});
     }catch(error){status.textContent=error.message||'Could not read this document.';message(status.textContent,'error');}
     finally{if(worker)await worker.terminate();readButton.disabled=!sourceCanvas;rotateButton.disabled=!sourceCanvas;}
   };
   raceSelect.onchange=()=>{if(rows.length)validateRows();};
   view.querySelector('[data-clear-sheet]').onclick=()=>{rows=[];sourceCanvas=null;rotation=0;fileInput.value='';preview.hidden=true;review.hidden=true;readButton.disabled=true;rotateButton.disabled=true;saveButton.disabled=true;status.textContent='Upload a photo or PDF to start.';};
   saveButton.onclick=async()=>{
-    await validateRows();const race=races.find(item=>item.id===Number(raceSelect.value)),valid=rows.filter(row=>!row.errors.length&&row.member),savedIds=new Set(valid.map(row=>row.id));if(!race||!valid.length){message('There are no valid rows to save. Correct the errors in the table.','error');return;}
+    await validateRows();const race=races.find(item=>item.id===Number(raceSelect.value)),valid=rows.filter(row=>!row.saved&&!row.errors.length&&row.member);if(!race||!valid.length){message('There are no valid rows to save. Correct the red rows in the table.','error');return;}
     const payload=valid.map(row=>({race_id:race.id,member_id:row.member.id,pigeon_ring:row.pigeon_ring.trim().toUpperCase(),barcode:row.barcode.trim(),pooling:0,category:'Open Category',race_type:'Regular Race/Set',distance_m:distanceMeters(race.release_latitude,race.release_longitude,row.member.latitude,row.member.longitude)}));
     saveButton.disabled=true;saveButton.textContent='Saving…';const {error}=await supabase.from('race_entries').insert(payload);if(error){message(dbError(error),'error');await validateRows();return;}
-    entries.unshift(...payload.map((entry,index)=>({...entry,id:`sheet-entry-${Date.now()}-${index}`})));const skipped=rows.length-valid.length;rows=rows.filter(row=>!savedIds.has(row.id));drawRegistered();redrawRows();if(rows.length)await validateRows();else saveButton.disabled=true;
-    status.textContent=`Saved ${valid.length} pigeon${valid.length===1?'':'s'}${skipped?`; ${skipped} row${skipped===1?' was':'s were'} skipped because of errors.`:'.'}`;message(status.textContent,skipped?'info':'success');
+    valid.forEach(row=>{row.saved=true;row.errors=[];});entries.unshift(...payload.map((entry,index)=>({...entry,id:`sheet-entry-${Date.now()}-${index}`})));drawRegistered();redrawRows();await validateRows();
+    const errorsLeft=rows.filter(row=>!row.saved).length;status.textContent=errorsLeft?`Saved ${valid.length} pigeon${valid.length===1?'':'s'}; ${errorsLeft} row${errorsLeft===1?'':'s'} still have errors.`:`Saved ${valid.length} pigeon${valid.length===1?'':'s'}. All scanned items remain visible in the table.`;message(status.textContent,errorsLeft?'info':'success');
   };
 }
 async function entriesPage(view) {
