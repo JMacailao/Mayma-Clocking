@@ -25,6 +25,8 @@ requests in the browser.
    2. `supabase-auth.sql` — skip if you already ran it
    3. `multi-club.sql` — adds clubs, `club_id`, roles and team-account management. Run
       it again after future SQL updates; it is safe to re-run.
+   4. `public-results.sql` — enables the public Results tab. Run it after the other
+      scripts; it is safe to re-run after future result changes.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.
@@ -65,4 +67,7 @@ Create a club account with exactly that name to hand the old data to that club.
 - `submit_member_clock` and `admin_record_clock` check the member, barcode, race
   status and release time, then write a server timestamp.
 - Clocking receipts are provisional evidence of server receipt time.
+- The login page's public Results tab needs no account. It shows non-rejected result
+  fields for a chosen club and Philippines-local race date; each club's other data
+  remains protected by row-level security.
 - Never put a service-role key in browser code.
