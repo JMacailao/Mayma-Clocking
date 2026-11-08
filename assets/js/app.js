@@ -224,14 +224,32 @@ async function loginPage() {
 const USERNAME_RE=/^[a-z0-9][a-z0-9_.-]{2,31}$/;
 const USERNAME_HELP='Username must be 3–32 characters and use letters, numbers, dots, hyphens, or underscores.';
 function renderSignIn(container){
- container.innerHTML=`<span class="eyebrow">CLUB PORTAL</span><h1>Welcome back</h1><p>Sign in with your club username and password.</p><div data-login-message class="notice" hidden></div><form id="login-form" class="form-grid"><label class="field"><span>Username</span><input name="username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]{2,31}" autocomplete="username" autocapitalize="none" spellcheck="false" required></label><label class="field"><span>Password</span><input name="password" type="password" autocomplete="current-password" required></label><button class="button primary" type="submit">Sign in <span>→</span></button></form><p class="login-help">Ask your club administrator to create your account or reset your password.</p>`;
+ let audience='team';
+ container.innerHTML=`<span class="eyebrow">CLUB PORTAL</span><h1 id="login-title">Welcome back</h1><p data-login-intro>Sign in with your club-team username and password.</p><div class="login-tabs" role="group" aria-label="Choose sign-in type"><button class="login-tab active" type="button" data-audience="team" aria-pressed="true">Club team</button><button class="login-tab" type="button" data-audience="member" aria-pressed="false">Member</button></div><div data-login-message class="notice" hidden></div><form id="login-form" class="form-grid"><label class="field"><span>Username</span><input name="username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]{2,31}" autocomplete="username" autocapitalize="none" spellcheck="false" required></label><label class="field"><span>Password</span><input name="password" type="password" autocomplete="current-password" required></label><button class="button primary" type="submit">Sign in <span>→</span></button></form><p class="login-help" data-login-help>For member access, ask your club administrator to create your account or reset your password.</p>`;
+ const helpCopy=container.querySelector('[data-login-help]');
+ const introCopy=container.querySelector('[data-login-intro]');
+ container.querySelectorAll('[data-audience]').forEach(tab=>tab.onclick=()=>{
+  audience=tab.dataset.audience;
+  container.querySelectorAll('[data-audience]').forEach(option=>{
+   const selected=option.dataset.audience===audience;
+   option.classList.toggle('active',selected);
+   option.setAttribute('aria-pressed',String(selected));
+  });
+  container.querySelector('#login-title').textContent=audience==='member'?'Member sign in':'Welcome back';
+  introCopy.textContent=audience==='member'?'Sign in with the username and password your club administrator gave you.':'Sign in with your club-team username and password.';
+  helpCopy.textContent=audience==='member'?'Need a member login? Ask your club administrator to create your account or reset your password.':'For member access, ask your club administrator to create your account or reset your password.';
+  container.querySelector('[data-login-message]').hidden=true;
+ });
  const form=container.querySelector('#login-form');
- form.onsubmit=async event=>{event.preventDefault();const username=form.elements.username.value.trim().toLowerCase();if(!USERNAME_RE.test(username)){loginMessage(container,USERNAME_HELP,'error');return;}const button=form.querySelector('button');button.disabled=true;button.textContent='Signing in…';
+ const tabs=[...container.querySelectorAll('[data-audience]')];
+ form.onsubmit=async event=>{event.preventDefault();const username=form.elements.username.value.trim().toLowerCase();if(!USERNAME_RE.test(username)){loginMessage(container,USERNAME_HELP,'error');return;}const button=form.querySelector('button');tabs.forEach(tab=>tab.disabled=true);button.disabled=true;button.textContent='Signing in…';
   const {data,error}=await supabase.auth.signInWithPassword({email:`${username}@users.mayma.invalid`,password:form.elements.password.value});
-  if(error){button.disabled=false;button.textContent='Sign in →';loginMessage(container,'Sign-in failed. Check your username and password.','error');return;}
+  if(error){tabs.forEach(tab=>tab.disabled=false);button.disabled=false;button.textContent='Sign in →';loginMessage(container,'Sign-in failed. Check your username and password.','error');return;}
   const {data:profile,error:profileError}=await supabase.from('app_profiles').select('role,username,is_active').eq('id',data.user.id).maybeSingle();
-  if(profileError||!profile||profile.username!==username){await signOutUser();button.disabled=false;button.textContent='Sign in →';loginMessage(container,'This account is not set up for the clocking app. Ask your administrator.','error');return;}
-  if(profile.is_active===false){await signOutUser();button.disabled=false;button.textContent='Sign in →';loginMessage(container,'This account is disabled. Ask your club administrator to reactivate it.','error');return;}
+  if(profileError||!profile||profile.username!==username){await signOutUser();tabs.forEach(tab=>tab.disabled=false);button.disabled=false;button.textContent='Sign in →';loginMessage(container,'This account is not set up for the clocking app. Ask your administrator.','error');return;}
+  if(profile.is_active===false){await signOutUser();tabs.forEach(tab=>tab.disabled=false);button.disabled=false;button.textContent='Sign in →';loginMessage(container,'This account is disabled. Ask your club administrator to reactivate it.','error');return;}
+  const isMember=profile.role==='member';
+  if((audience==='member')!==isMember){await signOutUser();tabs.forEach(tab=>tab.disabled=false);button.disabled=false;button.textContent='Sign in →';loginMessage(container,isMember?'This is a member account. Choose Member above.':'This is a club-team account. Choose Club team above.','error');return;}
   location.href=homeFor(profile.role);};
 }
 function renderSuperAdmin(container){
