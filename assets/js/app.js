@@ -75,7 +75,7 @@ function coordinateFieldHTML(key,label,value='') {
 }
 function coordinateMapHTML(fieldsList=[]) {
   const addressTarget=fieldsList.some(([key])=>key==='address')?'address':'';
-  const addressAction=addressTarget?'<div class="coordinate-map-tools"><button class="button secondary" type="button" data-get-address>Get Address</button><span data-address-status aria-live="polite">Use the coordinates to fill the address, then review it.</span></div>':'';
+  const addressAction=addressTarget?'<div class="coordinate-map-tools"><button class="button secondary" type="button" data-get-address>Get Address</button><span data-address-status aria-live="polite">Click Get Address to fill coordinates and address from your current location.</span></div>':'';
   return `<section class="coordinate-map" data-coordinate-map data-address-target="${addressTarget}" aria-label="Coordinate map preview">${addressAction}<div class="coordinate-map-heading"><div><h3>Map preview</h3><p data-map-status aria-live="polite">Enter latitude and longitude to preview this location.</p></div><a data-map-link target="_blank" rel="noopener noreferrer" hidden>Open in OpenStreetMap ↗</a></div><div class="coordinate-map-frame"><div class="coordinate-map-placeholder" data-map-placeholder><span class="map-placeholder-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.7"/></svg></span><span>Enter both coordinates to show the map.</span></div><iframe data-map-frame title="Map preview for the entered coordinates" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen hidden></iframe></div></section>`;
 }
 function fieldHTML([key,label,type,required],value='') {const id=`field-${key}`;if(type==='coordinates')return coordinateFieldHTML(key,label,value);if(type==='select')return `<label class="field"><span>${label}</span><select id="${id}" name="${key}"><option value="0">No</option><option value="1">Yes</option></select></label>`;return `<label class="field"><span>${label}</span><input id="${id}" name="${key}" type="${type}" ${type==='number'?`step="any" ${key==='latitude'?'min="-90" max="90"':key==='longitude'?'min="-180" max="180"':''}`:''} ${required?'required':''} value="${escapeHTML(value??'')}"></label>`;}
@@ -111,15 +111,27 @@ function bindCoordinateEditor(form) {
     const direction=axis.querySelector(`input[type="radio"][value="${parts.hemisphere}"]`);if(direction)direction.checked=true;
   };
   if(addressButton)addressButton.onclick=async()=>{
-    const values=axes.map(readAxis);if(values.some(value=>!value.valid)){addressStatus.textContent='Enter valid latitude and longitude first.';form.reportValidity();return;}
-    const latitude=values.find((_,index)=>axes[index].dataset.coordinateAxis==='latitude').value,longitude=values.find((_,index)=>axes[index].dataset.coordinateAxis==='longitude').value,target=form.elements.namedItem(preview.dataset.addressTarget);
-    if(!target)return;addressButton.disabled=true;addressButton.textContent='Finding address…';addressStatus.textContent='Looking up this location…';
+    const target=form.elements.namedItem(preview.dataset.addressTarget);
+    if(!target)return;
+    if(!window.isSecureContext){addressStatus.textContent='Location access requires a secure HTTPS connection.';return;}
+    if(!navigator.geolocation){addressStatus.textContent='This browser does not support location access. Enter the coordinates manually.';return;}
+    addressButton.disabled=true;addressButton.textContent='Getting location…';addressStatus.textContent='Allow location access in your browser to fill the coordinates.';
     try{
+      let position;
+      try{
+        position=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:20000,maximumAge:0}));
+      }catch(error){
+        addressStatus.textContent=error.code===1?'Location permission was denied. Allow it in your browser settings and try again.':error.code===3?'Location request timed out. Try again or enter the coordinates manually.':'Could not determine your location. Check your device location settings and try again.';
+        return;
+      }
+      const latitude=position.coords.latitude,longitude=position.coords.longitude;
+      set('latitude',latitude);set('longitude',longitude);refresh(true);
+      addressButton.textContent='Finding address…';addressStatus.textContent='Coordinates added. Looking up the address…';
       const delay=Math.max(0,1100-(Date.now()-lastAddressLookup));if(delay)await new Promise(resolve=>setTimeout(resolve,delay));lastAddressLookup=Date.now();
       const endpoint=new URL('https://nominatim.openstreetmap.org/reverse');endpoint.searchParams.set('format','jsonv2');endpoint.searchParams.set('lat',latitude);endpoint.searchParams.set('lon',longitude);
       const response=await fetch(endpoint,{headers:{Accept:'application/json'}});if(!response.ok)throw new Error('Address lookup failed.');const place=await response.json();if(!place.display_name)throw new Error('No address found.');
-      target.value=place.display_name;addressStatus.textContent='Address added. Review it before saving.';
-    }catch(error){addressStatus.textContent='Could not find an address. Check your connection or enter it manually.';console.warn('Address lookup failed:',error);}
+      target.value=place.display_name;addressStatus.textContent='Location and address added. Review them before saving.';
+    }catch(error){addressStatus.textContent='Coordinates were filled, but the address lookup failed. Check your connection or enter the address manually.';console.warn('Address lookup failed:',error);}
     finally{addressButton.disabled=false;addressButton.textContent='Get Address';}
   };
   axes.forEach(axis=>axis.querySelectorAll('input').forEach(input=>{input.addEventListener('input',()=>refresh());input.addEventListener('change',()=>refresh());}));refresh(true);
