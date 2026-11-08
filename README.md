@@ -21,7 +21,7 @@ requests in the browser.
 
 ## Set up
 
-1. Open your Supabase project (`ddwzrjvlatdbwaiagxhp`) → **SQL Editor** and run, in order:
+1. Open your Supabase project (`utfxtwgqdbjkbxlooolr`) → **SQL Editor** and run, in order:
    1. `schema.sql` — **only for a brand-new database** (skip if you already ran it)
    2. `supabase-auth.sql` — skip if you already ran it
    3. `multi-club.sql` — adds clubs, `club_id`, roles and team-account management. Run
