@@ -25,7 +25,9 @@ requests in the browser.
    2. `supabase-auth.sql` — skip if you already ran it
    3. `multi-club.sql` — adds clubs, `club_id`, roles and team-account management. Run
       it again after future SQL updates; it is safe to re-run.
-   4. `public-results.sql` — enables the public Results tab. Run it after the other
+   4. `account-credentials.sql` — lets club admins change same-club usernames and
+      passwords. Run it after `multi-club.sql`; it is safe to re-run.
+   5. `public-results.sql` — enables the public Results tab. Run it after the other
       scripts; it is safe to re-run after future result changes.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
@@ -37,8 +39,8 @@ requests in the browser.
 
 No Supabase Auth settings need changing and no email is used. Supabase Auth needs an
 email-shaped identifier internally, so the app uses `username@users.mayma.invalid`
-behind the scenes. Passwords are reset by the person above them: the superadmin resets
-club passwords, a club resets its members' passwords.
+behind the scenes. The superadmin resets club passwords; club administrators can
+change usernames and passwords for their own member and team accounts.
 
 Data that existed before clubs were introduced is kept in a club named **Default club**.
 Create a club account with exactly that name to hand the old data to that club.
@@ -49,7 +51,7 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/login/index.html`: shared admin/member sign-in.
 - `pages/admin/dashboard/`: club overview.
 - `pages/admin/members/`: member and loft records.
-- `pages/admin/users/`: create, reset, disable and reactivate administrator or staff accounts.
+- `pages/admin/users/`: create, edit credentials, disable and reactivate administrator or staff accounts.
 - `pages/admin/race-points/`: release locations.
 - `pages/admin/races/`: race schedules and status.
 - `pages/admin/entries/`: registered pigeons and barcodes.
