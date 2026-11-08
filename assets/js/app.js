@@ -4,6 +4,7 @@ const signOutUser = () => supabase.auth.signOut();
 const body = document.body;
 const BASE = body.dataset.base || '../../';
 const url = (path) => `${BASE}${path}`;
+let currentPageCleanup = () => {};
 const escapeHTML = (value='') => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const message = (text, kind='info') => { const el=document.querySelector('[data-message]'); if(el){el.textContent=text;el.className=`notice ${kind}`;el.hidden=!text;if(text&&el.scrollIntoView)el.scrollIntoView({behavior:'smooth',block:'nearest'});} };
 const fail = (error) => { console.error(error); const text=error?.message || 'Something went wrong. Please try again.'; if(!document.querySelector('[data-message]')&&document.querySelector('#app-shell')){document.querySelector('#app-shell').innerHTML=`<main class="loading"><strong>Could not connect to Supabase.</strong><span class="notice error">${escapeHTML(text)}</span><a class="button secondary" href="${url('index.html')}">Back to home</a></main>`;return;} message(text, 'error'); };
@@ -311,19 +312,22 @@ async function memberClock(view,identity) {
  const memberId=identity.profile.member_id;if(!memberId)throw new Error('This account is missing its member record.');
  const [{data:races,error:a},{data:entries,error:b}]=await Promise.all([supabase.from('races').select('id,name,release_location,status,release_at_utc').eq('status','open').order('id',{ascending:false}),supabase.from('race_entries').select('id,race_id,pigeon_ring').eq('member_id',memberId)]);if(a||b)throw a||b;
  const eligible=races.filter(r=>entries.some(e=>e.race_id===r.id));
- view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">MEMBER CLOCKING</span><h2>Record your pigeon</h2><p>Scan the barcode on your registered race entry.</p></div></div><section class="panel narrow"><div class="callout"><span class="callout-icon">◷</span><span>The receipt time comes from Supabase when your submission reaches the server. Clockings are provisional.</span></div><form id="member-clock-form" class="form-grid"><label class="field"><span>Open race</span><select name="race_id" required><option value="">Choose a race</option>${eligible.map(r=>`<option value="${r.id}">${escapeHTML(r.name)} · ${escapeHTML(r.release_location)}</option>`).join('')}</select></label><label class="field"><span>Barcode</span><input name="barcode" required maxlength="120" autocomplete="off" autocapitalize="none" autocorrect="off" inputmode="text" placeholder="Scan or type the registered code"></label><div class="form-actions"><button class="button primary">Submit clocking</button></div></form></section><section class="panel"><h3>Scan a barcode</h3><p class="muted">Start the camera and hold the barcode steady in the frame. Camera access requires HTTPS. You can also type the code above.</p><button class="button secondary" id="camera-button" type="button">Start camera</button><video id="camera" playsinline autoplay muted hidden aria-label="Live barcode scanner preview"></video><p class="muted small" id="camera-status" aria-live="polite" aria-atomic="true">You can enter the barcode manually above.</p></section>`;
+ view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">MEMBER CLOCKING</span><h2>Record your pigeon</h2><p>Scan the barcode on your registered race entry.</p></div></div><section class="panel narrow"><div class="callout"><span class="callout-icon">◷</span><span>The receipt time comes from Supabase when your submission reaches the server. Clockings are provisional.</span></div><form id="member-clock-form" class="form-grid"><label class="field"><span>Open race</span><select name="race_id" required><option value="">Choose a race</option>${eligible.map(r=>`<option value="${r.id}">${escapeHTML(r.name)} · ${escapeHTML(r.release_location)}</option>`).join('')}</select></label><div class="field barcode-field"><label for="member-barcode">Barcode</label><div class="barcode-entry"><input id="member-barcode" name="barcode" required maxlength="120" autocomplete="off" autocapitalize="none" autocorrect="off" inputmode="text" placeholder="Scan or type the registered code"><button class="barcode-scan-button" id="camera-button" type="button" aria-label="Start barcode scanner" title="Scan barcode" aria-controls="camera"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 12h8M10 9v6M14 9v6"/></svg></button></div><p class="barcode-scan-status" id="camera-status" aria-live="polite" aria-atomic="true" hidden></p><video id="camera" playsinline autoplay muted hidden aria-label="Live barcode scanner preview"></video></div><div class="form-actions"><button class="button primary">Submit clocking</button></div></form></section>`;
  view.querySelector('#member-clock-form').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget;const {data,error}=await supabase.rpc('submit_member_clock',{p_race_id:Number(f.race_id.value),p_barcode:f.barcode.value.trim()});if(error){message(error.message,'error');return;}message(data.message||'Clocking received.','success');f.reset();};
  const camera=view.querySelector('#camera'),status=view.querySelector('#camera-status'),cameraButton=view.querySelector('#camera-button'),barcode=view.querySelector('[name="barcode"]');
  let scannerControls=null,scannerActive=false,scannerStarting=false,scannerSession=0;
+ const scannerIcons={idle:'<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 12h8M10 9v6M14 9v6"/></svg>',starting:'<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>',active:'<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>'};
+ const updateCameraButton=(label,state='idle')=>{cameraButton.setAttribute('aria-label',label);cameraButton.title=label;cameraButton.dataset.state=state;cameraButton.innerHTML=scannerIcons[state];};
+ const setStatus=text=>{status.textContent=text;status.hidden=!text;};
  const stopCamera=(statusText='Camera stopped.')=>{
   scannerSession++;scannerActive=false;scannerStarting=false;scannerControls?.stop();scannerControls=null;
-  camera.pause();camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;camera.hidden=true;cameraButton.disabled=false;cameraButton.textContent='Start camera';status.textContent=statusText;
+  camera.pause();camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;camera.hidden=true;cameraButton.disabled=false;updateCameraButton('Start barcode scanner');setStatus(statusText);
  };
  const acceptBarcode=(value,controls)=>{
   const code=String(value||'').trim();if(!code||!scannerActive)return;
   scannerSession++;scannerActive=false;scannerStarting=false;const activeControls=controls||scannerControls;scannerControls=null;activeControls?.stop();
-  camera.pause();camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;camera.hidden=true;cameraButton.disabled=false;cameraButton.textContent='Start camera';
-  barcode.value=code;status.textContent='Barcode read. Confirm the race and submit the clocking.';message('Barcode captured. Confirm the race and submit the clocking.','info');
+  camera.pause();camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;camera.hidden=true;cameraButton.disabled=false;updateCameraButton('Start barcode scanner');
+  barcode.value=code;setStatus('Barcode read. Confirm the race and submit the clocking.');barcode.focus();message('Barcode captured. Confirm the race and submit the clocking.','info');
  };
  const cameraError=(error)=>{
   if(!window.isSecureContext)return 'Camera access needs a secure HTTPS page. Open this site using its HTTPS address.';
@@ -337,33 +341,35 @@ async function memberClock(view,identity) {
  cameraButton.onclick=async()=>{
   if(scannerActive){stopCamera();return;}
   if(scannerStarting){stopCamera('Camera start canceled.');return;}
-  if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){status.textContent=cameraError();return;}
-  const session=++scannerSession;scannerStarting=true;cameraButton.disabled=false;cameraButton.textContent='Cancel camera';status.textContent='Loading the barcode scanner…';
+  if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){setStatus(cameraError());return;}
+  const session=++scannerSession;scannerStarting=true;cameraButton.disabled=false;updateCameraButton('Cancel scanner start','starting');setStatus('Starting camera…');
   let cameraStream=null;
   try{
-   status.textContent='Requesting camera permission…';
+   setStatus('Allow camera access to scan the barcode.');
    cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
    if(session!==scannerSession){cameraStream.getTracks().forEach(track=>track.stop());return;}
    camera.srcObject=cameraStream;camera.hidden=false;camera.play().catch(()=>{});
-   status.textContent='Loading the barcode scanner…';
+   setStatus('Loading scanner…');
    const {BrowserMultiFormatReader}=await import('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm');
    if(session!==scannerSession){cameraStream.getTracks().forEach(track=>track.stop());return;}
    const reader=new BrowserMultiFormatReader();
-   scannerActive=true;status.textContent='Camera is on. Hold the barcode steady in the frame.';
+   scannerActive=true;setStatus('Camera on. Hold the barcode steady in the frame.');
    const controls=await reader.decodeFromStream(cameraStream,camera,(result,_error,scanControls)=>{
     if(result)acceptBarcode(result.getText(),scanControls);
    });
    if(session!==scannerSession||!scannerActive){controls?.stop();return;}
    scannerControls=controls;
-   scannerStarting=false;cameraButton.disabled=false;cameraButton.textContent='Stop camera';status.textContent='Camera is on. Hold the barcode steady in the frame.';
+   scannerStarting=false;cameraButton.disabled=false;updateCameraButton('Stop barcode scanner','active');setStatus('Camera on. Hold the barcode steady in the frame.');
   }catch(error){
    if(session!==scannerSession)return;
-   scannerActive=false;scannerStarting=false;scannerControls?.stop();scannerControls=null;camera.pause();cameraStream?.getTracks().forEach(track=>track.stop());camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;camera.hidden=true;cameraButton.disabled=false;cameraButton.textContent='Start camera';status.textContent=cameraError(error);console.error('Camera scanner could not start:',error);
+   scannerActive=false;scannerStarting=false;scannerControls?.stop();scannerControls=null;camera.pause();cameraStream?.getTracks().forEach(track=>track.stop());camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;camera.hidden=true;cameraButton.disabled=false;updateCameraButton('Start barcode scanner');setStatus(cameraError(error));console.error('Camera scanner could not start:',error);
   }
  };
  const releaseCameraOnPageHide=()=>stopCamera('Camera stopped.');
- document.addEventListener('visibilitychange',()=>{if(document.hidden&&(scannerActive||scannerStarting))releaseCameraOnPageHide();});
- window.addEventListener('pagehide',releaseCameraOnPageHide,{once:true});
+ const onVisibilityChange=()=>{if(document.hidden&&(scannerActive||scannerStarting))releaseCameraOnPageHide();};
+ document.addEventListener('visibilitychange',onVisibilityChange);
+ window.addEventListener('pagehide',releaseCameraOnPageHide);
+ currentPageCleanup=()=>{document.removeEventListener('visibilitychange',onVisibilityChange);window.removeEventListener('pagehide',releaseCameraOnPageHide);stopCamera('');currentPageCleanup=()=>{};};
 }
 async function memberHistory(view,identity) {
  const memberId=identity.profile.member_id;if(!memberId)throw new Error('This account is missing its member record.');
@@ -482,5 +488,83 @@ function renderSuperAdmin(container){
 }
 function loginMessage(container,text,kind){const node=container.querySelector('[data-login-message]');node.textContent=text;node.className=`notice ${kind}`;node.hidden=false;}
 
-async function main(){if(body.dataset.view==='login'){loginPage();return;}const role=body.dataset.role,active=body.dataset.active;const identity=await guard(role,active);if(!identity)return;const view=document.querySelector('.page-view');try{const page=body.dataset.view;if(page==='clubs'&&role==='superadmin')await clubsPage(view);else if(page==='team-users'&&role==='admin'&&identity.profile.role==='admin')await teamAccountsPage(view,identity);else if(page==='dashboard'&&role==='admin')await dashboard(view);else if(page==='members'||page==='race-points')await initCrud(view,page==='members'?'members':'race_points',identity.profile.role==='admin');else if(page==='races')await racesPage(view);else if(page==='entries')await entriesPage(view);else if(page==='clocking'&&role==='admin')await clockPage(view,identity);else if(page==='results')await resultsPage(view);else if(page==='dashboard'&&role==='member')await memberDashboard(view,identity);else if(page==='member-clocking')await memberClock(view,identity);else if(page==='history')await memberHistory(view,identity);else if(page==='member-results'&&role==='member')await memberResultsPage(view);else if(page==='member-settings'&&role==='member')await memberSettingsPage(view,identity);}catch(error){fail(error);}}
+async function renderPage(view,role,identity){
+  const page=body.dataset.view;
+  if(page==='clubs'&&role==='superadmin')await clubsPage(view);
+  else if(page==='team-users'&&role==='admin'&&identity.profile.role==='admin')await teamAccountsPage(view,identity);
+  else if(page==='dashboard'&&role==='admin')await dashboard(view);
+  else if(page==='members'||page==='race-points')await initCrud(view,page==='members'?'members':'race_points',identity.profile.role==='admin');
+  else if(page==='races')await racesPage(view);
+  else if(page==='entries')await entriesPage(view);
+  else if(page==='clocking'&&role==='admin')await clockPage(view,identity);
+  else if(page==='results')await resultsPage(view);
+  else if(page==='dashboard'&&role==='member')await memberDashboard(view,identity);
+  else if(page==='member-clocking'&&role==='member')await memberClock(view,identity);
+  else if(page==='history'&&role==='member')await memberHistory(view,identity);
+  else if(page==='member-results'&&role==='member')await memberResultsPage(view);
+  else if(page==='member-settings'&&role==='member')await memberSettingsPage(view,identity);
+}
+async function main(){
+  if(body.dataset.view==='login'){loginPage();return;}
+  const role=body.dataset.role,active=body.dataset.active,identity=await guard(role,active);
+  if(!identity)return;
+  const view=document.querySelector('.page-view');
+  try{await renderPage(view,role,identity);}catch(error){fail(error);}
+}
+const memberRoutes=[
+  {path:'pages/member/dashboard/index.html',title:'My races',documentTitle:'My races · Mayma Clocking',view:'dashboard',active:'dashboard'},
+  {path:'pages/member/history/index.html',title:'Clocking history',documentTitle:'Clocking history · Mayma Clocking',view:'history',active:'history'},
+  {path:'pages/member/clocking/index.html',title:'Clock a pigeon',documentTitle:'Clock a pigeon · Mayma Clocking',view:'member-clocking',active:'clocking'},
+  {path:'pages/member/results/index.html',title:'Results',documentTitle:'Race results · Mayma Clocking',view:'member-results',active:'results'},
+  {path:'pages/member/settings/index.html',title:'Settings',documentTitle:'Settings · Mayma Clocking',view:'member-settings',active:'settings'}
+];
+const memberRouteFor=(href)=>{
+  const pathname=new URL(href,location.href).pathname;
+  return memberRoutes.find(route=>new URL(url(route.path),location.href).pathname===pathname);
+};
+let memberNavigationToken=0;
+async function navigateMemberRoute(route,{push=true}={}){
+  if(!route)return;
+  const href=new URL(url(route.path),location.href);
+  if(push)history.pushState({memberRoute:true},'',href);
+  const token=++memberNavigationToken;
+  currentPageCleanup();
+  body.classList.remove('nav-open');
+  body.classList.add('member-body');
+  body.dataset.role='member';body.dataset.title=route.title;body.dataset.view=route.view;body.dataset.active=route.active;
+  document.title=route.documentTitle;
+  const heading=document.querySelector('.topbar h1');if(heading)heading.textContent=route.title;
+  const selectedPath=href.pathname;
+  document.querySelectorAll('.sidebar nav a,.member-bottom-nav a').forEach(link=>{
+    const active=new URL(link.href,location.href).pathname===selectedPath;
+    if(link.classList.contains('nav-link'))link.classList.toggle('active',active);
+    if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
+  });
+  const oldView=document.querySelector('.page-view');
+  const view=document.createElement('section');view.className='page-view';view.dataset.view=route.view;
+  view.innerHTML='<div class="route-loading" role="status"><span class="spinner" aria-hidden="true"></span>Loading page…</div>';
+  oldView?.replaceWith(view);
+  window.scrollTo(0,0);
+  try{
+    const identity=await getIdentity();
+    if(token!==memberNavigationToken)return;
+    if(!identity?.profile){location.href=url('pages/login/index.html');return;}
+    if(identity.profile.is_active===false){await signOutUser();location.href=url('pages/login/index.html');return;}
+    if(identity.profile.role!=='member'){location.href=homeFor(identity.profile.role);return;}
+    await renderPage(view,'member',identity);
+  }catch(error){if(token===memberNavigationToken)fail(error);}
+}
+document.addEventListener('click',event=>{
+  if(event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+  const anchor=event.target.closest?.('a[href]');
+  if(!anchor||anchor.target==='_blank'||body.dataset.role!=='member')return;
+  const route=memberRouteFor(anchor.href);
+  if(!route)return;
+  event.preventDefault();navigateMemberRoute(route);
+});
+window.addEventListener('popstate',()=>{
+  if(body.dataset.role!=='member')return;
+  const route=memberRouteFor(location.href);
+  if(route)navigateMemberRoute(route,{push:false});
+});
 main();
