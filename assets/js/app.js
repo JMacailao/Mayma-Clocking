@@ -93,7 +93,7 @@ function decimalCoordinateFields(fieldsList=[]) {
 function coordinateMapHTML(fieldsList=[]) {
   const addressTarget=fieldsList.some(([key])=>key==='address')?'address':'';
   const addressAction=addressTarget?'<div class="coordinate-map-tools"><button class="button secondary" type="button" data-get-address>Get Address</button><span data-address-status aria-live="polite">Click Get Address to fill coordinates and address from your current location.</span></div>':'';
-  return `<section class="coordinate-map" data-coordinate-map data-address-target="${addressTarget}" aria-label="Satellite map preview">${addressAction}<div class="coordinate-map-heading"><div><h3>Satellite map</h3><p data-map-status aria-live="polite">Enter coordinates to load satellite imagery.</p><p class="map-interaction-hint">Drag to pan; use the plus and minus controls or scroll to zoom.</p></div><a data-map-link target="_blank" rel="noopener noreferrer" hidden>Open satellite map ↗</a></div><div class="coordinate-map-frame"><div class="coordinate-map-placeholder" data-map-placeholder><span class="map-placeholder-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.7"/></svg></span><span>Enter both coordinates to load satellite imagery.</span></div><div class="coordinate-map-canvas" data-map-canvas hidden></div></div></section>`;
+  return `<section class="coordinate-map" data-coordinate-map data-address-target="${addressTarget}" aria-label="Satellite map preview">${addressAction}<div class="coordinate-map-heading"><div><h3>Satellite map</h3><p data-map-status aria-live="polite">Enter coordinates to load satellite imagery.</p><p class="map-interaction-hint">Tap or click the map to set coordinates. Drag to pan; use the plus and minus controls or scroll to zoom.</p></div><a data-map-link target="_blank" rel="noopener noreferrer" hidden>Open satellite map ↗</a></div><div class="coordinate-map-frame"><div class="coordinate-map-placeholder" data-map-placeholder><span class="map-placeholder-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="1.7"/></svg></span><span>Enter both coordinates to load satellite imagery.</span></div><div class="coordinate-map-canvas" data-map-canvas hidden></div></div></section>`;
 }
 let leafletPromise=null;
 function loadLeaflet(){
@@ -134,6 +134,10 @@ function bindCoordinateEditor(form) {
         const imagery=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'});
         imagery.on('tileerror',()=>{if(canvas.isConnected)status.textContent='Satellite imagery could not load. Check your internet connection.';});
         imagery.addTo(mapInstance);mapMarker=L.marker(point).addTo(mapInstance);
+        mapInstance.on('click',event=>{
+          set('latitude',event.latlng.lat);set('longitude',event.latlng.lng);refresh(true);
+          if(addressStatus)addressStatus.textContent='Map point selected. Coordinates are filled; update the address if needed.';
+        });
       }else{
         mapInstance.invalidateSize({pan:false});
         mapMarker.setLatLng(point);
