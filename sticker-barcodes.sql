@@ -1,5 +1,5 @@
 -- Global barcode sticker registry. Run after multi-club.sql in Supabase SQL Editor.
--- Generated barcode batches are inserted into the registry in the same transaction.
+-- Generated barcode batches can be registered immediately or left unregistered.
 BEGIN;
 
 DO $$
@@ -77,8 +77,14 @@ $function$;
 REVOKE ALL ON FUNCTION public.superadmin_register_sticker(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.superadmin_register_sticker(text) TO authenticated;
 
-CREATE OR REPLACE FUNCTION public.superadmin_generate_sticker_batch(p_quantity integer)
-RETURNS TABLE(barcode_number text, source text, created_at timestamptz)
+DROP FUNCTION IF EXISTS public.superadmin_generate_sticker_batch(integer, boolean);
+DROP FUNCTION IF EXISTS public.superadmin_generate_sticker_batch(integer);
+
+CREATE FUNCTION public.superadmin_generate_sticker_batch(
+  p_quantity integer,
+  p_register boolean DEFAULT true
+)
+RETURNS TABLE(barcode_number text, registered boolean)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
@@ -86,7 +92,7 @@ AS $function$
 DECLARE
   v_index integer;
   v_number text;
-  v_sticker public.barcode_stickers%ROWTYPE;
+  v_should_register boolean := COALESCE(p_register, true);
 BEGIN
   IF NOT public.is_superadmin() THEN
     RAISE EXCEPTION 'Superadmin account required.' USING ERRCODE = '42501';
@@ -105,20 +111,20 @@ BEGIN
       );
     END LOOP;
 
-    INSERT INTO public.barcode_stickers (barcode_number, source, created_by)
-    VALUES (v_number, 'generated', auth.uid())
-    RETURNING * INTO v_sticker;
+    IF v_should_register THEN
+      INSERT INTO public.barcode_stickers (barcode_number, source, created_by)
+      VALUES (v_number, 'generated', auth.uid());
+    END IF;
 
-    barcode_number := v_sticker.barcode_number;
-    source := v_sticker.source;
-    created_at := v_sticker.created_at;
+    barcode_number := v_number;
+    registered := v_should_register;
     RETURN NEXT;
   END LOOP;
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.superadmin_generate_sticker_batch(integer) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.superadmin_generate_sticker_batch(integer) TO authenticated;
+REVOKE ALL ON FUNCTION public.superadmin_generate_sticker_batch(integer, boolean) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.superadmin_generate_sticker_batch(integer, boolean) TO authenticated;
 
 -- A club can use any global barcode, but a race entry cannot introduce a code
 -- that the Super Admin has not registered first.

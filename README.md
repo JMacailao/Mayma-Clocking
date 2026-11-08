@@ -30,9 +30,10 @@ requests in the browser.
       passwords. Run it after `multi-club.sql`; it is safe to re-run.
    5. `public-results.sql` — enables the public Results tab. Run it after the other
       scripts; it is safe to re-run after future result changes.
-   6. `sticker-barcodes.sql` — enables global barcode registration, automatic batch
+   6. `sticker-barcodes.sql` — enables global barcode registration, optional batch
       registration, and registered-barcode checks on race entries. Run it after
-      `multi-club.sql`; it is safe to re-run.
+      `multi-club.sql`; it is safe to re-run. Re-run the updated file on existing
+      databases to enable the register-or-skip choice in Generate Sticker.
    7. `race-release-time.sql` — allows schedules to be saved before their release time
       is known, while requiring a release time before a race can be opened. Run it
       for existing databases; it is safe to re-run.
@@ -63,8 +64,9 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/superadmin/clubs/`: create and manage club accounts.
 - `pages/superadmin/stickers/register/`: scan or enter existing barcode numbers in
   the global registry.
-- `pages/superadmin/stickers/generate/`: generate batches that register their unique
-  barcode numbers automatically, then export a 20-per-A4 Word sheet or print it.
+- `pages/superadmin/stickers/generate/`: generate unique barcode batches and choose
+  whether to register them for club use immediately, then export a 20-per-A4 Word
+  sheet or print it.
 - `pages/admin/dashboard/`: club overview.
 - `pages/admin/members/`: member and loft records, with `.xlsx`, `.xls`, and `.csv`
   import. The Excel template lists required columns; imports validate duplicates and
@@ -94,10 +96,11 @@ Create a club account with exactly that name to hand the old data to that club.
   and receipts. Users cannot promote themselves. A club must keep one active admin.
 - `submit_member_clock` and `admin_record_clock` check the member, barcode, race
   status and release time, then write a server timestamp.
-- Generated sticker numbers are registered in Supabase in the same transaction as
-  batch creation. Registered barcodes are global and can be used by any club. Race
-  entries reject numbers that are not registered by Super Admin. Existing entry
-  barcodes are imported when `sticker-barcodes.sql` is first run.
+- Generated sticker numbers can be registered in Supabase in the same transaction
+  as batch creation or generated without registration. Registered barcodes are global
+  and can be used by any club. Race entries reject numbers that are not registered by
+  Super Admin. Existing entry barcodes are imported when `sticker-barcodes.sql` is
+  first run.
 - Clocking receipts are provisional evidence of server receipt time.
 - The login page's public Results tab needs no account. It shows non-rejected result
   fields for a chosen club and Philippines-local race date; each club's other data
