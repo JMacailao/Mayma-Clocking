@@ -341,22 +341,20 @@ async function memberClock(view,identity) {
  const memberId=identity.profile.member_id;if(!memberId)throw new Error('This account is missing its member record.');
  const [{data:races,error:a},{data:entries,error:b}]=await Promise.all([supabase.from('races').select('id,name,release_location,status,release_at_utc').eq('status','open').order('id',{ascending:false}),supabase.from('race_entries').select('id,race_id,pigeon_ring').eq('member_id',memberId)]);if(a||b)throw a||b;
  const eligible=races.filter(r=>entries.some(e=>e.race_id===r.id));
- view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">MEMBER CLOCKING</span><h2>Record your pigeon</h2><p>Scan the barcode on your registered race entry.</p></div></div><section class="panel narrow"><div class="callout"><span class="callout-icon">◷</span><span>The receipt time comes from Supabase when your submission reaches the server. Clockings are provisional.</span></div><form id="member-clock-form" class="form-grid"><label class="field"><span>Open race</span><select name="race_id" required><option value="">Choose a race</option>${eligible.map(r=>`<option value="${r.id}">${escapeHTML(r.name)} · ${escapeHTML(r.release_location)}</option>`).join('')}</select></label><div class="field barcode-field"><label for="member-barcode">Barcode</label><div class="barcode-entry"><input id="member-barcode" name="barcode" required maxlength="120" autocomplete="off" autocapitalize="none" autocorrect="off" inputmode="text" placeholder="Scan or type the registered code"><button class="barcode-scan-button" id="camera-button" type="button" aria-label="Start barcode scanner" title="Scan barcode" aria-controls="camera"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 12h8M10 9v6M14 9v6"/></svg></button></div><p class="barcode-scan-status" id="camera-status" aria-live="polite" aria-atomic="true" hidden></p><video id="camera" playsinline autoplay muted hidden aria-label="Live barcode scanner preview"></video></div><div class="form-actions"><button class="button primary">Submit clocking</button></div></form></section>`;
+ view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">MEMBER CLOCKING</span><h2>Record your pigeon</h2><p>Scan the barcode on your registered race entry.</p></div></div><section class="panel narrow"><div class="callout"><span class="callout-icon">◷</span><span>The receipt time comes from Supabase when your submission reaches the server. Clockings are provisional.</span></div><form id="member-clock-form" class="form-grid"><label class="field"><span>Open race</span><select name="race_id" required><option value="">Choose a race</option>${eligible.map(r=>`<option value="${r.id}">${escapeHTML(r.name)} · ${escapeHTML(r.release_location)}</option>`).join('')}</select></label><div class="field barcode-field"><label for="member-barcode">Barcode</label><div class="barcode-entry"><input id="member-barcode" name="barcode" required maxlength="120" autocomplete="off" autocapitalize="none" autocorrect="off" inputmode="text" placeholder="Scan or type the registered code"><button class="barcode-scan-button" id="camera-button" type="button" aria-label="Open barcode camera" title="Scan barcode" aria-controls="camera-dialog"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 12h8M10 9v6M14 9v6"/></svg></button></div></div><div class="form-actions"><button class="button primary">Submit clocking</button></div></form></section><dialog class="scanner-dialog" id="camera-dialog" aria-labelledby="camera-dialog-title"><div class="scanner-dialog-content"><header class="scanner-dialog-header"><div><span class="eyebrow">BARCODE SCANNER</span><h2 id="camera-dialog-title">Scan your pigeon</h2></div><button class="scanner-close-button" type="button" data-close-camera aria-label="Close camera">×</button></header><p class="scanner-dialog-copy">Hold the pigeon barcode inside the camera frame.</p><div class="scanner-preview"><div class="scanner-placeholder" id="camera-placeholder"><span class="scanner-placeholder-mark" aria-hidden="true">⌗</span><span>Camera preview will appear here.</span></div><video id="camera" playsinline autoplay muted hidden aria-label="Live barcode scanner preview"></video></div><p class="barcode-scan-status" id="camera-status" aria-live="polite" aria-atomic="true" hidden></p><div class="scanner-dialog-actions"><button class="button secondary" type="button" data-cancel-camera>Cancel</button></div></div></dialog>`;
  view.querySelector('#member-clock-form').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget;const {data,error}=await supabase.rpc('submit_member_clock',{p_race_id:Number(f.race_id.value),p_barcode:f.barcode.value.trim()});if(error){message(error.message,'error');return;}message(data.message||'Clocking received.','success');f.reset();};
- const camera=view.querySelector('#camera'),status=view.querySelector('#camera-status'),cameraButton=view.querySelector('#camera-button'),barcode=view.querySelector('[name="barcode"]');
+ const camera=view.querySelector('#camera'),status=view.querySelector('#camera-status'),cameraButton=view.querySelector('#camera-button'),cameraDialog=view.querySelector('#camera-dialog'),cameraPlaceholder=view.querySelector('#camera-placeholder'),barcode=view.querySelector('[name="barcode"]');
  let scannerControls=null,scannerActive=false,scannerStarting=false,scannerSession=0;
- const scannerIcons={idle:'<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 12h8M10 9v6M14 9v6"/></svg>',starting:'<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>',active:'<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>'};
- const updateCameraButton=(label,state='idle')=>{cameraButton.setAttribute('aria-label',label);cameraButton.title=label;cameraButton.dataset.state=state;cameraButton.innerHTML=scannerIcons[state];};
  const setStatus=text=>{status.textContent=text;status.hidden=!text;};
  const stopCamera=(statusText='Camera stopped.')=>{
   scannerSession++;scannerActive=false;scannerStarting=false;scannerControls?.stop();scannerControls=null;
-  camera.pause();camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;camera.hidden=true;cameraButton.disabled=false;updateCameraButton('Start barcode scanner');setStatus(statusText);
+  camera.pause();camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;camera.hidden=true;cameraPlaceholder.hidden=false;cameraButton.disabled=false;cameraButton.removeAttribute('aria-busy');if(cameraDialog.open)cameraDialog.close();setStatus(statusText);
  };
  const acceptBarcode=(value,controls)=>{
   const code=String(value||'').trim();if(!code||!scannerActive)return;
   scannerSession++;scannerActive=false;scannerStarting=false;const activeControls=controls||scannerControls;scannerControls=null;activeControls?.stop();
-  camera.pause();camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;camera.hidden=true;cameraButton.disabled=false;updateCameraButton('Start barcode scanner');
-  barcode.value=code;setStatus('Barcode read. Confirm the race and submit the clocking.');barcode.focus();message('Barcode captured. Confirm the race and submit the clocking.','info');
+  camera.pause();camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;camera.hidden=true;cameraPlaceholder.hidden=false;cameraButton.disabled=false;cameraButton.removeAttribute('aria-busy');if(cameraDialog.open)cameraDialog.close();
+  barcode.value=code;barcode.focus();message('Barcode captured. Confirm the race and submit the clocking.','info');
  };
  const cameraError=(error)=>{
   if(!window.isSecureContext)return 'Camera access needs a secure HTTPS page. Open this site using its HTTPS address.';
@@ -368,16 +366,15 @@ async function memberClock(view,identity) {
   return 'Could not start the camera. Check permission and try again, or type the barcode manually.';
  };
  cameraButton.onclick=async()=>{
-  if(scannerActive){stopCamera();return;}
-  if(scannerStarting){stopCamera('Camera start canceled.');return;}
-  if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){setStatus(cameraError());return;}
-  const session=++scannerSession;scannerStarting=true;cameraButton.disabled=false;updateCameraButton('Cancel scanner start','starting');setStatus('Starting camera…');
+  if(scannerActive||scannerStarting)return;
+  cameraDialog.showModal();cameraPlaceholder.querySelector('span:last-child').textContent='Waiting for camera access…';setStatus('Starting camera…');
+  if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){cameraPlaceholder.querySelector('span:last-child').textContent='Camera access requires a secure HTTPS page.';setStatus(cameraError());return;}
+  const session=++scannerSession;scannerStarting=true;cameraButton.setAttribute('aria-busy','true');setStatus('Allow camera access to scan the barcode.');
   let cameraStream=null;
   try{
-   setStatus('Allow camera access to scan the barcode.');
    cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
    if(session!==scannerSession){cameraStream.getTracks().forEach(track=>track.stop());return;}
-   camera.srcObject=cameraStream;camera.hidden=false;camera.play().catch(()=>{});
+   camera.srcObject=cameraStream;camera.hidden=false;cameraPlaceholder.hidden=true;camera.play().catch(()=>{});
    setStatus('Loading scanner…');
    const {BrowserMultiFormatReader}=await import('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm');
    if(session!==scannerSession){cameraStream.getTracks().forEach(track=>track.stop());return;}
@@ -388,12 +385,15 @@ async function memberClock(view,identity) {
    });
    if(session!==scannerSession||!scannerActive){controls?.stop();return;}
    scannerControls=controls;
-   scannerStarting=false;cameraButton.disabled=false;updateCameraButton('Stop barcode scanner','active');setStatus('Camera on. Hold the barcode steady in the frame.');
+   scannerStarting=false;cameraButton.disabled=false;cameraButton.removeAttribute('aria-busy');setStatus('Camera on. Hold the barcode steady in the frame.');
   }catch(error){
    if(session!==scannerSession)return;
-   scannerActive=false;scannerStarting=false;scannerControls?.stop();scannerControls=null;camera.pause();cameraStream?.getTracks().forEach(track=>track.stop());camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;camera.hidden=true;cameraButton.disabled=false;updateCameraButton('Start barcode scanner');setStatus(cameraError(error));console.error('Camera scanner could not start:',error);
+   scannerActive=false;scannerStarting=false;scannerControls?.stop();scannerControls=null;camera.pause();cameraStream?.getTracks().forEach(track=>track.stop());camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;camera.hidden=true;cameraPlaceholder.hidden=false;cameraPlaceholder.querySelector('span:last-child').textContent='Camera preview is unavailable.';cameraButton.disabled=false;cameraButton.removeAttribute('aria-busy');setStatus(cameraError(error));console.error('Camera scanner could not start:',error);
   }
  };
+ view.querySelectorAll('[data-close-camera],[data-cancel-camera]').forEach(button=>button.addEventListener('click',()=>stopCamera()));
+ cameraDialog.addEventListener('cancel',event=>{event.preventDefault();stopCamera();});
+ cameraDialog.addEventListener('click',event=>{if(event.target===cameraDialog)stopCamera();});
  const releaseCameraOnPageHide=()=>stopCamera('Camera stopped.');
  const onVisibilityChange=()=>{if(document.hidden&&(scannerActive||scannerStarting))releaseCameraOnPageHide();};
  document.addEventListener('visibilitychange',onVisibilityChange);
