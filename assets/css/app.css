@@ -233,3 +233,16 @@ video#camera[hidden]{display:none}
 .scanner-flash-button.is-on{background:#e9f2ec;color:#183a2c}
 .scanner-flash-button:disabled{opacity:.75;cursor:default}
 @media(max-width:480px){.scanner-top-controls{padding-right:16px;padding-left:16px}.scanner-viewfinder{width:min(70vw,440px);height:min(30svh,360px)}.scanner-flash-button{width:64px;height:64px}}
+
+/* Superadmin global barcode sticker registry and print preview */
+.barcode-preview{display:block;width:min(100%,190px);height:48px;background:#fff}
+.sticker-print-note{margin:12px 0 0;color:var(--muted);line-height:1.5}
+.sticker-actions{display:flex;align-items:center;gap:8px}
+.sticker-preview{display:grid;gap:18px;overflow:auto}
+.sticker-preview-page{width:min(100%,840px);margin:0 auto;padding:14px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.sticker-sheet{width:100%;table-layout:fixed;border-collapse:collapse;background:#fff}
+.sticker-cell{height:76px;padding:5px 8px;border:1px dashed #bfc9c1;text-align:center;vertical-align:middle}
+.sticker-cell svg{display:block;width:min(100%,220px);height:45px;margin:0 auto 2px}
+.sticker-cell strong{display:block;color:#111;font-size:15px;line-height:1.2;font-variant-numeric:tabular-nums}
+.sticker-cell.sticker-empty{background:#fafbf9}
+@media(max-width:720px){.sticker-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.sticker-actions .button{min-width:0}.sticker-preview-page{min-width:580px;padding:9px}.sticker-preview{margin-right:-4px}.sticker-cell{height:68px;padding:4px}.sticker-cell svg{height:38px}.sticker-cell strong{font-size:12px}}

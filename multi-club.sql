@@ -1,5 +1,5 @@
 -- Mayma Clocking: multi-club. Run AFTER supabase-auth.sql. Safe to re-run.
---   superadmin  : created on first run of the app; manages club accounts only.
+--   superadmin  : created on first run; manages club accounts and global stickers.
 --   admin       : manages its own club, including team accounts.
 --   staff        : manages routine club records, but not accounts.
 --   member      : belongs to a club; sees only their own records.

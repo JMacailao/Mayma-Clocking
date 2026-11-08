@@ -27,7 +27,7 @@ async function getIdentity() {
 }
 const homeFor = (role) => url(role==='superadmin'?'pages/superadmin/clubs/index.html':['admin','staff'].includes(role)?'pages/admin/dashboard/index.html':'pages/member/dashboard/index.html');
 function superadminNav(active) {
-  const links=[['clubs','Club accounts','pages/superadmin/clubs/index.html','⌂']];
+  const links=[['clubs','Club accounts','pages/superadmin/clubs/index.html','⌂'],['sticker-register','Register Sticker','pages/superadmin/stickers/register/index.html','▣'],['sticker-generate','Generate Sticker','pages/superadmin/stickers/generate/index.html','▤']];
   return links.map(([key,label,href,icon])=>`<a class="nav-link ${active===key?'active':''}" ${active===key?'aria-current="page"':''} href="${url(href)}"><span class="nav-icon">${icon}</span>${label}</a>`).join('');
 }
 function adminNav(active,canManageAccounts) {
@@ -245,6 +245,117 @@ async function clubsPage(view) {
     form.reset();await load();message(`Club account created. Username: ${username}`,'success');};
   await load();
 }
+let barcodeRendererPromise=null;
+function loadBarcodeRenderer(){
+  if(window.JsBarcode)return Promise.resolve(window.JsBarcode);
+  if(!barcodeRendererPromise)barcodeRendererPromise=new Promise((resolve,reject)=>{
+    let script=document.querySelector('[data-jsbarcode]');
+    if(!script){script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/jsbarcode@3.12.1/dist/JsBarcode.all.min.js';script.crossOrigin='anonymous';script.dataset.jsbarcode='';document.head.append(script);}
+    script.addEventListener('load',()=>window.JsBarcode?resolve(window.JsBarcode):reject(new Error('The barcode renderer did not load.')),{once:true});
+    script.addEventListener('error',()=>reject(new Error('Could not load the barcode renderer. Check your internet connection.')),{once:true});
+    if(window.JsBarcode)resolve(window.JsBarcode);
+  }).catch(error=>{barcodeRendererPromise=null;throw error;});
+  return barcodeRendererPromise;
+}
+function drawBarcode(svg,code){
+  window.JsBarcode(svg,String(code),{format:'CODE128',displayValue:false,margin:3,width:1.8,height:54,lineColor:'#17231d',background:'#ffffff'});
+  svg.setAttribute('role','img');svg.setAttribute('aria-label',`Barcode ${code}`);
+}
+async function barcodePngDataUrl(code){
+  await loadBarcodeRenderer();
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');drawBarcode(svg,code);
+  const markup=new XMLSerializer().serializeToString(svg),blob=new Blob([markup],{type:'image/svg+xml;charset=utf-8'}),objectUrl=URL.createObjectURL(blob);
+  try{
+    const image=new Image();image.src=objectUrl;
+    if(image.decode)await image.decode();else await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;});
+    const canvas=document.createElement('canvas');canvas.width=Math.max(480,image.naturalWidth*2);canvas.height=Math.max(150,image.naturalHeight*2);
+    const context=canvas.getContext('2d');if(!context)throw new Error('Could not prepare barcode images.');
+    context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);
+    return canvas.toDataURL('image/png');
+  }finally{URL.revokeObjectURL(objectUrl);}
+}
+function stickerGroups(codes){const pages=[];for(let i=0;i<codes.length;i+=20)pages.push(codes.slice(i,i+20));return pages;}
+function stickerSheetTable(codes,renderCell){
+  const cells=[...codes];while(cells.length<20)cells.push(null);
+  return `<table class="sticker-sheet"><tbody>${Array.from({length:10},(_,row)=>`<tr>${cells.slice(row*2,row*2+2).map(renderCell).join('')}</tr>`).join('')}</tbody></table>`;
+}
+function wordStickerDocument(pages){
+  const sheets=pages.map(page=>`<section class="sticker-page">${stickerSheetTable(page,code=>code?`<td class="sticker-cell"><img src="${code.image}" alt=""><div class="sticker-number">${escapeHTML(code.number)}</div></td>`:'<td class="sticker-cell"></td>')}</section>`).join('');
+  return `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>Mayma barcode stickers</title><style>@page{size:21cm 29.7cm;margin:1cm}body{font-family:Arial,sans-serif;margin:0}.sticker-page{page-break-after:always;break-after:page}.sticker-page:last-child{page-break-after:auto;break-after:auto}.sticker-sheet{width:19cm;height:27.7cm;table-layout:fixed;border-collapse:collapse}.sticker-cell{width:9.5cm;height:2.77cm;border:.5pt solid #cbd3cd;text-align:center;vertical-align:middle;padding:2mm}.sticker-cell img{display:block;width:7.5cm;height:1.25cm;object-fit:contain;margin:0 auto 1mm}.sticker-number{font-size:14pt;font-weight:700;line-height:1.1}</style></head><body>${sheets}</body></html>`;
+}
+function bindStickerScanner(view,input){
+  const button=view.querySelector('#sticker-camera-button'),dialog=view.querySelector('#sticker-camera-dialog'),camera=view.querySelector('#sticker-camera'),placeholder=view.querySelector('#sticker-camera-placeholder'),status=view.querySelector('#sticker-camera-status');
+  let stream=null,controls=null,active=false,starting=false,session=0;
+  const setStatus=text=>{status.textContent=text;status.hidden=!text;};
+  const stop=(text='Camera stopped.')=>{session++;active=false;starting=false;controls?.stop();controls=null;camera.pause();stream?.getTracks().forEach(track=>track.stop());camera.srcObject?.getTracks().forEach(track=>track.stop());camera.srcObject=null;stream=null;camera.hidden=true;placeholder.hidden=false;button.disabled=false;button.removeAttribute('aria-busy');if(dialog.open)dialog.close();setStatus(text);};
+  const capture=(value,scanControls)=>{const code=String(value||'').trim();if(!code||!active)return;session++;active=false;starting=false;(scanControls||controls)?.stop();controls=null;camera.pause();stream?.getTracks().forEach(track=>track.stop());camera.srcObject=null;stream=null;camera.hidden=true;placeholder.hidden=false;button.disabled=false;button.removeAttribute('aria-busy');if(dialog.open)dialog.close();input.value=code;input.focus();message('Barcode captured. Review the number, then register it.','info');};
+  const cameraMessage=error=>{
+    if(!window.isSecureContext)return 'Camera access needs a secure HTTPS page. Type the barcode number manually if HTTPS is unavailable.';
+    if(!navigator.mediaDevices?.getUserMedia)return 'This browser does not provide camera access. Type the barcode number manually.';
+    if(error?.name==='NotAllowedError'||error?.name==='PermissionDeniedError')return 'Camera permission was blocked. Allow camera access in browser settings, then try again.';
+    if(error?.name==='NotFoundError'||error?.name==='DevicesNotFoundError')return 'No camera was found on this device.';
+    if(error?.name==='NotReadableError'||error?.name==='TrackStartError')return 'The camera is busy in another app. Close it and try again.';
+    if(error instanceof TypeError)return 'The barcode scanner could not load. Check your internet connection.';
+    return 'Could not start the camera. Check permission and try again.';
+  };
+  button.onclick=async()=>{
+    if(active||starting)return;
+    dialog.showModal();placeholder.querySelector('span:last-child').textContent='Waiting for camera access…';setStatus('Starting camera…');
+    if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){placeholder.querySelector('span:last-child').textContent=cameraMessage();setStatus(cameraMessage());return;}
+    const current=++session;starting=true;button.disabled=true;button.setAttribute('aria-busy','true');
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+      if(current!==session){stream.getTracks().forEach(track=>track.stop());return;}
+      camera.srcObject=stream;camera.hidden=false;placeholder.hidden=true;camera.play().catch(()=>{});setStatus('Loading scanner…');
+      const {BrowserMultiFormatReader}=await import('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm');
+      if(current!==session){stream.getTracks().forEach(track=>track.stop());return;}
+      active=true;setStatus('Camera on. Hold the barcode steady in the frame.');
+      controls=await new BrowserMultiFormatReader().decodeFromStream(stream,camera,(result,_error,scanControls)=>{if(result)capture(result.getText(),scanControls);});
+      if(current!==session||!active){controls?.stop();return;}
+      starting=false;button.disabled=false;button.removeAttribute('aria-busy');setStatus('Camera on. Hold the barcode steady in the frame.');
+    }catch(error){
+      if(current!==session)return;active=false;starting=false;controls?.stop();controls=null;stream?.getTracks().forEach(track=>track.stop());stream=null;camera.pause();camera.srcObject=null;camera.hidden=true;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent=cameraMessage(error);button.disabled=false;button.removeAttribute('aria-busy');setStatus(cameraMessage(error));console.error('Sticker barcode scanner could not start:',error);
+    }
+  };
+  view.querySelectorAll('[data-close-sticker-camera]').forEach(el=>el.addEventListener('click',()=>stop()));
+  dialog.addEventListener('cancel',event=>{event.preventDefault();stop();});
+  dialog.addEventListener('click',event=>{if(event.target===dialog)stop();});
+  const visibility=()=>{if(document.hidden&&(active||starting))stop('Camera stopped.');};
+  document.addEventListener('visibilitychange',visibility);window.addEventListener('pagehide',stop);
+  return()=>{document.removeEventListener('visibilitychange',visibility);window.removeEventListener('pagehide',stop);stop('');};
+}
+async function stickerRegisterPage(view){
+  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">SUPERADMIN · GLOBAL REGISTRY</span><h2>Register Sticker</h2><p>Register an existing sticker number so any club can use it.</p></div></div><section class="panel narrow"><div class="callout"><span class="callout-icon">◎</span><span>Barcode stickers are global and are not assigned to a club or member. Scan an existing sticker or enter its number manually.</span></div><form id="sticker-register-form" class="form-grid"><label class="field"><span>Barcode number</span><div class="barcode-entry"><input id="sticker-barcode-number" name="barcode_number" maxlength="120" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required placeholder="Scan or type the barcode number"><button class="barcode-scan-button" id="sticker-camera-button" type="button" aria-label="Scan barcode with camera" title="Scan barcode"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 12h8M10 9v6M14 9v6"/></svg></button></div></label><div class="form-actions"><button class="button primary" type="submit">Register barcode</button></div></form></section><section class="panel"><div class="panel-heading"><div><h3>Registered barcodes</h3><p class="small">Global sticker numbers available to all clubs.</p></div><span class="count-pill" data-sticker-count>Loading…</span></div><div data-sticker-table></div></section><dialog class="scanner-dialog scanner-camera-dialog" id="sticker-camera-dialog" aria-label="Scan sticker barcode"><div class="scanner-dialog-content"><div class="scanner-preview"><div class="scanner-placeholder" id="sticker-camera-placeholder"><span class="scanner-placeholder-mark" aria-hidden="true">⌗</span><span>Camera preview will appear here.</span></div><video id="sticker-camera" playsinline autoplay muted hidden aria-label="Live barcode camera preview"></video><div class="scanner-top-controls"><button class="scanner-close-button" type="button" data-close-sticker-camera aria-label="Close scanner">×</button><span class="scanner-live-indicator"><span></span>Scan barcode</span></div><div class="scanner-viewfinder" aria-hidden="true"><span class="scanner-corner top-left"></span><span class="scanner-corner top-right"></span><span class="scanner-corner bottom-left"></span><span class="scanner-corner bottom-right"></span></div><div class="scanner-bottom-controls"><p class="barcode-scan-status" id="sticker-camera-status" aria-live="polite" aria-atomic="true" hidden></p></div></div></div></dialog>`;
+  const form=view.querySelector('#sticker-register-form'),input=form.elements.barcode_number,table=view.querySelector('[data-sticker-table]'),count=view.querySelector('[data-sticker-count]');
+  const drawPreviews=async()=>{try{await loadBarcodeRenderer();table.querySelectorAll('[data-sticker-preview]').forEach(svg=>drawBarcode(svg,svg.dataset.stickerPreview));}catch(error){message(error.message,'error');}};
+  const load=async()=>{
+    const {data,error,count:total}=await supabase.from('barcode_stickers').select('barcode_number,source,created_at',{count:'exact'}).order('created_at',{ascending:false}).limit(100);
+    if(error){table.innerHTML=`<p class="notice error">${escapeHTML(error.message)}. Run sticker-barcodes.sql in your Supabase SQL Editor.</p>`;count.textContent='—';return;}
+    count.textContent=`${(total||0).toLocaleString()} registered`;
+    table.innerHTML=tableRows(data||[],[{key:'barcode_number',label:'Barcode number',render:r=>`<strong>${escapeHTML(r.barcode_number)}</strong>`},{key:'barcode',label:'Barcode',render:r=>`<svg class="barcode-preview" data-sticker-preview="${escapeHTML(r.barcode_number)}" aria-label="Barcode ${escapeHTML(r.barcode_number)}"></svg>`},{key:'source',label:'Registered via',render:r=>escapeHTML(r.source==='generated'?'Generated batch':r.source==='legacy'?'Existing race entry':'Manual or camera scan')},{key:'created_at',label:'Registered',render:r=>escapeHTML(formatDate(r.created_at))}],'No sticker numbers have been registered yet.',false);
+    await drawPreviews();
+  };
+  form.onsubmit=async event=>{event.preventDefault();const code=input.value.trim();if(!code){message('Enter or scan a barcode number first.','error');return;}const submit=form.querySelector('[type=submit]');submit.disabled=true;submit.textContent='Registering…';const {error}=await supabase.rpc('superadmin_register_sticker',{p_barcode_number:code});submit.disabled=false;submit.textContent='Register barcode';if(error){message(error.code==='23505'?'That barcode number is already registered.':dbError(error),'error');return;}form.reset();await load();message(`Barcode ${code} registered globally. Any club can use it.`,'success');};
+  currentPageCleanup=bindStickerScanner(view,input);
+  await load();
+}
+async function stickerGeneratePage(view){
+  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">SUPERADMIN · GLOBAL REGISTRY</span><h2>Generate Sticker</h2><p>Generate a batch of unique barcodes. Each number is registered automatically and can be used by any club.</p></div></div><section class="panel narrow"><form id="sticker-batch-form" class="form-grid"><label class="field"><span>Sticker batch quantity</span><input name="quantity" type="number" min="1" max="500" step="1" inputmode="numeric" value="20" required></label><div class="form-actions"><button class="button primary" type="submit">Generate and register stickers</button></div></form><p class="small sticker-print-note">Labels contain only a barcode and its number. The Word sheet uses 20 stickers per A4 page.</p></section><section class="panel" data-sticker-preview-panel hidden><div class="panel-heading"><div><h3>Generated sticker batch</h3><p class="small" data-sticker-batch-note></p></div><div class="sticker-actions"><button class="button secondary" type="button" data-export-word>Export Word</button><button class="button primary" type="button" data-print-stickers>Print</button></div></div><div data-sticker-preview></div></section>`;
+  const form=view.querySelector('#sticker-batch-form'),previewPanel=view.querySelector('[data-sticker-preview-panel]'),preview=view.querySelector('[data-sticker-preview]');let generatedCodes=[];
+  const showBatch=async()=>{
+    previewPanel.hidden=false;view.querySelector('[data-sticker-batch-note]').textContent=`${generatedCodes.length} stickers · 20 per A4 page`;
+    preview.innerHTML=stickerGroups(generatedCodes).map(group=>`<div class="sticker-preview-page">${stickerSheetTable(group,code=>code?`<td class="sticker-cell"><svg data-sticker-preview="${escapeHTML(code)}" aria-label="Barcode ${escapeHTML(code)}"></svg><strong>${escapeHTML(code)}</strong></td>`:'<td class="sticker-cell sticker-empty" aria-hidden="true"></td>')}</div>`).join('');
+    await loadBarcodeRenderer();preview.querySelectorAll('[data-sticker-preview]').forEach(svg=>drawBarcode(svg,svg.dataset.stickerPreview));
+  };
+  form.onsubmit=async event=>{event.preventDefault();const quantity=Number(form.elements.quantity.value);if(!Number.isInteger(quantity)||quantity<1||quantity>500){message('Choose a batch quantity from 1 to 500.','error');return;}const button=form.querySelector('[type=submit]');button.disabled=true;button.textContent='Generating and registering…';const {data,error}=await supabase.rpc('superadmin_generate_sticker_batch',{p_quantity:quantity});button.disabled=false;button.textContent='Generate and register stickers';if(error){message(authError(error),'error');return;}generatedCodes=(data||[]).map(row=>String(row.barcode_number));if(generatedCodes.length!==quantity){message('The batch may have been saved, but the generated stickers could not be loaded. Refresh the page to check the global registry.','error');return;}try{await showBatch();message(`${generatedCodes.length} unique stickers generated and registered globally.`,'success');}catch(renderError){message(`The stickers were registered, but the barcode preview could not load: ${renderError.message}`,'error');}};
+  const buildDocument=async()=>{
+    if(!generatedCodes.length)throw new Error('Generate a sticker batch first.');
+    const pages=[];for(const group of stickerGroups(generatedCodes)){const cells=await Promise.all(group.map(async number=>({number,image:await barcodePngDataUrl(number)})));pages.push(cells);}
+    return wordStickerDocument(pages);
+  };
+  view.querySelector('[data-export-word]').onclick=async event=>{const button=event.currentTarget;button.disabled=true;button.textContent='Preparing Word…';try{const html=await buildDocument(),blob=new Blob(['\ufeff',html],{type:'application/msword;charset=utf-8'}),link=document.createElement('a'),objectUrl=URL.createObjectURL(blob);link.href=objectUrl;link.download=`mayma-stickers-${new Date().toISOString().slice(0,10)}.doc`;link.click();URL.revokeObjectURL(objectUrl);message('Word sticker sheet downloaded. Open it in Word and print on A4 label paper.','success');}catch(error){message(error.message,'error');}finally{button.disabled=false;button.textContent='Export Word';}};
+  view.querySelector('[data-print-stickers]').onclick=async event=>{const button=event.currentTarget,printWindow=window.open('','_blank');if(!printWindow){message('Allow pop-ups to open the print sheet. You can export Word instead.','error');return;}button.disabled=true;button.textContent='Preparing…';try{const html=await buildDocument();printWindow.onload=()=>setTimeout(()=>printWindow.print(),250);printWindow.document.open();printWindow.document.write(html);printWindow.document.close();}catch(error){printWindow.close();message(error.message,'error');}finally{button.disabled=false;button.textContent='Print';}};
+}
 async function dashboard(view) {
   const queries=[['members','Registered members'],['race_points','Race points'],['races','Race schedules'],['race_entries','Race entries']];
   const results=await Promise.all(queries.map(async([table,label])=>{const {count,error}=await supabase.from(table).select('*',{count:'exact',head:true});if(error)throw error;return [label,count||0];}));
@@ -328,8 +439,8 @@ function distanceMeters(lat1,lon1,lat2,lon2){const rad=n=>n*Math.PI/180;const a=
 async function entriesPage(view) {
   const [{data:races,error:a},{data:members,error:b}]=await Promise.all([supabase.from('races').select('*').order('id',{ascending:false}),supabase.from('members').select('id,member_no,full_name,loft_name,latitude,longitude').order('member_no')]);if(a||b)throw a||b;
   const {data:entries,error}=await supabase.from('race_entries').select('*').order('id',{ascending:false});if(error)throw error;
-  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">PIGEON ROSTER</span><h2>Race entries</h2><p>Register each pigeon once for the selected schedule.</p></div></div><section class="panel"><h3>Register a pigeon</h3><form id="entry-form" class="form-grid"><label class="field"><span>Race schedule</span><select name="race_id" required><option value="">Choose a race</option>${races.map(r=>`<option value="${r.id}">${escapeHTML(r.name)}</option>`).join('')}</select></label><label class="field"><span>Member</span><select name="member_id" required><option value="">Choose a member</option>${members.map(m=>`<option value="${m.id}">${escapeHTML(m.member_no)} · ${escapeHTML(m.full_name)}</option>`).join('')}</select></label><label class="field"><span>Ring number</span><input name="pigeon_ring" maxlength="80" required></label><label class="field"><span>Race barcode</span><input name="barcode" maxlength="120" required autocomplete="off"></label><label class="field"><span>Category</span><select name="category"><option>Open Category</option><option>Young Bird</option><option>Old Bird</option><option>Special Category</option></select></label><label class="field"><span>Race type</span><select name="race_type"><option>Regular Race/Set</option><option>Training Toss</option><option>Special Race</option></select></label><label class="field"><span>Pooling</span><select name="pooling"><option value="0">No</option><option value="1">Yes</option></select></label><div class="form-actions"><button class="button primary">Save entry</button></div></form></section><section class="panel"><div class="panel-heading"><h3>Registered pigeons</h3></div>${tableRows(entries.map(e=>({...e,member:members.find(m=>m.id===e.member_id),race:races.find(r=>r.id===e.race_id)})),[{key:'race',label:'Race',render:r=>escapeHTML(r.race?.name||'—')},{key:'member',label:'Member',render:r=>`${escapeHTML(r.member?.member_no||'—')} · ${escapeHTML(r.member?.full_name||'')}`},{key:'pigeon_ring',label:'Ring'},{key:'barcode',label:'Barcode'},{key:'distance_m',label:'Distance',render:r=>`${number(r.distance_m)} m`}],'No pigeons registered.',false)}</section>`;
-  view.querySelector('#entry-form').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,m=members.find(x=>x.id===Number(f.member_id.value)),r=races.find(x=>x.id===Number(f.race_id.value));if(!m||!r)return;const {error}=await supabase.from('race_entries').insert({race_id:r.id,member_id:m.id,pigeon_ring:f.pigeon_ring.value.trim().toUpperCase(),barcode:f.barcode.value.trim(),pooling:Number(f.pooling.value),category:f.category.value,race_type:f.race_type.value,distance_m:distanceMeters(r.release_latitude,r.release_longitude,m.latitude,m.longitude)});if(error){message(dbError(error),'error');return;}location.reload();};
+  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">PIGEON ROSTER</span><h2>Race entries</h2><p>Register each pigeon once for the selected schedule.</p></div></div><section class="panel"><h3>Register a pigeon</h3><form id="entry-form" class="form-grid"><label class="field"><span>Race schedule</span><select name="race_id" required><option value="">Choose a race</option>${races.map(r=>`<option value="${r.id}">${escapeHTML(r.name)}</option>`).join('')}</select></label><label class="field"><span>Member</span><select name="member_id" required><option value="">Choose a member</option>${members.map(m=>`<option value="${m.id}">${escapeHTML(m.member_no)} · ${escapeHTML(m.full_name)}</option>`).join('')}</select></label><label class="field"><span>Ring number</span><input name="pigeon_ring" maxlength="80" required></label><label class="field"><span>Race barcode · global sticker</span><input name="barcode" maxlength="120" required autocomplete="off" autocapitalize="none" autocorrect="off" placeholder="Type or scan the registered number"><small class="small">Use a sticker registered by Super Admin. The same global barcode can be used by any club.</small></label><label class="field"><span>Category</span><select name="category"><option>Open Category</option><option>Young Bird</option><option>Old Bird</option><option>Special Category</option></select></label><label class="field"><span>Race type</span><select name="race_type"><option>Regular Race/Set</option><option>Training Toss</option><option>Special Race</option></select></label><label class="field"><span>Pooling</span><select name="pooling"><option value="0">No</option><option value="1">Yes</option></select></label><div class="form-actions"><button class="button primary">Save entry</button></div></form></section><section class="panel"><div class="panel-heading"><h3>Registered pigeons</h3></div>${tableRows(entries.map(e=>({...e,member:members.find(m=>m.id===e.member_id),race:races.find(r=>r.id===e.race_id)})),[{key:'race',label:'Race',render:r=>escapeHTML(r.race?.name||'—')},{key:'member',label:'Member',render:r=>`${escapeHTML(r.member?.member_no||'—')} · ${escapeHTML(r.member?.full_name||'')}`},{key:'pigeon_ring',label:'Ring'},{key:'barcode',label:'Barcode'},{key:'distance_m',label:'Distance',render:r=>`${number(r.distance_m)} m`}],'No pigeons registered.',false)}</section>`;
+  view.querySelector('#entry-form').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,m=members.find(x=>x.id===Number(f.member_id.value)),r=races.find(x=>x.id===Number(f.race_id.value)),barcode=f.barcode.value.trim();if(!m||!r)return;const {data:sticker,error:stickerError}=await supabase.from('barcode_stickers').select('barcode_number').eq('barcode_number',barcode).maybeSingle();if(stickerError){message(stickerError.message.includes('barcode_stickers')?'The global sticker registry is not installed. Run sticker-barcodes.sql in Supabase SQL Editor.':stickerError.message,'error');return;}if(!sticker){message('This barcode is not registered. Ask the Super Admin to register it first.','error');return;}const {error}=await supabase.from('race_entries').insert({race_id:r.id,member_id:m.id,pigeon_ring:f.pigeon_ring.value.trim().toUpperCase(),barcode,pooling:Number(f.pooling.value),category:f.category.value,race_type:f.race_type.value,distance_m:distanceMeters(r.release_latitude,r.release_longitude,m.latitude,m.longitude)});if(error){message(dbError(error),'error');return;}location.reload();};
 }
 async function clockPage(view,identity) {
  const [{data:races,error:a},{data:entries,error:b}]=await Promise.all([supabase.from('races').select('id,name,status,release_at_utc').eq('status','open').order('id',{ascending:false}),supabase.from('race_entries').select('id,race_id,member_id,pigeon_ring,barcode').order('id')]);if(a||b)throw a||b;
@@ -544,6 +655,8 @@ function loginMessage(container,text,kind){const node=container.querySelector('[
 async function renderPage(view,role,identity){
   const page=body.dataset.view;
   if(page==='clubs'&&role==='superadmin')await clubsPage(view);
+  else if(page==='sticker-register'&&role==='superadmin')await stickerRegisterPage(view);
+  else if(page==='sticker-generate'&&role==='superadmin')await stickerGeneratePage(view);
   else if(page==='team-users'&&role==='admin'&&identity.profile.role==='admin')await teamAccountsPage(view,identity);
   else if(page==='dashboard'&&role==='admin')await dashboard(view);
   else if(page==='members'||page==='race-points')await initCrud(view,page==='members'?'members':'race_points',identity.profile.role==='admin');

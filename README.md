@@ -6,8 +6,9 @@ an email address.
 
 ## How accounts work
 
-- **Superadmin**: created once, on first run of a fresh database. The superadmin only
-  manages club accounts (Club accounts page). It cannot see any club's members or races.
+- **Superadmin**: created once, on first run of a fresh database. The superadmin
+  manages club accounts and the global barcode sticker registry. It cannot see any
+  club's members or races.
 - **Club administrator**: created by the superadmin with a club name, username and
   password. It manages its club's records and can create more administrators or staff.
 - **Staff**: created by a club administrator. Staff can manage routine member, race,
@@ -29,6 +30,9 @@ requests in the browser.
       passwords. Run it after `multi-club.sql`; it is safe to re-run.
    5. `public-results.sql` — enables the public Results tab. Run it after the other
       scripts; it is safe to re-run after future result changes.
+   6. `sticker-barcodes.sql` — enables global barcode registration, automatic batch
+      registration, and registered-barcode checks on race entries. Run it after
+      `multi-club.sql`; it is safe to re-run.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.
@@ -49,6 +53,11 @@ Create a club account with exactly that name to hand the old data to that club.
 
 - `index.html`: club portal landing page.
 - `pages/login/index.html`: shared admin/member sign-in.
+- `pages/superadmin/clubs/`: create and manage club accounts.
+- `pages/superadmin/stickers/register/`: scan or enter existing barcode numbers in
+  the global registry.
+- `pages/superadmin/stickers/generate/`: generate batches that register their unique
+  barcode numbers automatically, then export a 20-per-A4 Word sheet or print it.
 - `pages/admin/dashboard/`: club overview.
 - `pages/admin/members/`: member and loft records.
 - `pages/admin/users/`: create, edit credentials, disable and reactivate administrator or staff accounts.
@@ -70,6 +79,10 @@ Create a club account with exactly that name to hand the old data to that club.
   and receipts. Users cannot promote themselves. A club must keep one active admin.
 - `submit_member_clock` and `admin_record_clock` check the member, barcode, race
   status and release time, then write a server timestamp.
+- Generated sticker numbers are registered in Supabase in the same transaction as
+  batch creation. Registered barcodes are global and can be used by any club. Race
+  entries reject numbers that are not registered by Super Admin. Existing entry
+  barcodes are imported when `sticker-barcodes.sql` is first run.
 - Clocking receipts are provisional evidence of server receipt time.
 - The login page's public Results tab needs no account. It shows non-rejected result
   fields for a chosen club and Philippines-local race date; each club's other data
