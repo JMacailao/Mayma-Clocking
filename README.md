@@ -65,7 +65,9 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/admin/dashboard/`: club overview.
 - `pages/admin/members/`: member and loft records, with `.xlsx`, `.xls`, and `.csv`
   import. The Excel template lists required columns; imports validate duplicates and
-  coordinates before saving and do not create login accounts.
+  coordinates before saving and do not create login accounts. The template uses
+  latitude/longitude hemisphere, degrees, minutes, and seconds; decimal coordinate
+  columns are also accepted.
 - `pages/admin/users/`: create, edit credentials, disable and reactivate administrator or staff accounts.
 - `pages/admin/race-points/`: release locations.
 - `pages/admin/races/`: race schedules and status.

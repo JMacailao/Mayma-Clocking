@@ -116,7 +116,7 @@ let spreadsheetParserPromise=null;
 function loadSpreadsheetParser(){
   if(window.XLSX?.read)return Promise.resolve(window.XLSX);
   if(!spreadsheetParserPromise)spreadsheetParserPromise=new Promise((resolve,reject)=>{
-    const script=document.createElement('script');script.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';script.crossOrigin='anonymous';script.dataset.sheetjs='';
+    const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';script.crossOrigin='anonymous';script.dataset.sheetjs='';
     script.onload=()=>window.XLSX?.read?resolve(window.XLSX):reject(new Error('The Excel reader did not load.'));
     script.onerror=()=>reject(new Error('Could not load the Excel reader. Check your internet connection.'));
     document.head.append(script);
@@ -134,9 +134,37 @@ const memberImportAliases={
   phone:['phone','phonenumber','contactnumber','mobile'],
   paid:['paid','membershippaid','paymentstatus','membershipstatus'],
   latitude:['latitude','lat','latitudedd','latitudedecimal','latitudedecimaldegrees'],
-  longitude:['longitude','lon','lng','long','longitudedd','longitudedecimal','longitudedecimaldegrees']
+  latitude_hemisphere:['latitudehemisphere','latitudehemispherens','lathemisphere','latitudedirection','latdirection','latns'],
+  latitude_degrees:['latitudedegrees','latdegrees','latdeg'],
+  latitude_minutes:['latitudeminutes','latminutes','latmin'],
+  latitude_seconds:['latitudeseconds','latseconds','latsec'],
+  longitude:['longitude','lon','lng','long','longitudedd','longitudedecimal','longitudedecimaldegrees'],
+  longitude_hemisphere:['longitudehemisphere','longitudehemisphereew','lonhemisphere','longitudedirection','londirection','lonew'],
+  longitude_degrees:['longitudedegrees','longdegrees','longdeg','londegrees'],
+  longitude_minutes:['longitudeminutes','longminutes','longmin','lonminutes'],
+  longitude_seconds:['longitudeseconds','longseconds','longsec','lonseconds']
 };
 const normalizeImportHeader=value=>String(value??'').toLowerCase().replace(/[^a-z0-9]/g,'');
+function parseImportedCoordinate(row,axis,limit,positive,negative,cell,columns){
+  const decimalText=cell(row,axis),degreeField=`${axis}_degrees`,minuteField=`${axis}_minutes`,secondField=`${axis}_seconds`,hemisphereField=`${axis}_hemisphere`,hasDmsColumns=columns[degreeField]>=0;
+  if(decimalText){
+    const value=Number(decimalText);
+    if(!Number.isFinite(value)||value < -limit||value > limit)return {error:`${titleCase(axis)} must be from ${-limit} to ${limit}.`};
+    if(hasDmsColumns&&[degreeField,minuteField,secondField].some(field=>cell(row,field)!==''))return {error:`Use either decimal ${titleCase(axis)} or DMS columns, not both.`};
+    return {value};
+  }
+  if(!hasDmsColumns)return {error:`${titleCase(axis)} is missing.`};
+  const degreeText=cell(row,degreeField),minuteText=cell(row,minuteField),secondText=cell(row,secondField),hemisphere=(cell(row,hemisphereField)||positive).toUpperCase();
+  if(!degreeText)return {error:`${titleCase(axis)} degrees are missing.`};
+  const degrees=Number(degreeText),minutes=minuteText===''?0:Number(minuteText),seconds=secondText===''?0:Number(secondText);
+  if(!Number.isInteger(degrees)||degrees<0||degrees>limit)return {error:`${titleCase(axis)} degrees must be a whole number from 0 to ${limit}.`};
+  if(!Number.isInteger(minutes)||minutes<0||minutes>=60)return {error:`${titleCase(axis)} minutes must be a whole number from 0 to 59.`};
+  if(!Number.isFinite(seconds)||seconds<0||seconds>=60)return {error:`${titleCase(axis)} seconds must be from 0 up to 59.9999.`};
+  if(degrees===limit&&(minutes>0||seconds>0))return {error:`At ${limit} ${titleCase(axis)} degrees, minutes and seconds must be zero.`};
+  if(hemisphere!==positive&&hemisphere!==negative)return {error:`${titleCase(axis)} hemisphere must be ${positive} or ${negative}.`};
+  const magnitude=degrees+minutes/60+seconds/3600;
+  return {value:Number((hemisphere===negative?-magnitude:magnitude).toFixed(7))};
+}
 function parseMemberWorksheet(XLSX,arrayBuffer){
   const workbook=XLSX.read(arrayBuffer,{type:'array',cellDates:false});
   if(!workbook.SheetNames?.length)throw new Error('The Excel file has no worksheet.');
@@ -145,9 +173,10 @@ function parseMemberWorksheet(XLSX,arrayBuffer){
   const headerRowIndex=matrix.slice(0,10).findIndex(row=>{
     const headers=new Set(row.map(normalizeImportHeader));
     const has=key=>memberImportAliases[key].some(alias=>headers.has(normalizeImportHeader(alias)));
-    return has('member_no')&&has('loft_name')&&has('latitude')&&has('longitude')&&(has('full_name')||(has('first_name')&&has('last_name')));
+    const decimalCoordinates=has('latitude')&&has('longitude'),dmsCoordinates=has('latitude_degrees')&&has('longitude_degrees');
+    return has('member_no')&&has('loft_name')&&(decimalCoordinates||dmsCoordinates)&&(has('full_name')||(has('first_name')&&has('last_name')));
   });
-  if(headerRowIndex<0)throw new Error('Could not find the member column headings in the first 10 rows. Include Member ID, Full name (or First name and Last name), Loft name, Latitude, and Longitude.');
+  if(headerRowIndex<0)throw new Error('Could not find the member column headings in the first 10 rows. Include Member ID, Full name (or First name and Last name), Loft name, and either decimal Latitude/Longitude or DMS degree columns for both coordinates.');
   const header=matrix[headerRowIndex].map(normalizeImportHeader),columns={};
   for(const [field,aliases] of Object.entries(memberImportAliases))columns[field]=header.findIndex(value=>aliases.some(alias=>value===normalizeImportHeader(alias)));
   const cell=(row,field)=>{const index=columns[field];return index<0?'':String(row[index]??'').trim();};
@@ -157,18 +186,18 @@ function parseMemberWorksheet(XLSX,arrayBuffer){
   for(const item of dataRows){
     const row=item.row,errors=[],memberNo=cell(row,'member_no'),firstName=cell(row,'first_name'),middleName=cell(row,'middle_name'),lastName=cell(row,'last_name');
     const fullName=cell(row,'full_name')||[firstName,middleName,lastName].filter(Boolean).join(' '),loftName=cell(row,'loft_name');
-    const latitudeText=cell(row,'latitude'),longitudeText=cell(row,'longitude'),latitude=Number(latitudeText),longitude=Number(longitudeText);
+    const latitudeResult=parseImportedCoordinate(row,'latitude',90,'N','S',cell,columns),longitudeResult=parseImportedCoordinate(row,'longitude',180,'E','W',cell,columns);
     if(!memberNo)errors.push('Member ID is missing.');else if(memberNo.length>40)errors.push('Member ID exceeds 40 characters.');
     if(!fullName)errors.push('Full name or first and last name is required.');else if(fullName.length>180)errors.push('Full name exceeds 180 characters.');
     if(!loftName)errors.push('Loft name is missing.');else if(loftName.length>180)errors.push('Loft name exceeds 180 characters.');
-    if(!latitudeText||!Number.isFinite(latitude)||latitude < -90||latitude > 90)errors.push('Latitude must be a decimal value from -90 to 90.');
-    if(!longitudeText||!Number.isFinite(longitude)||longitude < -180||longitude > 180)errors.push('Longitude must be a decimal value from -180 to 180.');
+    if(latitudeResult.error)errors.push(latitudeResult.error);
+    if(longitudeResult.error)errors.push(longitudeResult.error);
     for(const [value,label,max] of [[firstName,'First name',180],[middleName,'Middle name',180],[lastName,'Last name',180],[cell(row,'address'),'Address',500],[cell(row,'phone'),'Phone',40]])if(value.length>max)errors.push(`${label} exceeds ${max} characters.`);
     const paidText=cell(row,'paid').toLowerCase();let paid=0;
     if(['yes','y','true','1','paid'].includes(paidText))paid=1;else if(['','no','n','false','0','unpaid'].includes(paidText))paid=0;else errors.push('Membership paid must be Yes/No or 1/0.');
     if(memberNo){const normalized=memberNo.toLocaleLowerCase();if(seen.has(normalized))errors.push('Member ID appears more than once in this file.');else seen.add(normalized);}
     if(errors.length){issues.push({rowNumber:item.rowNumber,errors});continue;}
-    members.push({__rowNumber:item.rowNumber,member_no:memberNo,full_name:fullName,first_name:firstName||null,middle_name:middleName||null,last_name:lastName||null,loft_name:loftName,address:cell(row,'address')||null,phone:cell(row,'phone')||null,paid,latitude:Number(latitude.toFixed(7)),longitude:Number(longitude.toFixed(7))});
+    members.push({__rowNumber:item.rowNumber,member_no:memberNo,full_name:fullName,first_name:firstName||null,middle_name:middleName||null,last_name:lastName||null,loft_name:loftName,address:cell(row,'address')||null,phone:cell(row,'phone')||null,paid,latitude:latitudeResult.value,longitude:longitudeResult.value});
   }
   return {members,issues,dataRows:dataRows.length};
 }
@@ -292,17 +321,17 @@ function bindGeneric(view,table,fieldsList,columns,defaults={},withAccounts=fals
     const showImportPreview=(rows,issues)=>{
       pendingImportRows=rows;summary.textContent=`${rows.length} ready · ${issues.length} issue${issues.length===1?'':'s'}`;
       errorsNode.innerHTML=issues.length?`<div class="notice error"><strong>Fix these spreadsheet rows before importing:</strong><ul class="import-issue-list">${issues.slice(0,20).map(issue=>`<li>Row ${escapeHTML(issue.rowNumber)}: ${issue.errors.map(escapeHTML).join(' ')}</li>`).join('')}${issues.length>20?`<li>And ${issues.length-20} more issue(s).</li>`:''}</ul></div>`:'';
-      previewNode.innerHTML=rows.length?`<p class="small">Previewing the first ${Math.min(rows.length,8)} of ${rows.length} members. Imports create member records only; they do not create login accounts.</p>${tableRows(rows.slice(0,8),[{key:'member_no',label:'Member ID'},{key:'full_name',label:'Full name'},{key:'loft_name',label:'Loft name'},{key:'latitude',label:'Latitude'},{key:'longitude',label:'Longitude'}],'No member rows found.',false)}`:'<p class="small">No valid member rows to preview.</p>';
+      previewNode.innerHTML=rows.length?`<p class="small">Previewing the first ${Math.min(rows.length,8)} of ${rows.length} members. Coordinates are converted to decimal degrees for storage. Imports create member records only; they do not create login accounts.</p>${tableRows(rows.slice(0,8),[{key:'member_no',label:'Member ID'},{key:'full_name',label:'Full name'},{key:'loft_name',label:'Loft name'},{key:'latitude',label:'Latitude · DD'},{key:'longitude',label:'Longitude · DD'}],'No member rows found.',false)}`:'<p class="small">No valid member rows to preview.</p>';
       importButton.disabled=!rows.length||issues.length>0;importPanel.hidden=false;importPanel.scrollIntoView({behavior:'smooth',block:'start'});
     };
     openButton.onclick=()=>importFile.click();
     view.querySelector('[data-download-member-template]').onclick=async event=>{
       const button=event.currentTarget;button.disabled=true;
       try{
-        const XLSX=await loadSpreadsheetParser(),workbook=XLSX.utils.book_new(),sheet=XLSX.utils.aoa_to_sheet([['Member ID','Full name','First name','Middle name','Last name','Loft name','Address','Phone','Membership paid','Latitude','Longitude']]);
-        sheet['!cols']=[{wch:18},{wch:26},{wch:18},{wch:18},{wch:18},{wch:24},{wch:32},{wch:18},{wch:18},{wch:14},{wch:14}];
+        const XLSX=await loadSpreadsheetParser(),workbook=XLSX.utils.book_new(),sheet=XLSX.utils.aoa_to_sheet([['Member ID','Full name','First name','Middle name','Last name','Loft name','Address','Phone','Membership paid','Latitude Hemisphere (N/S)','Latitude Degrees','Latitude Minutes','Latitude Seconds','Longitude Hemisphere (E/W)','Longitude Degrees','Longitude Minutes','Longitude Seconds']]);
+        sheet['!cols']=[{wch:18},{wch:26},{wch:18},{wch:18},{wch:18},{wch:24},{wch:32},{wch:18},{wch:18},{wch:24},{wch:16},{wch:16},{wch:16},{wch:26},{wch:17},{wch:17},{wch:17}];
         XLSX.utils.book_append_sheet(workbook,sheet,'Members');XLSX.writeFile(workbook,'mayma-members-template.xlsx');
-        message('Excel template downloaded. Fill one member per row; coordinates must be decimal degrees.','success');
+        message('Excel template downloaded. Fill one member per row; enter each coordinate as hemisphere, degrees, minutes, and seconds.','success');
       }catch(error){message(error.message||'Could not create the Excel template.','error');}
       finally{button.disabled=false;}
     };
@@ -501,7 +530,7 @@ async function initCrud(view,table,canManageAccounts) {
   const formMarkup=genericForm(fields[table]).replace('<div class="form-actions">',`${accountFields}<div class="form-actions">`);
   const formPanel=`<section class="panel" ${isMembers?'data-member-form-panel hidden':''}><div class="panel-heading"><h3 data-form-title>${isMembers?'Add a member':'Add a race point'}</h3></div>${formMarkup}</section>`;
   const listPanel=`<section class="panel"><div class="panel-heading"><h3>${isMembers?'Member list':'Saved locations'}</h3>${isMembers?'<div class="member-list-actions"><button class="button secondary" type="button" data-download-member-template>Excel template</button><button class="button secondary" type="button" data-open-member-import>Import Excel</button><input id="member-import-file" type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden><button class="button primary" type="button" data-add-member>＋ Add member</button></div>':''}</div><div data-table></div></section>`;
-  const importPanel=isMembers?`<section class="panel member-import-panel" data-member-import-panel hidden><div class="panel-heading"><div><h3>Excel import preview</h3><p class="small">Reads the first worksheet using its first row of column headings. Required: Member ID, Full name, Loft name, Latitude, Longitude.</p></div><span class="count-pill" data-import-summary></span></div><div data-import-errors></div><div data-import-preview></div><div class="form-actions"><button class="button secondary" type="button" data-cancel-member-import>Cancel</button><button class="button primary" type="button" data-confirm-member-import disabled>Import members</button></div></section>`:'';
+  const importPanel=isMembers?`<section class="panel member-import-panel" data-member-import-panel hidden><div class="panel-heading"><div><h3>Excel import preview</h3><p class="small">Reads the first worksheet using its first row of column headings. Required: Member ID, Full name, Loft name, and coordinates as decimal Latitude/Longitude or hemisphere, degrees, minutes, and seconds.</p></div><span class="count-pill" data-import-summary></span></div><div data-import-errors></div><div data-import-preview></div><div class="form-actions"><button class="button secondary" type="button" data-cancel-member-import>Cancel</button><button class="button primary" type="button" data-confirm-member-import disabled>Import members</button></div></section>`:'';
   view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">${isMembers?'CLUB DIRECTORY':'RELEASE LOCATIONS'}</span><h2>${isMembers?'Members & lofts':'Race points'}</h2><p>${isMembers?'Maintain member records and loft coordinates.':'Save release points for new race schedules.'}</p></div><span class="count-pill" data-count>— records</span></div>${isMembers?`${listPanel}${importPanel}${formPanel}`:`${formPanel}${listPanel}`}`;
   bindGeneric(view,table,fields[table],columns,{},isMembers&&canManageAccounts);
 }
