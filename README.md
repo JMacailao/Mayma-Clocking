@@ -60,6 +60,8 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/member/dashboard/`: a member's open races.
 - `pages/member/clocking/`: member barcode clocking and camera scan.
 - `pages/member/history/`: that member's receipts.
+- `pages/member/results/`: public club and date-filtered race results.
+- `pages/member/settings/`: member profile and password settings.
 
 ## Important
 
