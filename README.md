@@ -37,6 +37,8 @@ requests in the browser.
    7. `race-release-time.sql` — allows schedules to be saved before their release time
       is known, while requiring a release time before a race can be opened. Run it
       for existing databases; it is safe to re-run.
+   8. `race-schedule-dates.sql` — adds open and end dates to schedules. Run it for
+      existing databases; it is safe to re-run.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.
@@ -75,7 +77,7 @@ Create a club account with exactly that name to hand the old data to that club.
   columns are also accepted.
 - `pages/admin/users/`: create, edit credentials, disable and reactivate administrator or staff accounts.
 - `pages/admin/race-points/`: release locations.
-- `pages/admin/races/`: race schedules and status.
+- `pages/admin/races/`: race schedules, open/end dates, release time, and status.
 - `pages/admin/entries/`: registered pigeons and barcodes, with photo/PDF race-sheet
   OCR for printed and handwritten IDs/rings, barcode decoding, Excel template
   export/import, an editable review table, and checks for registered members and
@@ -108,3 +110,10 @@ Create a club account with exactly that name to hand the old data to that club.
   fields for a chosen club and Philippines-local race date; each club's other data
   remains protected by row-level security.
 - Never put a service-role key in browser code.
+
+## JavaScript structure
+
+- `assets/js/app.js` handles startup, authentication checks, and page routing.
+- `assets/js/shared.js` contains shared Supabase, formatting, and UI helpers.
+- Each page's behavior lives beside its HTML in `page.js` and is loaded on demand. Race-entry scanning and imports are in `pages/admin/entries/page.js`.
+- Shared admin member and race-point forms live in `pages/admin/crud.js`; public results are shared from `pages/results/public.js`.
