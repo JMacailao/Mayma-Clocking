@@ -40,6 +40,9 @@ requests in the browser.
       for existing databases; it is safe to re-run.
    8. `race-schedule-dates.sql` — adds open and end dates to schedules. Run it for
       existing databases; it is safe to re-run.
+   9. `nfc-tags.sql` — enables NFC tag clocking: race entries can store each pigeon's
+      NFC tag ID instead of (or as well as) a sticker, and members clock by tapping
+      the tag. Run it after `sticker-barcodes.sql`; it is safe to re-run.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.
@@ -89,8 +92,9 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/admin/clocking/`: admin receipts.
 - `pages/admin/results/`: provisional leaderboard.
 - `pages/member/dashboard/`: a member's open races.
-- `pages/member/clocking/`: member clocking with the sticker's scratch code, typed or
-  scanned with the camera.
+- `pages/member/clocking/`: member clocking by tapping the pigeon's NFC tag (Android
+  phone or USB NFC reader), or with the sticker's scratch code, typed or scanned with
+  the camera.
 - `pages/member/history/`: that member's receipts.
 - `pages/member/results/`: public club and date-filtered race results.
 - `pages/member/settings/`: member profile and password settings.
@@ -102,6 +106,15 @@ Create a club account with exactly that name to hand the old data to that club.
   and receipts. Users cannot promote themselves. A club must keep one active admin.
 - `submit_member_clock` and `admin_record_clock` check the member, barcode, race
   status and release time, then write a server timestamp.
+- **NFC tags.** At basketing, the club taps each pigeon's NFC tag in **Race entries**
+  to save its tag ID on the entry. When the pigeon arrives, the member taps the same
+  tag on the **Clocking** page and the server records the time. Members do not need
+  to choose a race unless the tag is entered in more than one open race. Tags work
+  with Chrome on Android phones (Web NFC, HTTPS only) or with a USB NFC reader in
+  keyboard mode on any device. Set USB readers to output the UID in **hex**, so they
+  match what phones read. A tag's ID is not secret: anyone can read it with an NFC
+  app and type it into the reader field, so NFC clocking proves less than it seems
+  unless the club checks birds or uses cryptographic tags (for example NTAG 424 DNA).
 - Each sticker has a visible number (for example `12345`) and a hidden scratch code
   (for example `4567`) printed in the dashed **SCRATCH TO CLOCK** box. Cover that box
   with scratch-off foil before handing stickers out. Race entries use the visible

@@ -295,3 +295,11 @@ video#camera[hidden]{display:none}
 .entry-sheet-input:disabled{background:#f2f5f1;color:#66736a}
 .entry-sheet-panel .form-actions{justify-content:flex-end}
 @media(max-width:720px){.entry-sheet-controls{grid-template-columns:1fr}.entry-sheet-actions{display:grid;grid-template-columns:1fr 1fr}.entry-sheet-actions .button{width:100%;min-width:0}.entry-sheet-input{min-width:0;min-height:44px;font-size:16px}.entry-sheet-table table{min-width:0}.entry-sheet-table tr.has-errors{border-color:#e29c91;background:#fff1ee}.entry-sheet-table tr.is-saved{border-color:#c8decf;background:#f0f7f1}.entry-sheet-table tr.has-errors td,.entry-sheet-table tr.is-saved td{background:transparent}.entry-sheet-panel .form-actions{flex-direction:column-reverse;align-items:stretch}.entry-sheet-panel .form-actions .button{width:100%}}
+
+.nfc-clock-panel{margin-bottom:16px}
+.nfc-status{margin:12px 0 0}
+.nfc-log{display:grid;gap:6px;margin:12px 0 0;padding:0;list-style:none}
+.nfc-log:empty{display:none}
+.nfc-log-item{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-variant-numeric:tabular-nums}
+.nfc-log-item.success{border-color:#bcdcc5;background:#eef7f0}
+.nfc-log-item.error{border-color:#ebc9c1;background:#fbf0ed}

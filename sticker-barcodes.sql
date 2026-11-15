@@ -220,7 +220,13 @@ SET search_path = ''
 AS $function$
 BEGIN
   IF NEW.barcode IS NULL OR btrim(NEW.barcode) = '' THEN
-    RAISE EXCEPTION 'Choose a barcode registered by the Super Admin.' USING ERRCODE = '23514';
+    -- Entries clocked by NFC tag (nfc-tags.sql) do not need a sticker. to_jsonb
+    -- keeps this working before the nfc_tag column exists.
+    IF NULLIF(to_jsonb(NEW) ->> 'nfc_tag', '') IS NOT NULL THEN
+      NEW.barcode := NULL;
+      RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'Choose a barcode registered by the Super Admin, or tap the pigeon''s NFC tag.' USING ERRCODE = '23514';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM public.barcode_stickers AS s WHERE s.barcode_number = NEW.barcode
