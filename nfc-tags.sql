@@ -143,4 +143,81 @@ $function$;
 REVOKE ALL ON FUNCTION public.submit_member_nfc_clock(text, bigint) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.submit_member_nfc_clock(text, bigint) TO authenticated;
 
+-- Global NFC tag registry. Like stickers, a tag must be registered by the
+-- Super Admin before any club can put it on a race entry. Tags are global and
+-- are not assigned to a club or member.
+CREATE TABLE IF NOT EXISTS public.nfc_tags (
+  tag_uid varchar(20) COLLATE "C" PRIMARY KEY
+    CHECK (tag_uid ~ '^([0-9A-F]{8}|[0-9A-F]{14}|[0-9A-F]{20})$'),
+  source text NOT NULL CHECK (source IN ('manual', 'legacy')),
+  created_by uuid,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Keep tags already used on race entries before this registry existed.
+INSERT INTO public.nfc_tags (tag_uid, source)
+SELECT DISTINCT e.nfc_tag, 'legacy'
+FROM public.race_entries AS e
+WHERE e.nfc_tag IS NOT NULL
+ON CONFLICT (tag_uid) DO NOTHING;
+
+ALTER TABLE public.nfc_tags ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS nfc_tags_read_registered ON public.nfc_tags;
+CREATE POLICY nfc_tags_read_registered ON public.nfc_tags
+  FOR SELECT TO authenticated USING (true);
+REVOKE ALL ON public.nfc_tags FROM anon, PUBLIC, authenticated;
+GRANT SELECT ON public.nfc_tags TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.superadmin_register_nfc_tag(p_tag text)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  v_uid text;
+BEGIN
+  IF NOT public.is_superadmin() THEN
+    RAISE EXCEPTION 'Superadmin account required.' USING ERRCODE = '42501';
+  END IF;
+  v_uid := public.normalize_nfc_uid(p_tag);
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Tap an NFC tag first.' USING ERRCODE = '22023';
+  END IF;
+  INSERT INTO public.nfc_tags (tag_uid, source, created_by)
+  VALUES (v_uid, 'manual', auth.uid());
+  RETURN v_uid;
+EXCEPTION
+  WHEN unique_violation THEN
+    RAISE EXCEPTION 'That NFC tag is already registered.' USING ERRCODE = '23505';
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.superadmin_register_nfc_tag(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.superadmin_register_nfc_tag(text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.require_registered_nfc_tag()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $function$
+BEGIN
+  IF NEW.nfc_tag IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.nfc_tags AS t WHERE t.tag_uid = NEW.nfc_tag
+  ) THEN
+    RAISE EXCEPTION 'This NFC tag is not registered. Ask the Super Admin to register it first.' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+-- Runs after race_entries_a_normalize_nfc_tag (triggers fire in name order).
+DROP TRIGGER IF EXISTS race_entries_b_require_registered_nfc_tag ON public.race_entries;
+CREATE TRIGGER race_entries_b_require_registered_nfc_tag
+  BEFORE INSERT OR UPDATE OF nfc_tag ON public.race_entries
+  FOR EACH ROW EXECUTE FUNCTION public.require_registered_nfc_tag();
+
+COMMENT ON TABLE public.nfc_tags IS
+  'Global NFC tag registry. Tags are not assigned to a club or member.';
+
 COMMIT;

@@ -70,6 +70,8 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/superadmin/clubs/`: create and manage club accounts.
 - `pages/superadmin/stickers/register/`: scan or enter an existing sticker number and
   its hidden scratch code in the global registry.
+- `pages/superadmin/nfc/`: register NFC tags in the global registry by tapping them
+  on a USB NFC reader or Android phone.
 - `pages/superadmin/stickers/generate/`: generate unique barcode batches and choose
   whether to register them for club use immediately, then export a 20-per-A4 Word
   sheet or print it.
@@ -106,7 +108,8 @@ Create a club account with exactly that name to hand the old data to that club.
   and receipts. Users cannot promote themselves. A club must keep one active admin.
 - `submit_member_clock` and `admin_record_clock` check the member, barcode, race
   status and release time, then write a server timestamp.
-- **NFC tags.** At basketing, the club taps each pigeon's NFC tag in **Race entries**
+- **NFC tags.** The Super Admin first registers each tag on **Register NFC** (tap tags
+  one after another on a USB reader); clubs cannot use unregistered tags. At basketing, the club taps each pigeon's NFC tag in **Race entries**
   to save its tag ID on the entry. When the pigeon arrives, the member taps the same
   tag on the **Clocking** page and the server records the time. Members do not need
   to choose a race unless the tag is entered in more than one open race. Tags work
