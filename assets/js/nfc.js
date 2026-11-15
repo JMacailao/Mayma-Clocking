@@ -2,6 +2,12 @@
 // HTTPS). Elsewhere a USB NFC reader set to "keyboard" mode types the tag ID into
 // a text field and presses Enter, which works in any browser.
 
+import { pageUrl } from './shared.js';
+
+// Download link for the Windows helper that makes an ACS ACR122U (or other PC/SC
+// reader) type tag IDs like a keyboard.
+export const readerHelperLink=()=>`<a href="${pageUrl('tools/nfc-reader/acr122u-keyboard.ps1')}" download>Download the ACR122U reader helper</a> (Windows: right-click it, Run with PowerShell).`;
+
 export const NFC_HELP='That is not a valid NFC tag ID. Tag IDs are hex, for example 04:A2:3B:1C:5D:80:00. If your USB reader types only digits, set it to output the UID in hex (see the reader manual).';
 
 // Same rules as public.normalize_nfc_uid(): uppercase hex with no separators.

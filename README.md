@@ -118,6 +118,11 @@ Create a club account with exactly that name to hand the old data to that club.
   match what phones read. A tag's ID is not secret: anyone can read it with an NFC
   app and type it into the reader field, so NFC clocking proves less than it seems
   unless the club checks birds or uses cryptographic tags (for example NTAG 424 DNA).
+- **ACS ACR122U and other PC/SC readers** do not type like a keyboard, so browsers
+  cannot see them. On Windows, run `tools/nfc-reader/acr122u-keyboard.ps1`
+  (right-click → **Run with PowerShell**, nothing to install) and keep its window
+  open. It types each tapped tag's ID and Enter into the focused field. Every NFC
+  reader field links to it.
 - Each sticker has a visible number (for example `12345`) and a hidden scratch code
   (for example `4567`) printed in the dashed **SCRATCH TO CLOCK** box. Cover that box
   with scratch-off foil before handing stickers out. Race entries use the visible
