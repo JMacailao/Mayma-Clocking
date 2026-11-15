@@ -1,16 +1,5 @@
-import { supabase, escapeHTML, message, dbError, number, tableRows } from '../../../assets/js/shared.js';
+import { supabase, escapeHTML, message, dbError, number, tableRows, loadSpreadsheetParser, normalizeImportHeader } from '../../../assets/js/shared.js';
 
-let spreadsheetParserPromise=null;
-function loadSpreadsheetParser(){
-  if(window.XLSX?.read)return Promise.resolve(window.XLSX);
-  if(!spreadsheetParserPromise)spreadsheetParserPromise=new Promise((resolve,reject)=>{
-    const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';script.crossOrigin='anonymous';script.dataset.sheetjs='';
-    script.onload=()=>window.XLSX?.read?resolve(window.XLSX):reject(new Error('The Excel reader did not load.'));
-    script.onerror=()=>reject(new Error('Could not load the Excel reader. Check your internet connection.'));
-    document.head.append(script);
-  }).catch(error=>{spreadsheetParserPromise=null;document.querySelector('[data-sheetjs]')?.remove();throw error;});
-  return spreadsheetParserPromise;
-}
 let spreadsheetZipReaderPromise=null;
 function loadSpreadsheetZipReader(){
   if(window.JSZip?.loadAsync)return Promise.resolve(window.JSZip);

@@ -1,4 +1,4 @@
-import { supabase, escapeHTML, message, dbError, authError, fail, tableRows, USERNAME_RE, USERNAME_HELP } from '../../assets/js/shared.js';
+import { supabase, escapeHTML, message, dbError, authError, fail, tableRows, USERNAME_RE, USERNAME_HELP, titleCase, loadSpreadsheetParser, normalizeImportHeader } from '../../assets/js/shared.js';
 
 const fields={
   members:[['member_no','Member ID','text',true],['full_name','Full name','text',true],['first_name','First name','text'],['middle_name','Middle name','text'],['last_name','Last name','text'],['loft_name','Loft name','text',true],['address','Address','text'],['phone','Phone','text'],['paid','Membership paid','select',true],['latitude','Latitude','coordinates',true],['longitude','Longitude','coordinates',true]],
@@ -65,7 +65,6 @@ const memberImportAliases={
   longitude_minutes:['longitudeminutes','longminutes','longmin','lonminutes'],
   longitude_seconds:['longitudeseconds','longseconds','longsec','lonseconds']
 };
-const normalizeImportHeader=value=>String(value??'').toLowerCase().replace(/[^a-z0-9]/g,'');
 function parseImportedCoordinate(row,axis,limit,positive,negative,cell,columns){
   const decimalText=cell(row,axis),degreeField=`${axis}_degrees`,minuteField=`${axis}_minutes`,secondField=`${axis}_seconds`,hemisphereField=`${axis}_hemisphere`,hasDmsColumns=columns[degreeField]>=0;
   if(decimalText){

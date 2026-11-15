@@ -1,4 +1,4 @@
-import { supabase, message, pageUrl as url } from '../../../assets/js/shared.js';
+import { supabase, message, escapeHTML } from '../../../assets/js/shared.js';
 
 export async function render(view,identity,setPageCleanup) {
  const memberId=identity.profile.member_id;if(!memberId)throw new Error('This account is missing its member record.');

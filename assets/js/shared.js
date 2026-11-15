@@ -32,3 +32,16 @@ export function tableRows(items, columns, empty='Nothing here yet.',withActions=
 
 export const pageUrl = (path) => `${document.body.dataset.base || '../../'}${path}`;
 export const fail = (error) => { console.error(error); const text=error?.message || 'Something went wrong. Please try again.'; if(!document.querySelector('[data-message]')&&document.querySelector('#app-shell')){document.querySelector('#app-shell').innerHTML=`<main class="loading"><strong>Could not connect to Supabase.</strong><span class="notice error">${escapeHTML(text)}</span><a class="button secondary" href="${pageUrl('index.html')}">Back to home</a></main>`;return;} message(text,'error'); };
+
+export const normalizeImportHeader=value=>String(value??'').toLowerCase().replace(/[^a-z0-9]/g,'');
+let spreadsheetParserPromise=null;
+export function loadSpreadsheetParser(){
+  if(window.XLSX?.read)return Promise.resolve(window.XLSX);
+  if(!spreadsheetParserPromise)spreadsheetParserPromise=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';script.crossOrigin='anonymous';script.dataset.sheetjs='';
+    script.onload=()=>window.XLSX?.read?resolve(window.XLSX):reject(new Error('The Excel reader did not load.'));
+    script.onerror=()=>reject(new Error('Could not load the Excel reader. Check your internet connection.'));
+    document.head.append(script);
+  }).catch(error=>{spreadsheetParserPromise=null;document.querySelector('[data-sheetjs]')?.remove();throw error;});
+  return spreadsheetParserPromise;
+}
