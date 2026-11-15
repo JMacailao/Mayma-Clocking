@@ -33,7 +33,8 @@ requests in the browser.
    6. `sticker-barcodes.sql` — enables global barcode registration, optional batch
       registration, and registered-barcode checks on race entries. Run it after
       `multi-club.sql`; it is safe to re-run. Re-run the updated file on existing
-      databases to enable the register-or-skip choice in Generate Sticker.
+      databases to enable the register-or-skip choice in Generate Sticker and
+      scratch-off clocking codes.
    7. `race-release-time.sql` — allows schedules to be saved before their release time
       is known, while requiring a release time before a race can be opened. Run it
       for existing databases; it is safe to re-run.
@@ -64,8 +65,8 @@ Create a club account with exactly that name to hand the old data to that club.
 - `index.html`: club portal landing page.
 - `pages/login/index.html`: shared admin/member sign-in.
 - `pages/superadmin/clubs/`: create and manage club accounts.
-- `pages/superadmin/stickers/register/`: scan or enter existing barcode numbers in
-  the global registry.
+- `pages/superadmin/stickers/register/`: scan or enter an existing sticker number and
+  its hidden scratch code in the global registry.
 - `pages/superadmin/stickers/generate/`: generate unique barcode batches and choose
   whether to register them for club use immediately, then export a 20-per-A4 Word
   sheet or print it.
@@ -88,7 +89,8 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/admin/clocking/`: admin receipts.
 - `pages/admin/results/`: provisional leaderboard.
 - `pages/member/dashboard/`: a member's open races.
-- `pages/member/clocking/`: member barcode clocking and camera scan.
+- `pages/member/clocking/`: member clocking with the sticker's scratch code, typed or
+  scanned with the camera.
 - `pages/member/history/`: that member's receipts.
 - `pages/member/results/`: public club and date-filtered race results.
 - `pages/member/settings/`: member profile and password settings.
@@ -100,6 +102,15 @@ Create a club account with exactly that name to hand the old data to that club.
   and receipts. Users cannot promote themselves. A club must keep one active admin.
 - `submit_member_clock` and `admin_record_clock` check the member, barcode, race
   status and release time, then write a server timestamp.
+- Each sticker has a visible number (for example `12345`) and a hidden scratch code
+  (for example `4567`) printed in the dashed **SCRATCH TO CLOCK** box. Cover that box
+  with scratch-off foil before handing stickers out. Race entries use the visible
+  number; members clock with the scratch code, and the server maps it back to the
+  sticker number. A sticker with a scratch code cannot be clocked with its visible
+  number. Scratch codes are never readable through the app or API, so print or export
+  a generated batch before leaving the page. Older stickers without a scratch code
+  still clock with their number; register the same number again with a scratch code
+  to add one.
 - Generated sticker numbers can be registered in Supabase in the same transaction
   as batch creation or generated without registration. Registered barcodes are global
   and can be used by any club. Race entries reject numbers that are not registered by
