@@ -41,25 +41,25 @@ export const CODES_PER_ROW=2,STICKER_ROWS=27,STICKERS_PER_PAGE=CODES_PER_ROW*STI
 export const STICKER_BARCODE={height:28,width:1.2,margin:0};
 export const DEFAULT_STICKER_LABEL='MAYMA';
 // Layout shared by the screen preview and the printed/Word sheet, in real units.
-const STICKER_CSS='.sticker-sheet{width:16cm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{width:3.97cm;height:.97cm;max-height:.97cm;padding:0;border:.5pt solid #cbd3cd;overflow:hidden;vertical-align:middle;text-align:center}.sticker-code-part img,.sticker-code-part svg{display:block;width:3.6cm;height:.5cm;margin:0 auto .03cm}.sticker-code-text{width:3.75cm;margin:0 auto;border-collapse:collapse;table-layout:fixed}.sticker-code-text td{padding:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;line-height:12px;color:#111;white-space:nowrap;overflow:hidden}.sticker-code-text td{text-align:center}.sticker-code-text .left{width:2.25cm;text-align:left}.sticker-code-text .right{width:1.5cm;text-align:right}.sticker-tag{width:3.75cm;margin:0 auto;border-collapse:collapse;table-layout:fixed}.sticker-tag td{padding:0;vertical-align:middle;white-space:nowrap;overflow:hidden}.sticker-tag .sticker-number{text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;color:#111}.sticker-tag .sticker-brand-cell{width:1.5cm;text-align:right}.sticker-brand{display:inline-block;padding:.06cm .1cm;background:#111;color:#fff;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;line-height:12px;letter-spacing:.02em;-webkit-print-color-adjust:exact;print-color-adjust:exact}';
+const STICKER_CSS='.sticker-sheet{width:16cm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{width:3.97cm;height:.97cm;max-height:.97cm;padding:0;border:.5pt solid #cbd3cd;overflow:hidden;vertical-align:middle;text-align:center}.sticker-code-part img,.sticker-code-part svg{display:block;width:3cm;height:.28cm;margin:.01cm auto}.sticker-code-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;line-height:12px;color:#111;white-space:nowrap;text-align:center}.sticker-code-text{width:3.75cm;margin:0 auto;border-collapse:collapse;table-layout:fixed}.sticker-code-text td{padding:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;line-height:12px;color:#111;white-space:nowrap;overflow:hidden}.sticker-code-text td{text-align:center}.sticker-code-text .left{width:2.25cm;text-align:left}.sticker-code-text .right{width:1.5cm;text-align:right}.sticker-tag{width:3.75cm;margin:0 auto;border-collapse:collapse;table-layout:fixed}.sticker-tag td{padding:0;vertical-align:middle;white-space:nowrap;overflow:hidden}.sticker-tag .sticker-number{text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;color:#111}.sticker-tag .sticker-brand-cell{width:1.5cm;text-align:right}.sticker-brand{display:inline-block;padding:.06cm .1cm;background:#111;color:#fff;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;line-height:12px;letter-spacing:.02em;-webkit-print-color-adjust:exact;print-color-adjust:exact}';
 
 // The barcode printed on a sticker: the secret scratch code when there is one.
 export const stickerBarcodeValue=code=>code.scratch||code.number;
 // The two pieces of one code: the number piece on the left (the visible sticker
 // number, used to register the race entry) and the barcode piece on the right
-// (the barcode of the secret code, with the sticker number under it so the two
-// pieces can be matched). The secret code itself is not printed as digits.
+// (the sticker number on top, the barcode of the secret code, and the number the
+// barcode decodes to underneath).
 // barcode is an <img> (print) or <svg> (preview).
 function stickerPieces(code,barcode,label){
   const brand=label?`<td class="sticker-brand-cell"><span class="sticker-brand">${escapeHTML(label)}</span></td>`:'';
-  return `<td class="sticker-number-part"><table class="sticker-tag"><tr><td class="sticker-number">${escapeHTML(code.number)}</td>${brand}</tr></table></td><td class="sticker-code-part">${barcode}<table class="sticker-code-text"><tr><td>${escapeHTML(code.number)}</td></tr></table></td>`;
+  return `<td class="sticker-number-part"><table class="sticker-tag"><tr><td class="sticker-number">${escapeHTML(code.number)}</td>${brand}</tr></table></td><td class="sticker-code-part"><span class="sticker-code-line">${escapeHTML(code.number)}</span>${barcode}<span class="sticker-code-line">${escapeHTML(stickerBarcodeValue(code))}</span></td>`;
 }
 const emptyPieces='<td class="sticker-empty" aria-hidden="true"></td><td class="sticker-empty" aria-hidden="true"></td>';
 // Screen preview of one code (two cells).
 export function stickerPreviewCell(code,label=DEFAULT_STICKER_LABEL){
   if(!code)return emptyPieces;
   const value=stickerBarcodeValue(code);
-  return stickerPieces(code,`<svg data-sticker-preview="${escapeHTML(value)}" aria-label="Barcode ${escapeHTML(value)}" preserveAspectRatio="xMidYMid meet"></svg>`,label);
+  return stickerPieces(code,`<svg data-sticker-preview="${escapeHTML(value)}" aria-label="Barcode ${escapeHTML(value)}" preserveAspectRatio="none"></svg>`,label);
 }
 export function drawStickerPreviews(root){
   root.querySelectorAll('[data-sticker-preview]').forEach(svg=>{drawBarcode(svg,svg.dataset.stickerPreview,STICKER_BARCODE);const w=svg.getAttribute('width'),h=svg.getAttribute('height');if(w&&h){svg.setAttribute('viewBox',`0 0 ${parseFloat(w)} ${parseFloat(h)}`);svg.removeAttribute('width');svg.removeAttribute('height');}});

@@ -124,7 +124,7 @@ Create a club account with exactly that name to hand the old data to that club.
   open. It types each tapped tag's ID and Enter into the focused field. Every NFC
   reader field links to it.
 - Each sticker has a visible number (for example `12345`) and a hidden scratch code
-  (for example `4567`). Each code prints as two pieces: on the left a number piece (the sticker number and a label box) for registering the race entry, and on the right a barcode piece (barcode of the secret code with the sticker number under it) for clocking. The secret code is not printed as digits. Keep the barcode piece hidden until clocking. Cover that box
+  (for example `4567`). Each code prints as two pieces: on the left a number piece (the sticker number and a label box) for registering the race entry, and on the right a barcode piece (sticker number on top, barcode of the secret code, and the decoded secret code underneath) for clocking. Keep the barcode piece hidden until clocking. Cover that box
   with scratch-off foil before handing stickers out. Race entries use the visible
   number; members clock with the scratch code, and the server maps it back to the
   sticker number. A sticker with a scratch code cannot be clocked with its visible
