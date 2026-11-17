@@ -1,4 +1,4 @@
-import { escapeHTML, message } from '../../../assets/js/shared.js';
+import { escapeHTML, message, pageUrl } from '../../../assets/js/shared.js';
 
 let barcodeRendererPromise=null;
 export function loadBarcodeRenderer(){
@@ -32,16 +32,18 @@ export async function barcodePngDataUrl(code,options){
   }finally{URL.revokeObjectURL(objectUrl);}
 }
 
-// Sticker size and A4 sheet layout. Each code is printed as two 4 cm x 1 cm
-// pieces side by side: a barcode piece and a number piece. An A4 page with 1 cm
-// margins holds 2 codes (4 pieces) per row and 27 rows.
-export const CODES_PER_ROW=2,STICKER_ROWS=27,STICKERS_PER_PAGE=CODES_PER_ROW*STICKER_ROWS;
-// Compact barcode for the small label: thin bars, no quiet-zone margin (the
-// sticker's own padding provides it).
+// Ticket size and A4 sheet layout. Each ticket is 5 in wide and 1 in tall
+// (12.7 cm x 2.54 cm): the number piece on the left and, after a solid divider,
+// the barcode piece on the right. An A4 page with 1 cm margins holds one ticket
+// per row and 10 rows.
+export const CODES_PER_ROW=1,STICKER_ROWS=10,STICKERS_PER_PAGE=CODES_PER_ROW*STICKER_ROWS;
+// Barcode drawn without its own margin: the barcode piece keeps about 9 mm of
+// white on each side (the quiet zone scanners need). Keep the divider at 1pt: a
+// thicker black line next to the barcode stops the app's scanner reading it.
 export const STICKER_BARCODE={height:28,width:1.2,margin:0};
 export const DEFAULT_STICKER_LABEL='MAYMA';
 // Layout shared by the screen preview and the printed/Word sheet, in real units.
-const STICKER_CSS='.sticker-sheet{width:16cm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{width:3.97cm;height:.97cm;max-height:.97cm;padding:0;border:.5pt solid #cbd3cd;overflow:hidden;vertical-align:middle;text-align:center}.sticker-code-part img,.sticker-code-part svg{display:block;width:3cm;height:.28cm;margin:.01cm auto}.sticker-code-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;line-height:12px;color:#111;white-space:nowrap;text-align:center}.sticker-code-text{width:3.75cm;margin:0 auto;border-collapse:collapse;table-layout:fixed}.sticker-code-text td{padding:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;line-height:12px;color:#111;white-space:nowrap;overflow:hidden}.sticker-code-text td{text-align:center}.sticker-code-text .left{width:2.25cm;text-align:left}.sticker-code-text .right{width:1.5cm;text-align:right}.sticker-tag{width:3.75cm;margin:0 auto;border-collapse:collapse;table-layout:fixed}.sticker-tag td{padding:0;vertical-align:middle;white-space:nowrap;overflow:hidden}.sticker-tag .sticker-number{text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;color:#111}.sticker-tag .sticker-brand-cell{width:1.5cm;text-align:right}.sticker-brand{display:inline-block;padding:.06cm .1cm;background:#111;color:#fff;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;line-height:12px;letter-spacing:.02em;-webkit-print-color-adjust:exact;print-color-adjust:exact}';
+const STICKER_CSS='.sticker-sheet{width:12.7cm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{height:2.5cm;max-height:2.5cm;padding:0;border:.5pt solid #cbd3cd;overflow:hidden;vertical-align:middle;text-align:center}.sticker-sheet>tbody>tr>td.sticker-number-part{width:5.6cm}.sticker-sheet>tbody>tr>td.sticker-code-part{width:7.03cm;border-left:1pt solid #111}.sticker-brand-line{display:block;height:.6cm;line-height:.6cm;margin-bottom:.12cm;white-space:nowrap;text-align:center}.sticker-logo{display:inline;height:.55cm;width:auto;vertical-align:middle;margin-right:.12cm}.sticker-brand-text{display:inline;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:11pt;font-weight:700;color:#555;letter-spacing:.02em}.sticker-number{display:block;font-family:Arial,Helvetica,sans-serif;font-size:18pt;font-weight:700;line-height:1.1;color:#111;white-space:nowrap;text-align:center;letter-spacing:.04em}.sticker-code-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:16pt;font-weight:700;line-height:1.1;color:#111;white-space:nowrap;text-align:center;letter-spacing:.04em}.sticker-code-part img,.sticker-code-part svg{display:block;width:5.2cm;height:1.35cm;margin:0 auto .1cm}';
 
 // The barcode printed on a sticker: the secret scratch code when there is one.
 export const stickerBarcodeValue=code=>code.scratch||code.number;
@@ -50,16 +52,39 @@ export const stickerBarcodeValue=code=>code.scratch||code.number;
 // (the sticker number on top, the barcode of the secret code, and the number the
 // barcode decodes to underneath).
 // barcode is an <img> (print) or <svg> (preview).
-function stickerPieces(code,barcode,label){
-  const brand=label?`<td class="sticker-brand-cell"><span class="sticker-brand">${escapeHTML(label)}</span></td>`:'';
-  return `<td class="sticker-number-part"><table class="sticker-tag"><tr><td class="sticker-number">${escapeHTML(code.number)}</td>${brand}</tr></table></td><td class="sticker-code-part"><span class="sticker-code-line">${escapeHTML(code.number)}</span>${barcode}<span class="sticker-code-line">${escapeHTML(stickerBarcodeValue(code))}</span></td>`;
+function stickerPieces(code,barcode,label,logo){
+  const brand=logo||label?`<span class="sticker-brand-line">${logo?`<img class="sticker-logo" src="${logo}" alt="">`:''}${label?`<span class="sticker-brand-text">${escapeHTML(label)}</span>`:''}</span>`:'';
+  return `<td class="sticker-number-part">${brand}<span class="sticker-number">${escapeHTML(code.number)}</span></td><td class="sticker-code-part">${barcode}<span class="sticker-code-line">${escapeHTML(stickerBarcodeValue(code))}</span></td>`;
+}
+// The app logo, cropped to its drawing and turned grey, as a small PNG data URL
+// that works on screen, in the print window and in the Word file. '' if it
+// cannot be loaded.
+let stickerLogoPromise=null;
+export function stickerLogoDataUrl(){
+  if(!stickerLogoPromise)stickerLogoPromise=(async()=>{
+    const image=new Image();image.src=pageUrl('assets/images/clocking-logo.png');await image.decode();
+    const source=document.createElement('canvas');source.width=image.naturalWidth;source.height=image.naturalHeight;
+    const sctx=source.getContext('2d',{willReadFrequently:true});sctx.drawImage(image,0,0);
+    const {data,width,height}=sctx.getImageData(0,0,source.width,source.height);
+    let left=width,right=-1,top=height,bottom=-1;
+    for(let y=0;y<height;y+=2)for(let x=0;x<width;x+=2){const k=(y*width+x)*4;if(data[k+3]>20&&(data[k]<235||data[k+1]<235||data[k+2]<235)){if(x<left)left=x;if(x>right)right=x;if(y<top)top=y;if(y>bottom)bottom=y;}}
+    if(right<left)return '';
+    const cropW=right-left+1,cropH=bottom-top+1,outH=96,outW=Math.max(1,Math.round(cropW*outH/cropH));
+    const out=document.createElement('canvas');out.width=outW;out.height=outH;const octx=out.getContext('2d');
+    octx.fillStyle='#fff';octx.fillRect(0,0,outW,outH);octx.drawImage(source,left,top,cropW,cropH,0,0,outW,outH);
+    const pixels=octx.getImageData(0,0,outW,outH);
+    for(let k=0;k<pixels.data.length;k+=4){const grey=Math.round(.3*pixels.data[k]+.59*pixels.data[k+1]+.11*pixels.data[k+2]);pixels.data[k]=pixels.data[k+1]=pixels.data[k+2]=grey;}
+    octx.putImageData(pixels,0,0);
+    return out.toDataURL('image/png');
+  })().catch(error=>{console.warn('Sticker logo could not load:',error);stickerLogoPromise=null;return '';});
+  return stickerLogoPromise;
 }
 const emptyPieces='<td class="sticker-empty" aria-hidden="true"></td><td class="sticker-empty" aria-hidden="true"></td>';
 // Screen preview of one code (two cells).
-export function stickerPreviewCell(code,label=DEFAULT_STICKER_LABEL){
+export function stickerPreviewCell(code,label=DEFAULT_STICKER_LABEL,logo=''){
   if(!code)return emptyPieces;
   const value=stickerBarcodeValue(code);
-  return stickerPieces(code,`<svg data-sticker-preview="${escapeHTML(value)}" aria-label="Barcode ${escapeHTML(value)}" preserveAspectRatio="none"></svg>`,label);
+  return stickerPieces(code,`<svg data-sticker-preview="${escapeHTML(value)}" aria-label="Barcode ${escapeHTML(value)}" preserveAspectRatio="none"></svg>`,label,logo);
 }
 export function drawStickerPreviews(root){
   root.querySelectorAll('[data-sticker-preview]').forEach(svg=>{drawBarcode(svg,svg.dataset.stickerPreview,STICKER_BARCODE);const w=svg.getAttribute('width'),h=svg.getAttribute('height');if(w&&h){svg.setAttribute('viewBox',`0 0 ${parseFloat(w)} ${parseFloat(h)}`);svg.removeAttribute('width');svg.removeAttribute('height');}});
@@ -71,8 +96,8 @@ export function stickerSheetTable(codes,renderCode){
   return `<table class="sticker-sheet"><tbody>${Array.from({length:rows},(_,row)=>`<tr>${cells.slice(row*CODES_PER_ROW,(row+1)*CODES_PER_ROW).map(code=>renderCode(code)).join('')}</tr>`).join('')}</tbody></table>`;
 }
 export const stickerPreviewStyle=()=>`<style>${STICKER_CSS}</style>`;
-export function wordStickerDocument(pages,label=DEFAULT_STICKER_LABEL){
-  const cell=code=>code?stickerPieces(code,`<img src="${code.image}" alt="">`,label):'<td></td><td></td>';
+export function wordStickerDocument(pages,label=DEFAULT_STICKER_LABEL,logo=''){
+  const cell=code=>code?stickerPieces(code,`<img src="${code.image}" alt="">`,label,logo):'<td></td><td></td>';
   const sheets=pages.map(page=>`<section class="sticker-page">${stickerSheetTable(page,cell)}</section>`).join('');
   return `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>Mayma barcode stickers</title><style>@page{size:21cm 29.7cm;margin:1cm}body{font-family:Arial,sans-serif;margin:0}.sticker-page{page-break-after:always;break-after:page}.sticker-page:last-child{page-break-after:auto;break-after:auto}${STICKER_CSS}</style></head><body>${sheets}</body></html>`;
 }

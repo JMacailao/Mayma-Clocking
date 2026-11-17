@@ -3,9 +3,9 @@
 --
 -- Each sticker has a visible number (used to register the race entry) and a
 -- secret code (printed as a barcode, used by the member to clock). New stickers
--- use a visible number from 1 to 1999 and a random 7-digit secret code. Numbers
--- are reused each season: the Super Admin starts a new season,
--- which archives the current stickers so numbers 1 to 1999 are free again.
+-- use a 12-digit sticker number (issued in order) and a random 12-digit secret
+-- code. The Super Admin can start a new season, which archives the current
+-- stickers so they stop working.
 BEGIN;
 
 DO $$
@@ -19,7 +19,7 @@ BEGIN
 END;
 $$;
 
--- No longer used for new stickers (they use 1 to 1999); kept for older databases.
+-- Issues 12-digit sticker numbers in order.
 CREATE SEQUENCE IF NOT EXISTS public.sticker_barcode_number_seq
   AS bigint START WITH 700000000000 INCREMENT BY 1 NO CYCLE;
 
@@ -54,8 +54,8 @@ ALTER TABLE public.barcode_stickers ADD CONSTRAINT barcode_stickers_scratch_code
     AND scratch_code <> barcode_number
   )
 );
--- Secret codes are not unique across seasons and older short codes may repeat, so
--- there is no unique index; new 7-digit codes are kept unique within a season.
+-- Older short secret codes may repeat, so there is no unique index; new 12-digit
+-- secret codes are kept unique within a season.
 DROP INDEX IF EXISTS public.barcode_stickers_scratch_code_key;
 
 -- Preserve barcodes already used by race entries when installing this feature.
@@ -134,19 +134,28 @@ AS $function$
 $function$;
 GRANT EXECUTE ON FUNCTION public.is_short_sticker_code(text) TO authenticated;
 
--- Secret codes are 7 digits, 1000000 to 9999999.
+-- Sticker numbers and secret codes are 12 digits, not starting with 0.
 CREATE OR REPLACE FUNCTION public.is_sticker_secret_code(p_value text)
 RETURNS boolean
 LANGUAGE sql
 IMMUTABLE
 SET search_path = ''
 AS $function$
-  SELECT COALESCE(p_value ~ '^[1-9][0-9]{6}$', false);
+  SELECT COALESCE(p_value ~ '^[1-9][0-9]{11}$', false);
 $function$;
+CREATE OR REPLACE FUNCTION public.is_sticker_number(p_value text)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+SET search_path = ''
+AS $function$
+  SELECT COALESCE(p_value ~ '^[1-9][0-9]{11}$', false);
+$function$;
+GRANT EXECUTE ON FUNCTION public.is_sticker_number(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_sticker_secret_code(text) TO authenticated;
 
--- Random 7-digit secret code (from a cryptographically random UUID), not used by
--- any other sticker this season.
+-- Random 12-digit secret code (from a cryptographically random UUID), not used
+-- by any other sticker this season.
 DROP FUNCTION IF EXISTS public._new_sticker_scratch_code();
 CREATE OR REPLACE FUNCTION public._new_sticker_scratch_code(p_number text)
 RETURNS text
@@ -158,7 +167,7 @@ DECLARE
   v_code text;
 BEGIN
   LOOP
-    v_code := (1000000 + (('x' || substr(md5(gen_random_uuid()::text), 1, 15))::bit(60)::bigint % 9000000))::text;
+    v_code := (100000000000 + (('x' || substr(md5(gen_random_uuid()::text), 1, 15))::bit(60)::bigint % 900000000000))::text;
     EXIT WHEN v_code IS DISTINCT FROM p_number
       AND NOT EXISTS (SELECT 1 FROM public.barcode_stickers AS s WHERE s.scratch_code = v_code);
   END LOOP;
@@ -170,7 +179,7 @@ REVOKE ALL ON FUNCTION public._new_sticker_scratch_code(text) FROM PUBLIC, anon,
 DROP FUNCTION IF EXISTS public.superadmin_register_sticker(text);
 DROP FUNCTION IF EXISTS public.superadmin_register_sticker(text, text);
 
--- Registers a sticker number (1 to 1999) with its 7-digit secret code.
+-- Registers a 12-digit sticker number with its 12-digit secret code.
 -- - A sticker generated without registering is activated; its saved secret code
 --   is kept, so the secret code can be left blank.
 -- - A registered sticker without a secret code gets the one given.
@@ -191,12 +200,12 @@ BEGIN
   IF NOT public.is_superadmin() THEN
     RAISE EXCEPTION 'Superadmin account required.' USING ERRCODE = '42501';
   END IF;
-  IF NOT public.is_short_sticker_code(v_number) THEN
-    RAISE EXCEPTION 'Sticker numbers must be 1 to 1999.' USING ERRCODE = '22023';
+  IF NOT public.is_sticker_number(v_number) THEN
+    RAISE EXCEPTION 'Sticker numbers are 12 digits, for example 700000000025.' USING ERRCODE = '22023';
   END IF;
   IF v_scratch IS NOT NULL THEN
     IF NOT public.is_sticker_secret_code(v_scratch) THEN
-      RAISE EXCEPTION 'Secret codes are 7 digits, for example 4827153.' USING ERRCODE = '22023';
+      RAISE EXCEPTION 'Secret codes are 12 digits, for example 482715390212.' USING ERRCODE = '22023';
     END IF;
     IF v_scratch = v_number THEN
       RAISE EXCEPTION 'The secret code must be different from the sticker number.' USING ERRCODE = '22023';
@@ -237,8 +246,8 @@ GRANT EXECUTE ON FUNCTION public.superadmin_register_sticker(text, text) TO auth
 DROP FUNCTION IF EXISTS public.superadmin_generate_sticker_batch(integer, boolean);
 DROP FUNCTION IF EXISTS public.superadmin_generate_sticker_batch(integer);
 
--- Takes the lowest free sticker numbers from 1 to 1999 and gives each a random
--- 7-digit secret code. The batch is always saved, registered or not.
+-- Issues the next 12-digit sticker numbers and gives each a random 12-digit
+-- secret code. The batch is always saved, registered or not.
 CREATE FUNCTION public.superadmin_generate_sticker_batch(
   p_quantity integer,
   p_register boolean DEFAULT true
@@ -249,9 +258,9 @@ SECURITY DEFINER
 SET search_path = ''
 AS $function$
 DECLARE
-  v_number integer;
+  v_index integer;
+  v_number text;
   v_scratch text;
-  v_free integer;
   v_should_register boolean := COALESCE(p_register, true);
 BEGIN
   IF NOT public.is_superadmin() THEN
@@ -261,27 +270,20 @@ BEGIN
     RAISE EXCEPTION 'Choose a batch quantity from 1 to 500.' USING ERRCODE = '22023';
   END IF;
 
-  -- One batch at a time, so two batches never take the same numbers.
-  LOCK TABLE public.barcode_stickers IN SHARE ROW EXCLUSIVE MODE;
-
-  SELECT count(*) INTO v_free
-  FROM generate_series(1, 1999) AS n(value)
-  WHERE NOT EXISTS (SELECT 1 FROM public.barcode_stickers AS s WHERE s.barcode_number = n.value::text);
-  IF v_free < p_quantity THEN
-    RAISE EXCEPTION 'Only % sticker numbers are left this season (1 to 1999). Generate fewer, or start a new season on Register Sticker.', v_free USING ERRCODE = '22023';
-  END IF;
-
-  FOR v_number IN
-    SELECT n.value FROM generate_series(1, 1999) AS n(value)
-    WHERE NOT EXISTS (SELECT 1 FROM public.barcode_stickers AS s WHERE s.barcode_number = n.value::text)
-    ORDER BY n.value
-    LIMIT p_quantity
-  LOOP
-    v_scratch := public._new_sticker_scratch_code(v_number::text);
+  FOR v_index IN 1..p_quantity LOOP
+    LOOP
+      v_number := nextval('public.sticker_barcode_number_seq')::text;
+      EXIT WHEN NOT EXISTS (
+        SELECT 1 FROM public.barcode_stickers AS s WHERE s.barcode_number = v_number OR s.scratch_code = v_number
+      ) AND NOT EXISTS (
+        SELECT 1 FROM public.barcode_stickers_archive AS a WHERE a.barcode_number = v_number
+      );
+    END LOOP;
+    v_scratch := public._new_sticker_scratch_code(v_number);
     INSERT INTO public.barcode_stickers (barcode_number, scratch_code, source, created_by, is_registered)
-    VALUES (v_number::text, v_scratch, 'generated', auth.uid(), v_should_register);
+    VALUES (v_number, v_scratch, 'generated', auth.uid(), v_should_register);
 
-    barcode_number := v_number::text;
+    barcode_number := v_number;
     scratch_code := v_scratch;
     registered := v_should_register;
     RETURN NEXT;
@@ -292,8 +294,7 @@ $function$;
 REVOKE ALL ON FUNCTION public.superadmin_generate_sticker_batch(integer, boolean) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.superadmin_generate_sticker_batch(integer, boolean) TO authenticated;
 
--- Archives every sticker of the current season, so numbers 1 to 1999 can be
--- generated again. Refused while a draft or open race still uses stickers, so a
+-- Archives every sticker of the current season, so they stop working. Refused while a draft or open race still uses stickers, so a
 -- running race never loses its stickers.
 CREATE OR REPLACE FUNCTION public.superadmin_start_sticker_season()
 RETURNS integer

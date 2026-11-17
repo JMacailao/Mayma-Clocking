@@ -73,7 +73,7 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/superadmin/nfc/`: register NFC tags in the global registry by tapping them
   on a USB NFC reader or Android phone.
 - `pages/superadmin/stickers/generate/`: generate unique barcode batches and choose
-  whether to register them for club use immediately, then export a Word sheet of 54 codes per A4 page (each code is a 4 cm × 1 cm number piece plus a 4 cm × 1 cm barcode piece)
+  whether to register them for club use immediately, then export a Word sheet of 10 tickets per A4 page (each ticket is 5 × 1 inches: a number piece and a barcode piece)
   sheet or print it.
 - `pages/admin/dashboard/`: club overview.
 - `pages/admin/members/`: member and loft records, with `.xlsx`, `.xls`, and `.csv`
@@ -124,7 +124,7 @@ Create a club account with exactly that name to hand the old data to that club.
   open. It types each tapped tag's ID and Enter into the focused field. Every NFC
   reader field links to it.
 - Each sticker has a visible number (for example `12345`) and a hidden scratch code
-  (for example `4567`). Each code prints as two pieces: on the left a number piece (the sticker number and a label box) for registering the race entry, and on the right a barcode piece (sticker number on top, barcode of the secret code, and the decoded secret code underneath) for clocking. Keep the barcode piece hidden until clocking. Cover that box
+  (for example `4567`). Each code prints as two pieces: on the left a number piece (logo, label text and the sticker number) for registering the race entry, and on the right, after a solid divider line, a barcode piece (barcode of the secret code with the decoded secret code underneath) for clocking. Keep the barcode piece hidden until clocking. Cover that box
   with scratch-off foil before handing stickers out. Race entries use the visible
   number; members clock with the scratch code, and the server maps it back to the
   sticker number. A sticker with a scratch code cannot be clocked with its visible
@@ -132,10 +132,10 @@ Create a club account with exactly that name to hand the old data to that club.
   a generated batch before leaving the page. Older stickers without a scratch code
   still clock with their number; register the same number again with a scratch code
   to add one.
-- **Short numbers, reused each season.** New sticker numbers are 1 to 1999 and
-  each gets a random 7-digit secret code. Generate Sticker takes the lowest free numbers; when they run out,
-  the Super Admin starts a new season on **Register Sticker**, which archives the
-  current stickers (refused while any draft or open race still uses stickers).
+- **12-digit numbers.** Each new sticker gets the next 12-digit sticker number and a
+  random 12-digit secret code. The Super Admin can start a new season on **Register
+  Sticker**, which archives the current stickers so they stop working (refused while
+  any draft or open race still uses stickers).
   As a safeguard, a race entry is refused if its sticker clashes with
   another sticker the same member has in that race, and a member who enters 10 wrong
   codes in a race can no longer clock it (the club records the clocking instead).
