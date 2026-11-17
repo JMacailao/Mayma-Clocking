@@ -73,7 +73,7 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/superadmin/nfc/`: register NFC tags in the global registry by tapping them
   on a USB NFC reader or Android phone.
 - `pages/superadmin/stickers/generate/`: generate unique barcode batches and choose
-  whether to register them for club use immediately, then export a 108-per-A4 Word (4 cm × 1 cm stickers)
+  whether to register them for club use immediately, then export a Word sheet of 54 codes per A4 page (each code is a 4 cm × 1 cm barcode piece plus a 4 cm × 1 cm number piece)
   sheet or print it.
 - `pages/admin/dashboard/`: club overview.
 - `pages/admin/members/`: member and loft records, with `.xlsx`, `.xls`, and `.csv`
@@ -124,7 +124,7 @@ Create a club account with exactly that name to hand the old data to that club.
   open. It types each tapped tag's ID and Enter into the focused field. Every NFC
   reader field links to it.
 - Each sticker has a visible number (for example `12345`) and a hidden scratch code
-  (for example `4567`) printed as a barcode and digits in the dashed scratch box. Cover that box
+  (for example `4567`). Each code prints as two pieces: a barcode piece (barcode of the secret code, with the sticker number and secret code under it) and a number piece (the sticker number and a label box). Keep the barcode piece hidden until clocking. Cover that box
   with scratch-off foil before handing stickers out. Race entries use the visible
   number; members clock with the scratch code, and the server maps it back to the
   sticker number. A sticker with a scratch code cannot be clocked with its visible
