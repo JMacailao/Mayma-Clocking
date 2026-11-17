@@ -245,21 +245,8 @@ video#camera[hidden]{display:none}
 .sticker-registration-toggle small{color:var(--muted);font-size:11px;font-weight:400;line-height:1.5}
 .sticker-actions{display:flex;align-items:center;gap:8px}
 .sticker-preview{display:grid;gap:18px;overflow:auto}
-.sticker-preview-page{width:min(100%,840px);margin:0 auto;padding:14px;border:1px solid var(--line);border-radius:8px;background:#fff}
-.sticker-sheet{width:100%;table-layout:fixed;border-collapse:collapse;background:#fff}
-.sticker-cell{height:76px;padding:5px 8px;border:1px dashed #bfc9c1;text-align:center;vertical-align:middle}
-.sticker-cell svg{display:block;width:min(100%,220px);height:45px;margin:0 auto 2px}
-.sticker-cell strong{display:block;color:#111;font-size:12px;line-height:1.2;font-variant-numeric:tabular-nums}
-.sticker-cell.sticker-empty{background:#fafbf9}
-.sticker-label{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:8px;align-items:center}
-.sticker-main,.sticker-scratch{min-width:0}
-.sticker-scratch{padding:3px 4px;border:1px dashed #6b7570;border-radius:4px}
-.sticker-scratch-title{display:block;color:#4a544f;font-size:8px;font-weight:700;letter-spacing:.06em}
-.sticker-cell .sticker-scratch svg{height:28px;margin-bottom:1px}
-.sticker-cell .sticker-scratch strong{font-size:12px}
-@media(max-width:720px){.sticker-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.sticker-actions .button{min-width:0}.sticker-preview-page{min-width:580px;padding:9px}.sticker-preview{margin-right:-4px}.sticker-cell{height:68px;padding:4px}.sticker-cell svg{height:38px}.sticker-cell strong{font-size:12px}
-.sticker-cell .sticker-scratch svg{height:22px}
-.sticker-cell .sticker-scratch strong{font-size:12px}}
+.sticker-preview-page{width:max-content;max-width:none;margin:0 auto;padding:14px;border:1px solid var(--line);border-radius:8px;background:#fff}
+@media(max-width:720px){.sticker-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.sticker-actions .button{min-width:0}.sticker-preview-page{padding:9px}.sticker-preview{margin-right:-4px}}
 
 .member-list-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .member-import-panel .panel-heading{align-items:flex-start}
