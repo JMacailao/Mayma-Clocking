@@ -16,7 +16,17 @@ export const missingSchemaMessage = (error) => {
   return file?`The database is missing an update. In Supabase, open SQL Editor and run ${file}, then reload this page.`:'The database is missing an update. In Supabase, open SQL Editor and run the latest SQL files listed in the README, then reload this page.';
 };
 export const dbError = (error) => { const missing=missingSchemaMessage(error); if(missing) return missing; if(error?.code==='23505') return 'That value is already in use.'; if(error?.code==='23503') return 'This record is still in use by another item.'; return error?.message || 'Could not save changes.'; };
-export const formatDate = (value) => value ? new Intl.DateTimeFormat('en-PH',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Manila'}).format(new Date(value.endsWith?.('Z')?value:`${value}Z`)) : '—';
+// Formats a time in Philippine time. Accepts UTC times stored without a zone
+// ("2026-11-15 05:00:00") and times that already carry one ("...Z" or
+// "...+00:00"). Shows "—" for a blank or unreadable value instead of throwing.
+const DATE_FORMAT=new Intl.DateTimeFormat('en-PH',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Manila'});
+export const formatDate = (value) => {
+  if(value===null||value===undefined||value==='')return '—';
+  let date;
+  if(value instanceof Date||typeof value==='number')date=new Date(value);
+  else{const text=String(value).trim().replace(' ','T').replace(/([+-]\d\d)$/,'$1:00');date=new Date(/([zZ]|[+-]\d\d:?\d\d)$/.test(text)?text:`${text}Z`);}
+  return Number.isNaN(date.valueOf())?'—':DATE_FORMAT.format(date);
+};
 export const phDateTimeLocalToUtc = (value) => {
   if(!value)return null;
   const normalized=value.length===16?`${value}:00`:value;
