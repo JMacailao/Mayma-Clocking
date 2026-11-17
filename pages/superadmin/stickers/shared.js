@@ -32,18 +32,18 @@ export async function barcodePngDataUrl(code,options){
   }finally{URL.revokeObjectURL(objectUrl);}
 }
 
-// Ticket size and A4 sheet layout. Each ticket is 5 in wide and 1 in tall
-// (12.7 cm x 2.54 cm): the number piece on the left and, after a solid divider,
-// the barcode piece on the right. An A4 page with 1 cm margins holds one ticket
-// per row and 10 rows.
-export const CODES_PER_ROW=1,STICKER_ROWS=10,STICKERS_PER_PAGE=CODES_PER_ROW*STICKER_ROWS;
-// Barcode drawn without its own margin: the barcode piece keeps about 9 mm of
-// white on each side (the quiet zone scanners need). Keep the divider at 1pt: a
+// Ticket size and A4 sheet layout: 39 tickets per A4 page, 3 across and 13 down.
+// Each ticket is 66 mm x 21.2 mm: the number piece on the left and, after a thin
+// divider, the barcode piece on the right. The page margins centre the grid.
+export const CODES_PER_ROW=3,STICKER_ROWS=13,STICKERS_PER_PAGE=CODES_PER_ROW*STICKER_ROWS;
+const PAGE_MARGIN='10mm 6mm';
+// Barcode drawn without its own margin: the barcode piece keeps about 4.4 mm
+// (16 bar widths) of white on each side (the quiet zone scanners need). Keep the divider at 1pt: a
 // thicker black line next to the barcode stops the app's scanner reading it.
 export const STICKER_BARCODE={height:28,width:1.2,margin:0};
 export const DEFAULT_STICKER_LABEL='MAYMA';
 // Layout shared by the screen preview and the printed/Word sheet, in real units.
-const STICKER_CSS='.sticker-sheet{width:12.7cm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{height:2.5cm;max-height:2.5cm;padding:0;border:.5pt solid #cbd3cd;overflow:hidden;vertical-align:middle;text-align:center}.sticker-sheet>tbody>tr>td.sticker-number-part{width:5.6cm}.sticker-sheet>tbody>tr>td.sticker-code-part{width:7.03cm;border-left:1pt solid #111}.sticker-brand-line{display:block;height:.6cm;line-height:.6cm;margin-bottom:.12cm;white-space:nowrap;text-align:center}.sticker-logo{display:inline;height:.55cm;width:auto;vertical-align:middle;margin-right:.12cm}.sticker-brand-text{display:inline;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:11pt;font-weight:700;color:#555;letter-spacing:.02em}.sticker-number{display:block;font-family:Arial,Helvetica,sans-serif;font-size:18pt;font-weight:700;line-height:1.1;color:#111;white-space:nowrap;text-align:center;letter-spacing:.04em}.sticker-code-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:16pt;font-weight:700;line-height:1.1;color:#111;white-space:nowrap;text-align:center;letter-spacing:.04em}.sticker-code-part img,.sticker-code-part svg{display:block;width:5.2cm;height:1.35cm;margin:0 auto .1cm}';
+const STICKER_CSS='.sticker-sheet{width:198mm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{height:20.8mm;max-height:20.8mm;padding:0;border:.5pt solid #cbd3cd;overflow:hidden;vertical-align:middle;text-align:center}.sticker-sheet>tbody>tr>td.sticker-number-part{width:28.8mm}.sticker-sheet>tbody>tr>td.sticker-code-part{width:36.8mm;border-left:1pt solid #111}.sticker-brand-line{display:block;height:3.6mm;line-height:3.6mm;margin-bottom:1.2mm;white-space:nowrap;text-align:center}.sticker-logo{display:inline;height:3.4mm;width:auto;vertical-align:middle;margin-right:.8mm}.sticker-brand-text{display:inline;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:6.5pt;font-weight:700;color:#555;letter-spacing:.02em}.sticker-number{display:block;font-family:Arial,Helvetica,sans-serif;font-size:9.5pt;font-weight:700;line-height:1.1;color:#111;white-space:nowrap;text-align:center;letter-spacing:.02em}.sticker-code-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:8.5pt;font-weight:700;line-height:1.1;color:#111;white-space:nowrap;text-align:center;letter-spacing:.02em}.sticker-code-part img,.sticker-code-part svg{display:block;width:28mm;height:11mm;margin:0 auto .8mm}';
 
 // The barcode printed on a sticker: the secret scratch code when there is one.
 export const stickerBarcodeValue=code=>code.scratch||code.number;
@@ -99,7 +99,7 @@ export const stickerPreviewStyle=()=>`<style>${STICKER_CSS}</style>`;
 export function wordStickerDocument(pages,label=DEFAULT_STICKER_LABEL,logo=''){
   const cell=code=>code?stickerPieces(code,`<img src="${code.image}" alt="">`,label,logo):'<td></td><td></td>';
   const sheets=pages.map(page=>`<section class="sticker-page">${stickerSheetTable(page,cell)}</section>`).join('');
-  return `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>Mayma barcode stickers</title><style>@page{size:21cm 29.7cm;margin:1cm}body{font-family:Arial,sans-serif;margin:0}.sticker-page{page-break-after:always;break-after:page}.sticker-page:last-child{page-break-after:auto;break-after:auto}${STICKER_CSS}</style></head><body>${sheets}</body></html>`;
+  return `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>Mayma barcode stickers</title><style>@page{size:210mm 297mm;margin:${PAGE_MARGIN}}body{font-family:Arial,sans-serif;margin:0}.sticker-page{page-break-after:always;break-after:page}.sticker-page:last-child{page-break-after:auto;break-after:auto}${STICKER_CSS}</style></head><body>${sheets}</body></html>`;
 }
 // Each button with data-sticker-scan-for="<input name>" opens the camera and
 // fills that input with the scanned code.
