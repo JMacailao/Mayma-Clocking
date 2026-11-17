@@ -1,4 +1,4 @@
-# Mayma Clocking
+# AvilonX Clocking
 
 A static club clocking app built with HTML, CSS, JavaScript and **Supabase only**
 (Supabase Auth + PostgreSQL). People sign in with a **username and password**, never
@@ -73,8 +73,10 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/superadmin/nfc/`: register NFC tags in the global registry by tapping them
   on a USB NFC reader or Android phone.
 - `pages/superadmin/stickers/generate/`: generate unique barcode batches and choose
-  whether to register them for club use immediately, then export a Word sheet of 42 tickets per A4 page (two columns of 21; each ticket is 91 × 13 mm: a reference stub with a barcode of the sticker number for registering the race entry and, after a grey dashed line, one piece with a copy of the number joined to the secret barcode for clocking)
-  sheet or print it.
+  whether to register them for club use immediately, then export or print a landscape
+  A4 sheet of 36 sticker sets (two columns of 18). Each set has a 36.8 mm reference
+  stub and a 65 × 10.4 mm clocking label with the AvilonX mark, sticker number, and
+  secret-code barcode.
 - `pages/admin/dashboard/`: club overview.
 - `pages/admin/members/`: member and loft records, with `.xlsx`, `.xls`, and `.csv`
   import. The Excel template lists required columns; imports validate duplicates and
@@ -166,3 +168,19 @@ Create a club account with exactly that name to hand the old data to that club.
 - `assets/js/shared.js` contains shared Supabase, formatting, and UI helpers.
 - Each page's behavior lives beside its HTML in `page.js` and is loaded on demand. Race-entry scanning and imports are in `pages/admin/entries/page.js`.
 - Shared admin member and race-point forms live in `pages/admin/crud.js`; public results are shared from `pages/results/public.js`.
+
+## Install AvilonX on Android
+
+After publishing the latest files over HTTPS, open the site in Chrome on Android.
+Use **Install AvilonX** when Chrome offers installation, or Chrome's menu →
+**Add to Home screen** → **Install** (wording depends on the Chrome version).
+Launch AvilonX from its home-screen icon; it opens in a standalone window.
+The manifest uses relative paths and works under the GitHub Pages repository path
+as well as a custom domain. The repository does not need renaming.
+
+Installation does not enable offline clocking. Authentication, records and clock
+submissions still require internet access. The service worker caches only a public
+offline notice, never credentials, API responses or clock submissions. If a page
+cannot be reached, reconnect and press **Try again**. Existing open-page requests
+continue to use their normal network error handling. Service worker updates take
+effect after the old app windows are closed; they do not reload an active race.

@@ -32,27 +32,25 @@ export async function barcodePngDataUrl(code,options){
   }finally{URL.revokeObjectURL(objectUrl);}
 }
 
-// Ticket size and A4 sheet layout: the smallest ticket that stays readable and
-// scannable, 91 mm x 13 mm, printed in two columns, 21 down (42 per A4). Each
-// ticket has a reference stub (logo, barcode of the sticker number and the
-// number, scanned when the club registers the race entry) and, after a thin grey
-// dashed line, one piece holding a copy of the logo and number joined to the
-// barcode of the secret code (with the secret code below it), which the member
-// scans to clock.
-// Tested with the app's scanner on blurred, lower-resolution images: bars of
-// about 0.28 mm (a 28 mm barcode) are the narrowest that read reliably, and a
-// solid divider next to the barcode stops it reading, so the divider is dashed.
-// Numbers are 7 pt. The page margins centre the grid.
-export const CODES_PER_ROW=2,STICKER_ROWS=21,STICKERS_PER_PAGE=CODES_PER_ROW*STICKER_ROWS;
-const PAGE_MARGIN='10.5mm 9.6mm';
+// Each sticker set is 101.8 x 10.4 mm: a 36.8 mm reference stub and the
+// 65 x 10.4 mm clocking label shown in the user's marked example. Two sets plus
+// an 8 mm cutting gap fit across an A4 landscape sheet, 18 rows down (36 per page).
+// The code barcode keeps a quiet zone on both sides, and its divider is dashed
+// so it does not interfere with scans. The page margins centre the grid.
+export const CODES_PER_ROW=2,STICKER_ROWS=18,STICKERS_PER_PAGE=CODES_PER_ROW*STICKER_ROWS;
+export const STICKER_HEIGHT_MM=10.4,STICKER_CLOCK_LABEL_WIDTH_MM=65,STICKER_REFERENCE_WIDTH_MM=36.8;
+const STICKER_NUMBER_PART_WIDTH_MM=21,STICKER_BARCODE_PART_WIDTH_MM=STICKER_CLOCK_LABEL_WIDTH_MM-STICKER_NUMBER_PART_WIDTH_MM;
+export const STICKER_SET_WIDTH_MM=STICKER_REFERENCE_WIDTH_MM+STICKER_CLOCK_LABEL_WIDTH_MM;
+const SHEET_WIDTH_MM=CODES_PER_ROW*STICKER_SET_WIDTH_MM+(CODES_PER_ROW-1)*8;
+const PAGE_MARGIN='10.5mm 42.7mm';
 // Blank space between the two columns, for cutting.
 const COLUMN_GAP_CELL='<td class="sticker-gap" aria-hidden="true"></td>';
 // Barcode drawn without its own margin: the barcode piece keeps about 2.9 mm
 // (10 bar widths) of white on each side, the quiet zone scanners need.
 export const STICKER_BARCODE={height:28,width:1.2,margin:0};
-export const DEFAULT_STICKER_LABEL='MAYMA';
+export const DEFAULT_STICKER_LABEL='AvilonX';
 // Layout shared by the screen preview and the printed/Word sheet, in real units.
-const STICKER_CSS='.sticker-sheet{width:190.8mm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{height:12.8mm;max-height:12.8mm;padding:0;border:.5pt solid #e1e6e2;overflow:hidden;vertical-align:middle;text-align:center}.sticker-sheet>tbody>tr>td.sticker-gap{width:8mm;border:none;background:#fff}.sticker-sheet>tbody>tr>td.sticker-ref-part{width:36.8mm}.sticker-sheet>tbody>tr>td.sticker-number-part{width:17.8mm}.sticker-sheet>tbody>tr>td.sticker-ref-part+td.sticker-number-part{border-left:.5pt dashed #999}.sticker-ref-part .sticker-brand-line{margin-bottom:.3mm}.sticker-ref-part img.sticker-ref-code,.sticker-ref-part svg{display:block;width:31mm;height:5mm;margin:0 auto .3mm}.sticker-sheet>tbody>tr>td.sticker-code-part{width:36.8mm;border-left-style:hidden}.sticker-brand-line{display:block;height:2.4mm;line-height:2.4mm;margin-bottom:.6mm;white-space:nowrap;text-align:center}.sticker-logo{display:inline;height:2.3mm;width:auto;vertical-align:middle;margin-right:.5mm}.sticker-brand-text{display:inline;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:5pt;font-weight:700;color:#555}.sticker-number{display:block;font-family:Arial,Helvetica,sans-serif;font-size:7pt;font-weight:700;line-height:1.1;color:#111;white-space:nowrap;text-align:center}.sticker-code-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:6.5pt;font-weight:700;line-height:1.1;color:#111;white-space:nowrap;text-align:center}.sticker-code-part img,.sticker-code-part svg{display:block;width:31mm;height:6.5mm;margin:0 auto .5mm}.sticker-ref-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:6.5pt;font-weight:700;line-height:1.1;color:#111;white-space:nowrap;text-align:center}';
+const STICKER_CSS=`.sticker-sheet{width:${SHEET_WIDTH_MM}mm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{height:${STICKER_HEIGHT_MM}mm;max-height:${STICKER_HEIGHT_MM}mm;padding:0;border:.5pt solid #e1e6e2;overflow:hidden;vertical-align:middle;text-align:center}.sticker-sheet>tbody>tr>td.sticker-gap{width:8mm;border:none;background:#fff}.sticker-sheet>tbody>tr>td.sticker-ref-part{width:${STICKER_REFERENCE_WIDTH_MM}mm}.sticker-sheet>tbody>tr>td.sticker-number-part{width:${STICKER_NUMBER_PART_WIDTH_MM}mm}.sticker-sheet>tbody>tr>td.sticker-ref-part+td.sticker-number-part{border-left:.5pt dashed #999}.sticker-ref-part .sticker-brand-line{margin-bottom:.15mm}.sticker-ref-part img.sticker-ref-code,.sticker-ref-part svg{display:block;width:31mm;height:4.6mm;margin:0 auto .15mm}.sticker-sheet>tbody>tr>td.sticker-code-part{width:${STICKER_BARCODE_PART_WIDTH_MM}mm;border-left-style:hidden}.sticker-brand-line{display:block;height:1.8mm;line-height:1.8mm;margin-bottom:.15mm;white-space:nowrap;text-align:center}.sticker-logo{display:inline;height:1.7mm;width:auto;vertical-align:middle;margin-right:.4mm}.sticker-brand-text{display:inline;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:4.5pt;font-weight:700;color:#555}.sticker-number{display:block;font-family:Arial,Helvetica,sans-serif;font-size:7pt;font-weight:700;line-height:1.05;color:#111;white-space:nowrap;text-align:center}.sticker-code-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:6pt;font-weight:700;line-height:1;color:#111;white-space:nowrap;text-align:center}.sticker-code-part img,.sticker-code-part svg{display:block;width:38mm;height:6mm;margin:0 auto .15mm}.sticker-ref-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:6pt;font-weight:700;line-height:1;color:#111;white-space:nowrap;text-align:center}`;
 
 // The barcode printed on a sticker: the secret scratch code when there is one.
 export const stickerBarcodeValue=code=>code.scratch||code.number;
@@ -110,7 +108,7 @@ export const stickerPreviewStyle=()=>`<style>${STICKER_CSS}</style>`;
 export function wordStickerDocument(pages,label=DEFAULT_STICKER_LABEL,logo=''){
   const cell=code=>code?stickerPieces(code,`<img src="${code.image}" alt="">`,label,logo,`<img class="sticker-ref-code" src="${code.refImage||code.image}" alt="">`):emptyPieces;
   const sheets=pages.map(page=>`<section class="sticker-page">${stickerSheetTable(page,cell)}</section>`).join('');
-  return `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>Mayma barcode stickers</title><style>@page{size:210mm 297mm;margin:${PAGE_MARGIN}}body{font-family:Arial,sans-serif;margin:0}.sticker-page{page-break-after:always;break-after:page}.sticker-page:last-child{page-break-after:auto;break-after:auto}${STICKER_CSS}</style></head><body>${sheets}</body></html>`;
+  return `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>AvilonX barcode stickers</title><style>@page{size:297mm 210mm;margin:${PAGE_MARGIN}}body{font-family:Arial,sans-serif;margin:0}.sticker-page{page-break-after:always;break-after:page}.sticker-page:last-child{page-break-after:auto;break-after:auto}${STICKER_CSS}</style></head><body>${sheets}</body></html>`;
 }
 // Camera scanner dialog used with bindStickerScanner().
 export const stickerScannerDialogHtml=()=>`<dialog class="scanner-dialog scanner-camera-dialog" id="sticker-camera-dialog" aria-label="Scan sticker barcode"><div class="scanner-dialog-content"><div class="scanner-preview"><div class="scanner-placeholder" id="sticker-camera-placeholder"><span class="scanner-placeholder-mark" aria-hidden="true">⌗</span><span>Camera preview will appear here.</span></div><video id="sticker-camera" playsinline autoplay muted hidden aria-label="Live barcode camera preview"></video><div class="scanner-top-controls"><button class="scanner-close-button" type="button" data-close-sticker-camera aria-label="Close scanner">×</button><span class="scanner-live-indicator"><span></span>Scan barcode</span></div><div class="scanner-viewfinder" aria-hidden="true"><span class="scanner-corner top-left"></span><span class="scanner-corner top-right"></span><span class="scanner-corner bottom-left"></span><span class="scanner-corner bottom-right"></span></div><div class="scanner-bottom-controls"><p class="barcode-scan-status" id="sticker-camera-status" aria-live="polite" aria-atomic="true" hidden></p></div></div></div></dialog>`;

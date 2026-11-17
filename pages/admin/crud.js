@@ -250,7 +250,7 @@ function bindGeneric(view,table,fieldsList,columns,defaults={},withAccounts=fals
       try{
         const XLSX=await loadSpreadsheetParser(),workbook=XLSX.utils.book_new(),sheet=XLSX.utils.aoa_to_sheet([['Member ID','Full name','First name','Middle name','Last name','Loft name','Address','Phone','Membership paid','Latitude Hemisphere (N/S)','Latitude Degrees','Latitude Minutes','Latitude Seconds','Longitude Hemisphere (E/W)','Longitude Degrees','Longitude Minutes','Longitude Seconds']]);
         sheet['!cols']=[{wch:18},{wch:26},{wch:18},{wch:18},{wch:18},{wch:24},{wch:32},{wch:18},{wch:18},{wch:24},{wch:16},{wch:16},{wch:16},{wch:26},{wch:17},{wch:17},{wch:17}];
-        XLSX.utils.book_append_sheet(workbook,sheet,'Members');XLSX.writeFile(workbook,'mayma-members-template.xlsx');
+        XLSX.utils.book_append_sheet(workbook,sheet,'Members');XLSX.writeFile(workbook,'avilonx-members-template.xlsx');
         message('Excel template downloaded. Fill one member per row; enter each coordinate as hemisphere, degrees, minutes, and seconds.','success');
       }catch(error){message(error.message||'Could not create the Excel template.','error');}
       finally{button.disabled=false;}

@@ -351,3 +351,5 @@ video#camera[hidden]{display:none}
 .nfc-setup-body h4{margin:12px 0 4px;font-size:13px}
 .nfc-setup-body ol{margin:0;padding-left:20px}
 .nfc-setup-body .small{margin:4px 0 0}
+/* Installation stays in the page/sidebar, clear of the fixed mobile dock. */
+.install-app-button{margin-top:16px;min-height:44px}.sidebar-bottom .install-app-button{width:100%;font-size:12px}.install-app-button[hidden]{display:none!important}
