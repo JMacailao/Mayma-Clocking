@@ -249,7 +249,7 @@ video#camera[hidden]{display:none}
 .sticker-sheet{width:100%;table-layout:fixed;border-collapse:collapse;background:#fff}
 .sticker-cell{height:76px;padding:5px 8px;border:1px dashed #bfc9c1;text-align:center;vertical-align:middle}
 .sticker-cell svg{display:block;width:min(100%,220px);height:45px;margin:0 auto 2px}
-.sticker-cell strong{display:block;color:#111;font-size:15px;line-height:1.2;font-variant-numeric:tabular-nums}
+.sticker-cell strong{display:block;color:#111;font-size:12px;line-height:1.2;font-variant-numeric:tabular-nums}
 .sticker-cell.sticker-empty{background:#fafbf9}
 .sticker-label{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:8px;align-items:center}
 .sticker-main,.sticker-scratch{min-width:0}
@@ -259,7 +259,7 @@ video#camera[hidden]{display:none}
 .sticker-cell .sticker-scratch strong{font-size:12px}
 @media(max-width:720px){.sticker-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.sticker-actions .button{min-width:0}.sticker-preview-page{min-width:580px;padding:9px}.sticker-preview{margin-right:-4px}.sticker-cell{height:68px;padding:4px}.sticker-cell svg{height:38px}.sticker-cell strong{font-size:12px}
 .sticker-cell .sticker-scratch svg{height:22px}
-.sticker-cell .sticker-scratch strong{font-size:10px}}
+.sticker-cell .sticker-scratch strong{font-size:12px}}
 
 .member-list-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .member-import-panel .panel-heading{align-items:flex-start}
