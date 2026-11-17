@@ -344,3 +344,6 @@ video#camera[hidden]{display:none}
  .member-bottom-link[aria-current="page"]::after{bottom:3px}
 }
 @media(max-width:380px){.member-bottom-label{font-size:9px}.member-bottom-link.is-clock .member-bottom-icon{width:60px;height:60px;top:-20px}}
+
+/* Installation stays in the page/sidebar, clear of the fixed mobile dock. */
+.install-app-button{margin-top:16px;min-height:44px}.sidebar-bottom .install-app-button{width:100%;font-size:12px}.install-app-button[hidden]{display:none!important}
