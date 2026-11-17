@@ -118,6 +118,14 @@ Create a club account with exactly that name to hand the old data to that club.
   match what phones read. A tag's ID is not secret: anyone can read it with an NFC
   app and type it into the reader field, so NFC clocking proves less than it seems
   unless the club checks birds or uses cryptographic tags (for example NTAG 424 DNA).
+- **iPhone.** No iPhone browser can read NFC tags, so each tag can carry a web link
+  to the member Clocking page with its ID. When **Register NFC** is used on an Android
+  phone it writes that link onto each tag; otherwise use **Copy link** in the list and
+  write it as a URL record with any NFC writer app. Members hold the top of an
+  unlocked iPhone (XS or newer) to the tag and tap the notification; the page opens
+  (after sign-in if needed) and clocks the pigeon. Keyboard-type USB NFC readers also
+  work on iPhone and iPad through a USB-C or Lightning camera adapter. Every NFC page
+  has a **Reader setup help** section with these steps.
 - **ACS ACR122U and other PC/SC readers** do not type like a keyboard, so browsers
   cannot see them. On Windows, run `tools/nfc-reader/acr122u-keyboard.ps1`
   (right-click → **Run with PowerShell**, nothing to install) and keep its window

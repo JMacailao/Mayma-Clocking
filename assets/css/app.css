@@ -344,3 +344,10 @@ video#camera[hidden]{display:none}
  .member-bottom-link[aria-current="page"]::after{bottom:3px}
 }
 @media(max-width:380px){.member-bottom-label{font-size:9px}.member-bottom-link.is-clock .member-bottom-icon{width:60px;height:60px;top:-20px}}
+
+.nfc-setup{margin-top:14px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.nfc-setup summary{cursor:pointer;padding:10px 12px;font-weight:700;font-size:13px}
+.nfc-setup-body{padding:0 14px 12px;font-size:13px;line-height:1.5}
+.nfc-setup-body h4{margin:12px 0 4px;font-size:13px}
+.nfc-setup-body ol{margin:0;padding-left:20px}
+.nfc-setup-body .small{margin:4px 0 0}

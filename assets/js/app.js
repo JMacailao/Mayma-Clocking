@@ -17,6 +17,9 @@ async function getIdentity() {
   if(profile?.club_id){const {data}=await supabase.from('clubs').select('id,name').eq('id',profile.club_id).maybeSingle();club=data;}
   return {session,user:session.user,profile:profile||null,club};
 }
+// Sign-in page that returns here afterwards (for example a member opening a tag's
+// clocking link before signing in).
+const loginUrl=()=>`${url('pages/login/index.html')}?next=${encodeURIComponent(location.pathname+location.search)}`;
 const homeFor = (role) => url(role==='superadmin'?'pages/superadmin/clubs/index.html':['admin','staff'].includes(role)?'pages/admin/dashboard/index.html':'pages/member/dashboard/index.html');
 function superadminNav(active) {
   const links=[['clubs','Club accounts','pages/superadmin/clubs/index.html','⌂'],['sticker-register','Register Sticker','pages/superadmin/stickers/register/index.html','▣'],['nfc-register','Register NFC','pages/superadmin/nfc/index.html','◉'],['sticker-generate','Generate Sticker','pages/superadmin/stickers/generate/index.html','▤']];
@@ -51,7 +54,7 @@ function bottomNav(active, role) {
 async function guard(role,active) {
   try {
     const identity=await getIdentity();
-    if(!identity) { location.href=url('pages/login/index.html'); return null; }
+    if(!identity) { location.href=loginUrl(); return null; }
     if(!identity.profile) { await signOutUser(); document.querySelector('#app-shell').innerHTML=`<main class="loading"><strong>This account is not set up yet.</strong><span>Ask your administrator to finish setting up your account.</span><a class="button primary" href="${url('pages/login/index.html')}">Return to sign in</a></main>`; return null; }
     if(identity.profile.is_active===false) { await signOutUser(); document.querySelector('#app-shell').innerHTML=`<main class="loading"><strong>This account is disabled.</strong><span>Ask your club administrator to reactivate it.</span><a class="button primary" href="${url('pages/login/index.html')}">Return to sign in</a></main>`; return null; }
     const staffOnAdminPage=role==='admin'&&identity.profile.role==='staff'&&body.dataset.view!=='team-users';
@@ -260,7 +263,7 @@ async function navigateRoute(route,{push=true,identity=null}={}){
   try{
     identity=identity||await getIdentity();
     if(token!==navigationToken)return;
-    if(!identity?.profile){location.href=url('pages/login/index.html');return;}
+    if(!identity?.profile){location.href=loginUrl();return;}
     if(identity.profile.is_active===false){await signOutUser();location.href=url('pages/login/index.html');return;}
     const allowed=identity.profile.role===route.role||(route.role==='admin'&&identity.profile.role==='staff'&&route.view!=='team-users');
     if(!allowed){location.href=homeFor(identity.profile.role);return;}

@@ -2,6 +2,15 @@ import { supabase, authError, USERNAME_RE, USERNAME_HELP, pageUrl as url } from 
 import { mountPublicResults } from '../results/public.js';
 
 const signOutUser = async()=>{const {error}=await supabase.auth.signOut({scope:'local'});if(error)throw error;};
+// The page to return to after signing in, when it is a page of this site for the
+// account's role (only member pages for members, only team pages for others).
+const nextFor=role=>{
+ const next=new URLSearchParams(location.search).get('next');
+ if(!next||!next.startsWith('/')||next.startsWith('//'))return null;
+ const target=new URL(next,location.origin);if(target.origin!==location.origin)return null;
+ const area=role==='member'?'/pages/member/':role==='superadmin'?'/pages/superadmin/':'/pages/admin/';
+ return target.pathname.includes(area)?target.pathname+target.search:null;
+};
 const homeFor = role=>url(role==='superadmin'?'pages/superadmin/clubs/index.html':['admin','staff'].includes(role)?'pages/admin/dashboard/index.html':'pages/member/dashboard/index.html');
 
 export async function render() {
@@ -9,7 +18,7 @@ export async function render() {
  const {data:hasAdmin,error:checkError}=await supabase.rpc('has_admin_account');
  if(checkError){container.innerHTML='<span class="eyebrow">DATABASE SETUP NEEDED</span><h1>Finish database setup</h1><p>In your Supabase SQL Editor run <code>schema.sql</code> (fresh database only), then <code>supabase-auth.sql</code>, <code>multi-club.sql</code>, <code>account-credentials.sql</code>, and <code>public-results.sql</code>, then reload this page.</p>';return;}
  const {data:{session}}=await supabase.auth.getSession();
- if(session){try{const {data:p}=await supabase.from('app_profiles').select('role').eq('id',session.user.id).maybeSingle();if(p){location.href=homeFor(p.role);return;}}catch(e){console.error(e);}}
+ if(session){try{const {data:p}=await supabase.from('app_profiles').select('role').eq('id',session.user.id).maybeSingle();if(p){location.href=nextFor(p.role)||homeFor(p.role);return;}}catch(e){console.error(e);}}
  if(!hasAdmin){renderSuperAdmin(container);return;}
  renderSignIn(container);
 }
@@ -32,6 +41,7 @@ function renderSignIn(container){
  tabs.forEach(tab=>tab.onclick=()=>{
   showAudience(tab.dataset.audience);
  });
+ if((new URLSearchParams(location.search).get('next')||'').includes('/pages/member/'))showAudience('member');
  const form=container.querySelector('#login-form');
  form.onsubmit=async event=>{event.preventDefault();const username=form.elements.username.value.trim().toLowerCase();if(!USERNAME_RE.test(username)){loginMessage(container,USERNAME_HELP,'error');return;}const button=form.querySelector('button');tabs.forEach(tab=>tab.disabled=true);button.disabled=true;button.textContent='Signing in…';
   const {data,error}=await supabase.auth.signInWithPassword({email:`${username}@users.mayma.invalid`,password:form.elements.password.value});
@@ -41,7 +51,7 @@ function renderSignIn(container){
   if(profile.is_active===false){await signOutUser();tabs.forEach(tab=>tab.disabled=false);button.disabled=false;button.textContent='Sign in →';loginMessage(container,'This account is disabled. Ask your club administrator to reactivate it.','error');return;}
   const isMember=profile.role==='member';
   if((audience==='member')!==isMember){await signOutUser();tabs.forEach(tab=>tab.disabled=false);button.disabled=false;button.textContent='Sign in →';loginMessage(container,isMember?'This is a member account. Choose Member above.':'This is a club-team account. Choose Club team above.','error');return;}
-  location.href=homeFor(profile.role);};
+  location.href=nextFor(profile.role)||homeFor(profile.role);};
 }
 function renderSuperAdmin(container){
  container.innerHTML=`<span class="eyebrow" data-portal-eyebrow>FIRST-TIME SETUP</span><h1 data-portal-heading>Create superadmin account</h1><p data-portal-intro>This database is new. Choose a username and password for the superadmin. The superadmin creates the club accounts.</p><div class="login-tabs" role="tablist" aria-label="Choose a page"><button class="login-tab active" id="setup-tab" role="tab" type="button" data-setup-tab="setup" aria-controls="setup-pane" aria-selected="true">Admin setup</button><button class="login-tab" id="setup-results-tab" role="tab" type="button" data-setup-tab="results" aria-controls="setup-results-pane" aria-selected="false">Results</button></div><div id="setup-pane" role="tabpanel" aria-labelledby="setup-tab" data-setup-pane><div data-login-message class="notice" hidden></div><form id="superadmin-form" class="form-grid"><label class="field"><span>Superadmin username</span><input name="username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]{2,31}" autocomplete="username" autocapitalize="none" spellcheck="false" required></label><label class="field"><span>Password</span><input name="password" type="password" minlength="8" autocomplete="new-password" required></label><label class="field"><span>Confirm password</span><input name="confirm" type="password" minlength="8" autocomplete="new-password" required></label><button class="button primary" type="submit">Create superadmin <span>→</span></button></form><p class="login-help">Use at least 8 characters. This screen only appears once, while the database has no administrator.</p></div><section id="setup-results-pane" role="tabpanel" aria-labelledby="setup-results-tab" data-results-pane hidden></section>`;

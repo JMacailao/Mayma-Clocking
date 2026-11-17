@@ -43,3 +43,30 @@ export async function startPhoneNfc(onTag,onError){
   }
   return()=>controller.abort();
 }
+
+// iPhones cannot read NFC tags from a web page (no browser on iOS supports Web
+// NFC). They can open a web link stored on a tag: hold the iPhone to the tag and
+// tap the notification. So each tag can carry a link to the member Clocking page
+// with its own ID, which clocks that tag when it opens.
+export const isIos=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+export const nfcClockingLink=uid=>new URL(pageUrl(`pages/member/clocking/index.html?nfc=${encodeURIComponent(uid)}`),location.href).href;
+
+// Writes the clocking link onto the tag that is held to the phone (Android Chrome).
+export async function writeNfcClockingLink(uid,{timeoutMs=10000}={}){
+  if(!phoneNfcSupported())throw new Error('Writing tags needs Chrome on an Android phone.');
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{await new window.NDEFReader().write({records:[{recordType:'url',data:nfcClockingLink(uid)}]},{signal:controller.signal,overwrite:true});}
+  catch(error){
+    if(error?.name==='AbortError')throw new Error('The tag was moved away before the link was written. Hold it still and tap again.');
+    if(error?.name==='NotAllowedError')throw new Error('NFC permission was blocked. Allow NFC for this site in Chrome settings.');
+    throw new Error('Could not write the link to this tag. It may be locked or read-only.');
+  }finally{clearTimeout(timer);}
+}
+
+// Step-by-step reader setup for each kind of device.
+export const nfcSetupGuideHtml=()=>`<details class="nfc-setup"><summary>Reader setup help (Android, iPhone, USB)</summary><div class="nfc-setup-body">
+<h4>Android phone</h4><ol><li>Turn on NFC in the phone settings.</li><li>Open this site in <strong>Chrome</strong> (https address).</li><li>Press <strong>Start phone NFC</strong> and hold the tag against the back of the phone.</li></ol>
+<h4>iPhone (XS or newer)</h4><ol><li>The tag must carry its clocking link. The Super Admin writes it when registering the tag on an Android phone, or with any NFC writer app using the link from <strong>Register NFC → Copy link</strong>.</li><li>Unlock the iPhone and hold its <strong>top edge</strong> near the tag.</li><li>Tap the notification. The Clocking page opens and clocks the pigeon. Sign in first if asked.</li></ol><p class="small">iPhone browsers cannot read tags directly, so the Start phone NFC button does not appear on iPhone.</p>
+<h4>USB NFC reader that types like a keyboard</h4><ol><li>Plug it in. On iPhone or iPad use a USB-C adapter, or a Lightning to USB camera adapter.</li><li>Tap in the <strong>USB NFC reader</strong> field, then tap the tag on the reader. The ID is sent automatically.</li><li>The reader must type the ID in <strong>hex</strong> (letters and numbers). If it types only digits, switch it to hex as its manual describes.</li></ol>
+<h4>ACS ACR122U (Windows only)</h4><ol><li>${readerHelperLink()}</li><li>Keep its window open, tap in the USB NFC reader field, then tap tags on the reader.</li></ol><p class="small">The ACR122U does not work on iPhone, iPad or Mac.</p>
+</div></details>`;
