@@ -73,8 +73,10 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/superadmin/nfc/`: register NFC tags in the global registry by tapping them
   on a USB NFC reader or Android phone.
 - `pages/superadmin/stickers/generate/`: generate unique barcode batches and choose
-  whether to register them for club use immediately, then export a Word sheet of 42 tickets per A4 page (two columns of 21; each ticket is 91 × 13 mm: a reference stub with a barcode of the sticker number for registering the race entry and, after a grey dashed line, one piece with a copy of the number joined to the secret barcode for clocking)
-  sheet or print it.
+  whether to register them for club use immediately, then export or print a landscape
+  A4 sheet of 36 sticker sets (two columns of 18). Each set has a 36.8 mm reference
+  stub and a 65 × 10.4 mm clocking label with the AvilonX mark, sticker number, and
+  secret-code barcode.
 - `pages/admin/dashboard/`: club overview.
 - `pages/admin/members/`: member and loft records, with `.xlsx`, `.xls`, and `.csv`
   import. The Excel template lists required columns; imports validate duplicates and
