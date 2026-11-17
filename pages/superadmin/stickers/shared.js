@@ -45,11 +45,14 @@ const STICKER_CSS='.sticker-sheet{width:16cm;table-layout:fixed;border-collapse:
 
 // The barcode printed on a sticker: the secret scratch code when there is one.
 export const stickerBarcodeValue=code=>code.scratch||code.number;
-// The two pieces of one code. barcode is an <img> (print) or <svg> (preview).
+// The two pieces of one code: the number piece on the left (the visible sticker
+// number, used to register the race entry) and the barcode piece on the right
+// (the barcode of the secret code, with the sticker number under it so the two
+// pieces can be matched). The secret code itself is not printed as digits.
+// barcode is an <img> (print) or <svg> (preview).
 function stickerPieces(code,barcode,label){
-  const text=code.scratch?`<table class="sticker-code-text"><tr><td class="left">${escapeHTML(code.number)}</td><td class="right">${escapeHTML(code.scratch)}</td></tr></table>`:`<table class="sticker-code-text"><tr><td>${escapeHTML(code.number)}</td></tr></table>`;
   const brand=label?`<td class="sticker-brand-cell"><span class="sticker-brand">${escapeHTML(label)}</span></td>`:'';
-  return `<td class="sticker-code-part">${barcode}${text}</td><td class="sticker-number-part"><table class="sticker-tag"><tr><td class="sticker-number">${escapeHTML(code.number)}</td>${brand}</tr></table></td>`;
+  return `<td class="sticker-number-part"><table class="sticker-tag"><tr><td class="sticker-number">${escapeHTML(code.number)}</td>${brand}</tr></table></td><td class="sticker-code-part">${barcode}<table class="sticker-code-text"><tr><td>${escapeHTML(code.number)}</td></tr></table></td>`;
 }
 const emptyPieces='<td class="sticker-empty" aria-hidden="true"></td><td class="sticker-empty" aria-hidden="true"></td>';
 // Screen preview of one code (two cells).
