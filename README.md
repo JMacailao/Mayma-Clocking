@@ -77,7 +77,6 @@ Create a club account with exactly that name to hand the old data to that club.
   A4 sheet of 36 sticker sets (two columns of 18). Each set has a 36.8 mm reference
   stub and a 65 × 10.4 mm clocking label with the AvilonX mark, sticker number, and
   secret-code barcode.
-  sheet or print it.
 - `pages/admin/dashboard/`: club overview.
 - `pages/admin/members/`: member and loft records, with `.xlsx`, `.xls`, and `.csv`
   import. The Excel template lists required columns; imports validate duplicates and
