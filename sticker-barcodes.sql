@@ -3,8 +3,8 @@
 --
 -- Each sticker has a visible number (used to register the race entry) and a
 -- secret code (printed as a barcode, used by the member to clock). New stickers
--- use a 12-digit sticker number (issued in order) and a random 12-digit secret
--- code. The Super Admin can start a new season, which archives the current
+-- use an 8-digit sticker number (a 6-digit serial, restarting each year,
+-- followed by the 2-digit year, e.g. 00012326) and a random 6-digit secret code. The Super Admin can start a new season, which archives the current
 -- stickers so they stop working.
 BEGIN;
 
@@ -19,7 +19,7 @@ BEGIN
 END;
 $$;
 
--- Issues 12-digit sticker numbers in order.
+-- No longer used for new stickers; kept for older databases.
 CREATE SEQUENCE IF NOT EXISTS public.sticker_barcode_number_seq
   AS bigint START WITH 700000000000 INCREMENT BY 1 NO CYCLE;
 
@@ -54,7 +54,7 @@ ALTER TABLE public.barcode_stickers ADD CONSTRAINT barcode_stickers_scratch_code
     AND scratch_code <> barcode_number
   )
 );
--- Older short secret codes may repeat, so there is no unique index; new 12-digit
+-- Older secret codes may repeat, so there is no unique index; new 6-digit
 -- secret codes are kept unique within a season.
 DROP INDEX IF EXISTS public.barcode_stickers_scratch_code_key;
 
@@ -104,8 +104,9 @@ CREATE TABLE IF NOT EXISTS public.member_clock_attempts (
 ALTER TABLE public.member_clock_attempts ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.member_clock_attempts FROM anon, PUBLIC, authenticated;
 
--- Sticker numbers and secret codes are compared without leading zeros or spaces,
--- so "0025", " 25" and "25" are the same code. Returns NULL when blank.
+-- Sticker numbers and secret codes are compared without surrounding spaces.
+-- Leading zeros are kept: 00012326 and 12326 are different numbers. Returns NULL
+-- when blank.
 CREATE OR REPLACE FUNCTION public.normalize_sticker_code(p_value text)
 RETURNS text
 LANGUAGE plpgsql
@@ -115,10 +116,6 @@ AS $function$
 DECLARE
   v_code text := btrim(COALESCE(p_value, ''));
 BEGIN
-  IF v_code ~ '^[0-9]+$' THEN
-    v_code := ltrim(v_code, '0');
-    IF v_code = '' THEN v_code := '0'; END IF;
-  END IF;
   RETURN NULLIF(v_code, '');
 END;
 $function$;
@@ -134,14 +131,15 @@ AS $function$
 $function$;
 GRANT EXECUTE ON FUNCTION public.is_short_sticker_code(text) TO authenticated;
 
--- Sticker numbers and secret codes are 12 digits, not starting with 0.
+-- Sticker numbers are 8 digits (6-digit serial + 2-digit year); secret codes
+-- are 6 digits.
 CREATE OR REPLACE FUNCTION public.is_sticker_secret_code(p_value text)
 RETURNS boolean
 LANGUAGE sql
 IMMUTABLE
 SET search_path = ''
 AS $function$
-  SELECT COALESCE(p_value ~ '^[1-9][0-9]{11}$', false);
+  SELECT COALESCE(p_value ~ '^[0-9]{6}$', false);
 $function$;
 CREATE OR REPLACE FUNCTION public.is_sticker_number(p_value text)
 RETURNS boolean
@@ -149,12 +147,12 @@ LANGUAGE sql
 IMMUTABLE
 SET search_path = ''
 AS $function$
-  SELECT COALESCE(p_value ~ '^[1-9][0-9]{11}$', false);
+  SELECT COALESCE(p_value ~ '^[0-9]{8}$', false);
 $function$;
 GRANT EXECUTE ON FUNCTION public.is_sticker_number(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_sticker_secret_code(text) TO authenticated;
 
--- Random 12-digit secret code (from a cryptographically random UUID), not used
+-- Random 6-digit secret code (from a cryptographically random UUID), not used
 -- by any other sticker this season.
 DROP FUNCTION IF EXISTS public._new_sticker_scratch_code();
 CREATE OR REPLACE FUNCTION public._new_sticker_scratch_code(p_number text)
@@ -167,7 +165,7 @@ DECLARE
   v_code text;
 BEGIN
   LOOP
-    v_code := (100000000000 + (('x' || substr(md5(gen_random_uuid()::text), 1, 15))::bit(60)::bigint % 900000000000))::text;
+    v_code := lpad(((('x' || substr(md5(gen_random_uuid()::text), 1, 15))::bit(60)::bigint % 1000000))::text, 6, '0');
     EXIT WHEN v_code IS DISTINCT FROM p_number
       AND NOT EXISTS (SELECT 1 FROM public.barcode_stickers AS s WHERE s.scratch_code = v_code);
   END LOOP;
@@ -179,7 +177,7 @@ REVOKE ALL ON FUNCTION public._new_sticker_scratch_code(text) FROM PUBLIC, anon,
 DROP FUNCTION IF EXISTS public.superadmin_register_sticker(text);
 DROP FUNCTION IF EXISTS public.superadmin_register_sticker(text, text);
 
--- Registers a 12-digit sticker number with its 12-digit secret code.
+-- Registers an 8-digit sticker number with its 6-digit secret code.
 -- - A sticker generated without registering is activated; its saved secret code
 --   is kept, so the secret code can be left blank.
 -- - A registered sticker without a secret code gets the one given.
@@ -201,11 +199,11 @@ BEGIN
     RAISE EXCEPTION 'Superadmin account required.' USING ERRCODE = '42501';
   END IF;
   IF NOT public.is_sticker_number(v_number) THEN
-    RAISE EXCEPTION 'Sticker numbers are 12 digits, for example 700000000025.' USING ERRCODE = '22023';
+    RAISE EXCEPTION 'Sticker numbers are 8 digits: a 6-digit serial and the 2-digit year, for example 00012326.' USING ERRCODE = '22023';
   END IF;
   IF v_scratch IS NOT NULL THEN
     IF NOT public.is_sticker_secret_code(v_scratch) THEN
-      RAISE EXCEPTION 'Secret codes are 12 digits, for example 482715390212.' USING ERRCODE = '22023';
+      RAISE EXCEPTION 'Secret codes are 6 digits, for example 482715.' USING ERRCODE = '22023';
     END IF;
     IF v_scratch = v_number THEN
       RAISE EXCEPTION 'The secret code must be different from the sticker number.' USING ERRCODE = '22023';
@@ -246,8 +244,9 @@ GRANT EXECUTE ON FUNCTION public.superadmin_register_sticker(text, text) TO auth
 DROP FUNCTION IF EXISTS public.superadmin_generate_sticker_batch(integer, boolean);
 DROP FUNCTION IF EXISTS public.superadmin_generate_sticker_batch(integer);
 
--- Issues the next 12-digit sticker numbers and gives each a random 12-digit
--- secret code. The batch is always saved, registered or not.
+-- Issues the next sticker numbers for this year (6-digit serial + 2-digit year,
+-- Philippine time) and gives each a random 6-digit secret code. The batch is
+-- always saved, registered or not.
 CREATE FUNCTION public.superadmin_generate_sticker_batch(
   p_quantity integer,
   p_register boolean DEFAULT true
@@ -261,6 +260,8 @@ DECLARE
   v_index integer;
   v_number text;
   v_scratch text;
+  v_year text := to_char(now() AT TIME ZONE 'Asia/Manila', 'YY');
+  v_serial integer;
   v_should_register boolean := COALESCE(p_register, true);
 BEGIN
   IF NOT public.is_superadmin() THEN
@@ -270,15 +271,21 @@ BEGIN
     RAISE EXCEPTION 'Choose a batch quantity from 1 to 500.' USING ERRCODE = '22023';
   END IF;
 
+  -- One batch at a time, so two batches never take the same serials.
+  LOCK TABLE public.barcode_stickers IN SHARE ROW EXCLUSIVE MODE;
+  SELECT COALESCE(max(substr(n.number, 1, 6)::integer), 0) INTO v_serial
+  FROM (
+    SELECT s.barcode_number AS number FROM public.barcode_stickers AS s
+    UNION ALL
+    SELECT a.barcode_number FROM public.barcode_stickers_archive AS a
+  ) AS n
+  WHERE n.number ~ ('^[0-9]{6}' || v_year || '$');
+  IF v_serial + p_quantity > 999999 THEN
+    RAISE EXCEPTION 'Only % sticker numbers are left for this year.', 999999 - v_serial USING ERRCODE = '22023';
+  END IF;
+
   FOR v_index IN 1..p_quantity LOOP
-    LOOP
-      v_number := nextval('public.sticker_barcode_number_seq')::text;
-      EXIT WHEN NOT EXISTS (
-        SELECT 1 FROM public.barcode_stickers AS s WHERE s.barcode_number = v_number OR s.scratch_code = v_number
-      ) AND NOT EXISTS (
-        SELECT 1 FROM public.barcode_stickers_archive AS a WHERE a.barcode_number = v_number
-      );
-    END LOOP;
+    v_number := lpad((v_serial + v_index)::text, 6, '0') || v_year;
     v_scratch := public._new_sticker_scratch_code(v_number);
     INSERT INTO public.barcode_stickers (barcode_number, scratch_code, source, created_by, is_registered)
     VALUES (v_number, v_scratch, 'generated', auth.uid(), v_should_register);

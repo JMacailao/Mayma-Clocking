@@ -132,8 +132,9 @@ Create a club account with exactly that name to hand the old data to that club.
   a generated batch before leaving the page. Older stickers without a scratch code
   still clock with their number; register the same number again with a scratch code
   to add one.
-- **12-digit numbers.** Each new sticker gets the next 12-digit sticker number and a
-  random 12-digit secret code. The Super Admin can start a new season on **Register
+- **Sticker numbers.** Each new sticker gets an 8-digit reference number (a 6-digit
+  serial that restarts each year, followed by the 2-digit year, e.g. `00012326`) and
+  a random 6-digit secret code for clocking. The Super Admin can start a new season on **Register
   Sticker**, which archives the current stickers so they stop working (refused while
   any draft or open race still uses stickers).
   As a safeguard, a race entry is refused if its sticker clashes with
