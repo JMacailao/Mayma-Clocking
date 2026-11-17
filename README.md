@@ -73,7 +73,7 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/superadmin/nfc/`: register NFC tags in the global registry by tapping them
   on a USB NFC reader or Android phone.
 - `pages/superadmin/stickers/generate/`: generate unique barcode batches and choose
-  whether to register them for club use immediately, then export a Word sheet of 42 tickets per A4 page (2 × 21; each ticket is 70 × 13 mm: two number stubs and a barcode piece, split by grey dashed lines)
+  whether to register them for club use immediately, then export a Word sheet of 21 tickets per A4 page (one column; each ticket is 70 × 13 mm: two number stubs and a barcode piece, split by grey dashed lines)
   sheet or print it.
 - `pages/admin/dashboard/`: club overview.
 - `pages/admin/members/`: member and loft records, with `.xlsx`, `.xls`, and `.csv`
