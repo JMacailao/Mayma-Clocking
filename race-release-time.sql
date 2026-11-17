@@ -16,3 +16,6 @@ BEGIN
       CHECK (status <> 'open' OR release_at_utc IS NOT NULL);
   END IF;
 END $$;
+
+-- Tell the Supabase API to pick up new columns and functions straight away.
+NOTIFY pgrst, 'reload schema';

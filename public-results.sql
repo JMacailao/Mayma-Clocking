@@ -80,3 +80,6 @@ COMMENT ON FUNCTION public.public_race_results(bigint, date) IS
   'Returns non-rejected race result fields for a club and Philippines-local race date.';
 
 COMMIT;
+
+-- Tell the Supabase API to pick up new columns and functions straight away.
+NOTIFY pgrst, 'reload schema';

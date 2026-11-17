@@ -221,3 +221,6 @@ COMMENT ON TABLE public.nfc_tags IS
   'Global NFC tag registry. Tags are not assigned to a club or member.';
 
 COMMIT;
+
+-- Tell the Supabase API to pick up new columns and functions straight away.
+NOTIFY pgrst, 'reload schema';

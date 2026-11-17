@@ -86,3 +86,6 @@ COMMENT ON FUNCTION public.admin_update_user_credentials(uuid, text, text) IS
   'Allows an active club administrator to update a member or team account in the same club.';
 
 COMMIT;
+
+-- Tell the Supabase API to pick up new columns and functions straight away.
+NOTIFY pgrst, 'reload schema';

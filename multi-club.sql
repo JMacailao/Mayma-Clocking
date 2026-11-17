@@ -423,3 +423,6 @@ REVOKE ALL ON FUNCTION public.admin_set_team_active(uuid,boolean) FROM PUBLIC, a
 GRANT EXECUTE ON FUNCTION public.admin_set_team_active(uuid,boolean) TO authenticated;
 
 COMMIT;
+
+-- Tell the Supabase API to pick up new columns and functions straight away.
+NOTIFY pgrst, 'reload schema';

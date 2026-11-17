@@ -6,7 +6,16 @@ export const authError = (error) => error?.message || 'Something went wrong. Ple
 
 export const escapeHTML = (value='') => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 export const message = (text, kind='info') => { const el=document.querySelector('[data-message]'); if(el){el.textContent=text;el.className=`notice ${kind}`;el.hidden=!text;if(text&&el.scrollIntoView)el.scrollIntoView({behavior:'smooth',block:'nearest'});} };
-export const dbError = (error) => { if(error?.code==='23505') return 'That value is already in use.'; if(error?.code==='23503') return 'This record is still in use by another item.'; return error?.message || 'Could not save changes.'; };
+// A column or function the app needs is missing from the database: name the SQL
+// file that adds it, so the club can run it in the Supabase SQL Editor.
+const MISSING_SQL=[[/open_date|end_date/,'race-schedule-dates.sql'],[/release_at_utc/,'race-release-time.sql'],[/nfc_tag|nfc_tags|submit_member_nfc_clock|superadmin_register_nfc_tag/,'nfc-tags.sql'],[/barcode_sticker|scratch_code|is_registered|sticker_season|superadmin_register_sticker|superadmin_generate_sticker_batch/,'sticker-barcodes.sql'],[/public_race_results|public_result_clubs/,'public-results.sql']];
+export const missingSchemaMessage = (error) => {
+  const text=`${error?.message||''} ${error?.details||''} ${error?.hint||''}`;
+  if(!['PGRST204','PGRST202','PGRST200','42703','42883'].includes(error?.code)&&!/schema cache|does not exist/i.test(text))return null;
+  const file=MISSING_SQL.find(([pattern])=>pattern.test(text))?.[1];
+  return file?`The database is missing an update. In Supabase, open SQL Editor and run ${file}, then reload this page.`:'The database is missing an update. In Supabase, open SQL Editor and run the latest SQL files listed in the README, then reload this page.';
+};
+export const dbError = (error) => { const missing=missingSchemaMessage(error); if(missing) return missing; if(error?.code==='23505') return 'That value is already in use.'; if(error?.code==='23503') return 'This record is still in use by another item.'; return error?.message || 'Could not save changes.'; };
 export const formatDate = (value) => value ? new Intl.DateTimeFormat('en-PH',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Manila'}).format(new Date(value.endsWith?.('Z')?value:`${value}Z`)) : '—';
 export const phDateTimeLocalToUtc = (value) => {
   if(!value)return null;
@@ -31,7 +40,7 @@ export function tableRows(items, columns, empty='Nothing here yet.',withActions=
 }
 
 export const pageUrl = (path) => new URL(path,document.body.dataset.appRoot || new URL(document.body.dataset.base || '../../',location.href)).href;
-export const fail = (error) => { console.error(error); const text=error?.message || 'Something went wrong. Please try again.'; if(!document.querySelector('[data-message]')&&document.querySelector('#app-shell')){document.querySelector('#app-shell').innerHTML=`<main class="loading"><strong>Could not connect to Supabase.</strong><span class="notice error">${escapeHTML(text)}</span><a class="button secondary" href="${pageUrl('index.html')}">Back to home</a></main>`;return;} message(text,'error'); };
+export const fail = (error) => { console.error(error); const text=missingSchemaMessage(error) || error?.message || 'Something went wrong. Please try again.'; if(!document.querySelector('[data-message]')&&document.querySelector('#app-shell')){document.querySelector('#app-shell').innerHTML=`<main class="loading"><strong>Could not connect to Supabase.</strong><span class="notice error">${escapeHTML(text)}</span><a class="button secondary" href="${pageUrl('index.html')}">Back to home</a></main>`;return;} message(text,'error'); };
 
 export const normalizeImportHeader=value=>String(value??'').toLowerCase().replace(/[^a-z0-9]/g,'');
 let spreadsheetParserPromise=null;
