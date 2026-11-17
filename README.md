@@ -158,3 +158,19 @@ Create a club account with exactly that name to hand the old data to that club.
 - `assets/js/shared.js` contains shared Supabase, formatting, and UI helpers.
 - Each page's behavior lives beside its HTML in `page.js` and is loaded on demand. Race-entry scanning and imports are in `pages/admin/entries/page.js`.
 - Shared admin member and race-point forms live in `pages/admin/crud.js`; public results are shared from `pages/results/public.js`.
+
+## Install AvilonX on Android
+
+After publishing the latest files over HTTPS, open the site in Chrome on Android.
+Use **Install AvilonX** when Chrome offers installation, or Chrome's menu →
+**Add to Home screen** → **Install** (wording depends on the Chrome version).
+Launch AvilonX from its home-screen icon; it opens in a standalone window.
+The manifest uses relative paths and works under the GitHub Pages repository path
+as well as a custom domain. The repository does not need renaming.
+
+Installation does not enable offline clocking. Authentication, records and clock
+submissions still require internet access. The service worker caches only a public
+offline notice, never credentials, API responses or clock submissions. If a page
+cannot be reached, reconnect and press **Try again**. Existing open-page requests
+continue to use their normal network error handling. Service worker updates take
+effect after the old app windows are closed; they do not reload an active race.
