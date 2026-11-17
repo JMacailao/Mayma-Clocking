@@ -437,20 +437,21 @@ BEGIN
   FOR UPDATE OF e;
 
   IF NOT FOUND THEN
-    INSERT INTO public.member_clock_attempts AS a (member_id, race_id, failed, last_failed_at)
-    VALUES (v_member_id, p_race_id, 1, now())
-    ON CONFLICT (member_id, race_id) DO UPDATE SET failed = a.failed + 1, last_failed_at = now()
-    RETURNING a.failed INTO v_failed;
+    -- The reference barcode (the member's own sticker number) was scanned by
+    -- mistake. It is not a guess, so it does not count towards the limit.
     IF EXISTS (
       SELECT 1 FROM public.race_entries AS e
       JOIN public.barcode_stickers AS s ON s.barcode_number = e.barcode
       WHERE e.race_id = p_race_id AND e.member_id = v_member_id
         AND e.barcode = v_code AND s.scratch_code IS NOT NULL
     ) THEN
-      v_message := 'Scan the sticker''s barcode; the sticker number cannot be used to clock.';
-    ELSE
-      v_message := 'This code does not match a sticker registered to your account for this race.';
+      RETURN jsonb_build_object('status','rejected','message','That is the reference barcode. Scan the clocking barcode on the right-hand piece of the sticker.','tries_left',GREATEST(v_limit - COALESCE(v_failed, 0), 0));
     END IF;
+    INSERT INTO public.member_clock_attempts AS a (member_id, race_id, failed, last_failed_at)
+    VALUES (v_member_id, p_race_id, 1, now())
+    ON CONFLICT (member_id, race_id) DO UPDATE SET failed = a.failed + 1, last_failed_at = now()
+    RETURNING a.failed INTO v_failed;
+    v_message := 'This code does not match a sticker registered to your account for this race.';
     IF v_failed >= v_limit THEN
       v_message := v_message || ' Too many wrong codes: ask your club to record this clocking.';
     ELSE
