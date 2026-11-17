@@ -124,7 +124,7 @@ Create a club account with exactly that name to hand the old data to that club.
   open. It types each tapped tag's ID and Enter into the focused field. Every NFC
   reader field links to it.
 - Each sticker has a visible number (for example `12345`) and a hidden scratch code
-  (for example `4567`) printed in the dashed **SCRATCH TO CLOCK** box. Cover that box
+  (for example `4567`) printed as a barcode and digits in the dashed scratch box. Cover that box
   with scratch-off foil before handing stickers out. Race entries use the visible
   number; members clock with the scratch code, and the server maps it back to the
   sticker number. A sticker with a scratch code cannot be clocked with its visible

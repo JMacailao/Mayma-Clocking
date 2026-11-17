@@ -39,19 +39,26 @@ export const STICKER_COLUMNS=4,STICKER_ROWS=27,STICKERS_PER_PAGE=STICKER_COLUMNS
 // sticker's own padding provides it).
 export const STICKER_BARCODE={height:28,width:1.2,margin:0};
 // Layout shared by the screen preview and the printed/Word sheet, in real units.
-const STICKER_CSS='.sticker-sheet{width:16cm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{width:3.97cm;height:.97cm;max-height:.97cm;padding:0;border:.5pt solid #cbd3cd;overflow:hidden;vertical-align:middle;text-align:center}.sticker-label{width:3.97cm;height:.97cm;table-layout:fixed;border-collapse:collapse}.sticker-label td{padding:0;vertical-align:middle;text-align:center;overflow:hidden}.sticker-label .sticker-main{width:2.27cm}.sticker-label .sticker-main.full{width:3.97cm}.sticker-main img,.sticker-main svg{display:block;width:2.17cm;height:.5cm;margin:0 auto}.sticker-main.full img,.sticker-main.full svg{width:3.7cm}.sticker-number,.sticker-scratch-number{display:block;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;line-height:12px;color:#111;white-space:nowrap;letter-spacing:0}.sticker-label .sticker-scratch{width:1.7cm}.sticker-scratch-box{margin:0 .04cm;height:.8cm;border:.75pt dashed #6b7570;display:block}.sticker-scratch-title{display:block;font-family:Arial,Helvetica,sans-serif;font-size:5pt;font-weight:700;line-height:7px;color:#4a544f;padding-top:.08cm;margin-bottom:.04cm}';
+// Top line: the visible sticker number (used to register the race entry).
+// Bottom: the dashed scratch box, covered with scratch-off foil, holding the
+// barcode of the hidden scratch code and its digits. Members scratch it and scan
+// the barcode (or type the digits) to clock.
+const STICKER_CSS='.sticker-sheet{width:16cm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{width:3.97cm;height:.97cm;max-height:.97cm;padding:0;border:.5pt solid #cbd3cd;overflow:hidden;vertical-align:middle;text-align:center}.sticker-label{width:3.97cm;height:.97cm;table-layout:fixed;border-collapse:collapse}.sticker-label td{padding:0;vertical-align:middle;text-align:center;overflow:hidden}.sticker-label .sticker-top{height:.36cm}.sticker-label .sticker-bottom{height:.61cm}.sticker-number,.sticker-scratch-number{display:block;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;line-height:12px;color:#111;white-space:nowrap;letter-spacing:0}.sticker-scratch-box{width:3.75cm;height:.53cm;margin:0 auto;border:.75pt dashed #6b7570;table-layout:fixed;border-collapse:separate;border-spacing:0}.sticker-scratch-box td{padding:0;vertical-align:middle}.sticker-scratch-box .sticker-scratch-code{width:2.2cm}.sticker-scratch-code img,.sticker-scratch-code svg{display:block;width:2.1cm;height:.43cm;margin:0 auto}.sticker-main-code img,.sticker-main-code svg{display:block;width:3.6cm;height:.5cm;margin:0 auto}';
 
-// One sticker's inner markup. barcode is an <img> (print) or <svg> (preview).
+// One sticker's inner markup. barcode is an <img> (print) or <svg> (preview) of
+// the scratch code, or of the sticker number for older stickers without one.
 function stickerLabel(code,barcode){
   const number=`<span class="sticker-number">${escapeHTML(code.number)}</span>`;
-  if(!code.scratch)return `<table class="sticker-label"><tr><td class="sticker-main full">${barcode}${number}</td></tr></table>`;
-  return `<table class="sticker-label"><tr><td class="sticker-main">${barcode}${number}</td><td class="sticker-scratch"><span class="sticker-scratch-box"><span class="sticker-scratch-title">SCRATCH</span><span class="sticker-scratch-number">${escapeHTML(code.scratch)}</span></span></td></tr></table>`;
+  if(!code.scratch)return `<table class="sticker-label"><tr><td class="sticker-main-code">${barcode}${number}</td></tr></table>`;
+  return `<table class="sticker-label"><tr><td class="sticker-top">${number}</td></tr><tr><td class="sticker-bottom"><table class="sticker-scratch-box"><tr><td class="sticker-scratch-code">${barcode}</td><td><span class="sticker-scratch-number">${escapeHTML(code.scratch)}</span></td></tr></table></td></tr></table>`;
 }
-// Screen preview of one sticker: the visible sticker number on the left and the
-// hidden scratch code (to be covered with scratch-off foil) on the right.
+// The barcode printed on a sticker: the hidden scratch code when there is one.
+export const stickerBarcodeValue=code=>code.scratch||code.number;
+// Screen preview of one sticker.
 export function stickerPreviewCell(code){
   if(!code)return '<td class="sticker-empty" aria-hidden="true"></td>';
-  return `<td>${stickerLabel(code,`<svg data-sticker-preview="${escapeHTML(code.number)}" aria-label="Barcode ${escapeHTML(code.number)}" preserveAspectRatio="xMidYMid meet"></svg>`)}</td>`;
+  const value=stickerBarcodeValue(code);
+  return `<td>${stickerLabel(code,`<svg data-sticker-preview="${escapeHTML(value)}" aria-label="Barcode ${escapeHTML(value)}" preserveAspectRatio="xMidYMid meet"></svg>`)}</td>`;
 }
 export function drawStickerPreviews(root){
   root.querySelectorAll('[data-sticker-preview]').forEach(svg=>{drawBarcode(svg,svg.dataset.stickerPreview,STICKER_BARCODE);const w=svg.getAttribute('width'),h=svg.getAttribute('height');if(w&&h){svg.setAttribute('viewBox',`0 0 ${parseFloat(w)} ${parseFloat(h)}`);svg.removeAttribute('width');svg.removeAttribute('height');}});
