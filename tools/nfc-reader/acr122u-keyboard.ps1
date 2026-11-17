@@ -1,5 +1,5 @@
 <#
-  Mayma Clocking - NFC reader helper for the ACS ACR122U (and other PC/SC readers).
+  AvilonX Clocking - NFC reader helper for the ACS ACR122U (and other PC/SC readers).
 
   Browsers cannot talk to the ACR122U directly. This helper reads each tag you tap
   on the reader and types its ID followed by Enter into whatever field has focus,
@@ -81,7 +81,7 @@ public static class MaymaPcsc {
 '@
 
 Write-Host ''
-Write-Host 'Mayma Clocking - NFC reader helper' -ForegroundColor Green
+Write-Host 'AvilonX Clocking - NFC reader helper' -ForegroundColor Green
 Write-Host 'Click the NFC reader field in the browser, then tap tags on the reader.'
 Write-Host 'Keep this window open. Press Ctrl+C to stop.'
 Write-Host ''

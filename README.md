@@ -1,4 +1,4 @@
-# Mayma Clocking
+# AvilonX Clocking
 
 A static club clocking app built with HTML, CSS, JavaScript and **Supabase only**
 (Supabase Auth + PostgreSQL). People sign in with a **username and password**, never
