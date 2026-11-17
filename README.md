@@ -132,11 +132,11 @@ Create a club account with exactly that name to hand the old data to that club.
   a generated batch before leaving the page. Older stickers without a scratch code
   still clock with their number; register the same number again with a scratch code
   to add one.
-- **Short numbers, reused each season.** New sticker numbers and secret codes are
-  both 1 to 1999. Generate Sticker takes the lowest free numbers; when they run out,
+- **Short numbers, reused each season.** New sticker numbers are 1 to 1999 and
+  each gets a random 7-digit secret code. Generate Sticker takes the lowest free numbers; when they run out,
   the Super Admin starts a new season on **Register Sticker**, which archives the
   current stickers (refused while any draft or open race still uses stickers).
-  Because secret codes repeat, a race entry is refused if its sticker clashes with
+  As a safeguard, a race entry is refused if its sticker clashes with
   another sticker the same member has in that race, and a member who enters 10 wrong
   codes in a race can no longer clock it (the club records the clocking instead).
   Stickers generated without registering are saved but inactive until registered.

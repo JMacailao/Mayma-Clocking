@@ -2,9 +2,9 @@
 -- it is safe to re-run.
 --
 -- Each sticker has a visible number (used to register the race entry) and a
--- secret code (printed only as a barcode, used by the member to clock). New
--- stickers use short numbers: both the visible number and the secret code are
--- 1 to 1999. Numbers are reused each season: the Super Admin starts a new season,
+-- secret code (printed as a barcode, used by the member to clock). New stickers
+-- use a visible number from 1 to 1999 and a random 7-digit secret code. Numbers
+-- are reused each season: the Super Admin starts a new season,
 -- which archives the current stickers so numbers 1 to 1999 are free again.
 BEGIN;
 
@@ -54,7 +54,8 @@ ALTER TABLE public.barcode_stickers ADD CONSTRAINT barcode_stickers_scratch_code
     AND scratch_code <> barcode_number
   )
 );
--- Secret codes are no longer unique (1 to 1999 repeat between stickers).
+-- Secret codes are not unique across seasons and older short codes may repeat, so
+-- there is no unique index; new 7-digit codes are kept unique within a season.
 DROP INDEX IF EXISTS public.barcode_stickers_scratch_code_key;
 
 -- Preserve barcodes already used by race entries when installing this feature.
@@ -133,8 +134,19 @@ AS $function$
 $function$;
 GRANT EXECUTE ON FUNCTION public.is_short_sticker_code(text) TO authenticated;
 
--- Random secret code from 1 to 1999 (from a cryptographically random UUID),
--- different from the sticker's own number.
+-- Secret codes are 7 digits, 1000000 to 9999999.
+CREATE OR REPLACE FUNCTION public.is_sticker_secret_code(p_value text)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+SET search_path = ''
+AS $function$
+  SELECT COALESCE(p_value ~ '^[1-9][0-9]{6}$', false);
+$function$;
+GRANT EXECUTE ON FUNCTION public.is_sticker_secret_code(text) TO authenticated;
+
+-- Random 7-digit secret code (from a cryptographically random UUID), not used by
+-- any other sticker this season.
 DROP FUNCTION IF EXISTS public._new_sticker_scratch_code();
 CREATE OR REPLACE FUNCTION public._new_sticker_scratch_code(p_number text)
 RETURNS text
@@ -146,8 +158,9 @@ DECLARE
   v_code text;
 BEGIN
   LOOP
-    v_code := (1 + (('x' || substr(md5(gen_random_uuid()::text), 1, 15))::bit(60)::bigint % 1999))::text;
-    EXIT WHEN v_code IS DISTINCT FROM p_number;
+    v_code := (1000000 + (('x' || substr(md5(gen_random_uuid()::text), 1, 15))::bit(60)::bigint % 9000000))::text;
+    EXIT WHEN v_code IS DISTINCT FROM p_number
+      AND NOT EXISTS (SELECT 1 FROM public.barcode_stickers AS s WHERE s.scratch_code = v_code);
   END LOOP;
   RETURN v_code;
 END;
@@ -157,7 +170,7 @@ REVOKE ALL ON FUNCTION public._new_sticker_scratch_code(text) FROM PUBLIC, anon,
 DROP FUNCTION IF EXISTS public.superadmin_register_sticker(text);
 DROP FUNCTION IF EXISTS public.superadmin_register_sticker(text, text);
 
--- Registers a sticker number (1 to 1999) with its secret code (1 to 1999).
+-- Registers a sticker number (1 to 1999) with its 7-digit secret code.
 -- - A sticker generated without registering is activated; its saved secret code
 --   is kept, so the secret code can be left blank.
 -- - A registered sticker without a secret code gets the one given.
@@ -182,8 +195,8 @@ BEGIN
     RAISE EXCEPTION 'Sticker numbers must be 1 to 1999.' USING ERRCODE = '22023';
   END IF;
   IF v_scratch IS NOT NULL THEN
-    IF NOT public.is_short_sticker_code(v_scratch) THEN
-      RAISE EXCEPTION 'Secret codes must be 1 to 1999.' USING ERRCODE = '22023';
+    IF NOT public.is_sticker_secret_code(v_scratch) THEN
+      RAISE EXCEPTION 'Secret codes are 7 digits, for example 4827153.' USING ERRCODE = '22023';
     END IF;
     IF v_scratch = v_number THEN
       RAISE EXCEPTION 'The secret code must be different from the sticker number.' USING ERRCODE = '22023';
@@ -225,7 +238,7 @@ DROP FUNCTION IF EXISTS public.superadmin_generate_sticker_batch(integer, boolea
 DROP FUNCTION IF EXISTS public.superadmin_generate_sticker_batch(integer);
 
 -- Takes the lowest free sticker numbers from 1 to 1999 and gives each a random
--- secret code. The batch is always saved, registered or not.
+-- 7-digit secret code. The batch is always saved, registered or not.
 CREATE FUNCTION public.superadmin_generate_sticker_batch(
   p_quantity integer,
   p_register boolean DEFAULT true
