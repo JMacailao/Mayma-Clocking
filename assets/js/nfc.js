@@ -128,24 +128,29 @@ export function uidCandidates(text){
 const LOCAL_HELPER='http://127.0.0.1:47321/tag';
 function pollLocalHelper(onUid,isWanted,onState){
   let stopped=false,timer=null,seq=null,state='';
+  const control=new AbortController();
   const report=(next,extra={})=>{if(state!==next){state=next;onState?.({helper:next,...extra});}};
   const tick=async()=>{
     if(stopped)return;
     let delay=3000;
     if(isWanted()){
+      // After the first answer, the helper holds the request until the next
+      // tap (up to 20 seconds), so a tap reaches the page at once.
+      const started=performance.now();
       try{
-        const response=await fetch(`${LOCAL_HELPER}?after=${seq??''}`,{cache:'no-store'});
+        const response=await fetch(`${LOCAL_HELPER}?after=${seq??''}${seq===null?'':'&wait=1'}`,{cache:'no-store',signal:control.signal});
         const data=await response.json();
         report('connected',{reader:data.reader||''});
-        if(seq===null||data.seq<seq)seq=data.seq;
-        else{for(const tag of data.tags||[])if(tag.seq>seq&&!stopped)onUid(String(tag.uid));seq=data.seq;}
-        delay=350;
-      }catch{report('missing');}
+        const tags=seq===null||data.seq<seq?[]:(data.tags||[]).filter(tag=>tag.seq>seq);
+        seq=data.seq;
+        if(isWanted())for(const tag of tags)if(!stopped)onUid(String(tag.uid));
+        delay=tags.length||performance.now()-started>1000?0:300;
+      }catch{if(stopped)return;report('missing');}
     }else{state='';seq=null;}
     if(!stopped)timer=setTimeout(tick,delay);
   };
   tick();
-  return()=>{stopped=true;clearTimeout(timer);};
+  return()=>{stopped=true;clearTimeout(timer);control.abort();};
 }
 
 export function listenForReaderKeys(onTag,{maxGapMs=100,takeFromTextFields=false,onBurst=null,helper=null}={}){

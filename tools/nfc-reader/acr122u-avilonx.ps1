@@ -108,9 +108,32 @@ function Send-Response($Client, [string]$Origin, [int]$Code, [string]$Body) {
   $stream.Flush()
 }
 
+function Get-TagsJson([int]$After) {
+  $items = @($script:tags | Where-Object { $After -ge 0 -and $_.seq -gt $After } | ForEach-Object { '{"seq":' + $_.seq + ',"uid":"' + $_.uid + '"}' })
+  return '{"ok":true,"app":"avilonx-acr122u","reader":' + (ConvertTo-Json ([string]$script:readerName)) + ',"seq":' + $script:seq + ',"tags":[' + ($items -join ',') + ']}'
+}
+
+# Pages waiting for the next tap (?wait=1): answered the moment a tag is read,
+# or after 20 seconds with no tap, so each tap reaches the page at once.
+$waiting = New-Object System.Collections.ArrayList
+
+function Close-Waiter($Waiter) {
+  try { Send-Response $Waiter.client $Waiter.origin 200 (Get-TagsJson $Waiter.after) } catch { } finally { $Waiter.client.Close() }
+}
+
+function Update-Waiters {
+  $now = Get-Date
+  foreach ($waiter in @($script:waiting)) {
+    if ($script:seq -gt $waiter.after -or $now -ge $waiter.until -or -not $waiter.client.Connected) {
+      [void]$script:waiting.Remove($waiter); Close-Waiter $waiter
+    }
+  }
+}
+
 function Invoke-Request($Client) {
+  $keep = $false
   try {
-    $Client.ReceiveTimeout = 1000; $Client.SendTimeout = 1000
+    $Client.ReceiveTimeout = 1000; $Client.SendTimeout = 1000; $Client.NoDelay = $true
     $stream = $Client.GetStream()
     $buffer = New-Object byte[] 8192; $read = 0; $text = ''
     while ($read -lt $buffer.Length -and -not $text.Contains("`r`n`r`n")) {
@@ -126,13 +149,16 @@ function Invoke-Request($Client) {
     if (-not ($path -match '^/tag(\?|$)')) { Send-Response $Client $origin 404 '{"ok":false}'; return }
     $after = -1
     if ($path -match 'after=(\d+)') { $after = [int]$Matches[1] }
-    $items = @($script:tags | Where-Object { $after -ge 0 -and $_.seq -gt $after } | ForEach-Object { '{"seq":' + $_.seq + ',"uid":"' + $_.uid + '"}' })
-    $json = '{"ok":true,"app":"avilonx-acr122u","reader":' + (ConvertTo-Json ([string]$script:readerName)) + ',"seq":' + $script:seq + ',"tags":[' + ($items -join ',') + ']}'
-    Send-Response $Client $origin 200 $json
+    if ($after -ge 0 -and $path -match 'wait=1' -and $script:seq -le $after -and $script:waiting.Count -lt 8) {
+      [void]$script:waiting.Add(@{ client = $Client; origin = $origin; after = $after; until = (Get-Date).AddSeconds(20) })
+      $keep = $true
+      return
+    }
+    Send-Response $Client $origin 200 (Get-TagsJson $after)
   } catch {
     # A page that went away mid-request: nothing to do.
   } finally {
-    $Client.Close()
+    if (-not $keep) { $Client.Close() }
   }
 }
 
@@ -155,13 +181,14 @@ $lastUid = $null
 $reader = $null
 $warned = $false
 $nextRead = [DateTime]::MinValue
+$nextReaderCheck = [DateTime]::MinValue
 
 try {
   while ($true) {
-    # Answer the AvilonX page quickly, then check the reader every 250 ms.
+    # Answer the AvilonX page quickly, then check the reader every 80 ms.
     while ($listener.Pending()) { Invoke-Request ($listener.AcceptTcpClient()) }
     if ((Get-Date) -ge $nextRead) {
-      $nextRead = (Get-Date).AddMilliseconds(250)
+      $nextRead = (Get-Date).AddMilliseconds(80)
       try {
         if (-not $reader) {
           $readers = [AvilonXPcsc]::Readers()
@@ -177,12 +204,15 @@ try {
               $script:seq++
               [void]$script:tags.Add(@{ seq = $script:seq; uid = $uid })
               while ($script:tags.Count -gt 20) { $script:tags.RemoveAt(0) }
+              Update-Waiters
               Write-Host ("{0}  Tag {1}" -f (Get-Date -Format 'HH:mm:ss'), $uid) -ForegroundColor Cyan
             } else { Write-Host "Tag $uid has an unusual ID length and was ignored." -ForegroundColor Yellow }
           }
           # Remember the tag until it is lifted off, so each tap counts once.
           $lastUid = $uid
-          if (-not ([AvilonXPcsc]::Readers() -contains $reader)) {
+          # Unplugged? Checked every 2 seconds (listing readers is slow).
+          if ((Get-Date) -ge $nextReaderCheck) { $nextReaderCheck = (Get-Date).AddSeconds(2); $present = [AvilonXPcsc]::Readers() -contains $reader } else { $present = $true }
+          if (-not $present) {
             Write-Host 'Reader unplugged. Waiting for it to come back...' -ForegroundColor Yellow
             $reader = $null; $lastUid = $null; $script:readerName = ''
           }
@@ -194,8 +224,10 @@ try {
         $nextRead = (Get-Date).AddSeconds(2)
       }
     }
-    Start-Sleep -Milliseconds 40
+    Update-Waiters
+    Start-Sleep -Milliseconds 20
   }
 } finally {
+  foreach ($waiter in @($waiting)) { try { $waiter.client.Close() } catch { } }
   $listener.Stop()
 }
