@@ -5,7 +5,7 @@ const STATUSES=[['draft','Draft'],['open','Open'],['closed','Closed']];
 export async function render(view) {
   const {data:points,error}=await supabase.from('race_points').select('id,location,sector,latitude,longitude').order('location');if(error)throw error;
   const {data:races,error:raceError}=await supabase.from('races').select('*').order('id',{ascending:false});if(raceError)throw raceError;
-  const {data:entries,error:entryError}=await supabase.from('race_entries').select('race_id');if(entryError)throw entryError;
+  const {data:entries,error:entryError}=await supabase.from('race_entries').select('id,race_id,member_id');if(entryError)throw entryError;
   const pigeonCount=id=>entries.filter(entry=>entry.race_id===id).length;
 
   view.innerHTML=`<div class="split-heading"><div><h2>Race schedules</h2></div></div>
@@ -67,12 +67,34 @@ export async function render(view) {
       const point=points.find(item=>item.id===Number(form.elements.race_point_id.value));if(!point){form.elements.race_point_id.reportValidity();return;}
       Object.assign(record,{race_point_id:point.id,release_location:point.location,release_latitude:point.latitude,release_longitude:point.longitude});
     }
+    if(race&&status==='closed'&&race.status!=='closed'&&!(await confirmReadersSynced(race)))return;
     saveButton.disabled=true;
     const {error:saveError}=race?await supabase.from('races').update(record).eq('id',race.id):await supabase.from('races').insert(record);
     saveButton.disabled=false;
     if(saveError){message(dbError(saveError),'error');return;}
     message(race?'Schedule saved.':'Schedule created.','success');window.dispatchEvent(new Event('app:refresh'));
   };
+
+  // Loft readers keep taps made offline and send them later with their tap
+  // time; taps that arrive after the race is closed are refused. So before
+  // closing, list members' readers that have sent nothing since the release
+  // while the member still has pigeons without a receipt.
+  async function confirmReadersSynced(race){
+    try{
+      const {data:readers,error:readerError}=await supabase.rpc('admin_list_rfid_devices');
+      if(readerError||!readers?.length)return true;
+      const raceEntries=entries.filter(entry=>entry.race_id===race.id);
+      if(!raceEntries.length)return true;
+      const {data:clocks}=await supabase.from('clock_events').select('race_entry_id').in('race_entry_id',raceEntries.map(entry=>entry.id));
+      const clocked=new Set((clocks||[]).map(clock=>clock.race_entry_id));
+      const waitingMembers=new Set(raceEntries.filter(entry=>!clocked.has(entry.id)).map(entry=>entry.member_id));
+      const releasedAt=race.release_at_utc?new Date(String(race.release_at_utc).replace(' ','T')+(/[zZ]|[+-]\d\d:?\d\d$/.test(String(race.release_at_utc))?'':'Z')):null;
+      const silent=readers.filter(reader=>reader.member_id&&waitingMembers.has(reader.member_id)&&(!reader.last_seen_at||(releasedAt&&new Date(reader.last_seen_at)<releasedAt)));
+      if(!silent.length)return true;
+      const list=silent.map(reader=>`• ${reader.name} (${reader.member_name||'member'}), ${reader.last_seen_at?`last seen ${formatDate(reader.last_seen_at)}`:'never used'}`).join('\n');
+      return confirm(`Before closing ${race.name}: these loft readers have not sent anything to AvilonX since the release, so they may still hold taps saved while offline:\n\n${list}\n\nTaps that arrive after the race is closed are not accepted. Ask these members to connect their reader to the internet first.\n\nClose the race anyway?`);
+    }catch{return true;}
+  }
 
   drawRows();
   if(races.length)openEditor(races[0]);
