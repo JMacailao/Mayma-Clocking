@@ -21,6 +21,15 @@ requests in the browser.
 
 ## Set up
 
+**Quick way (recommended):** in the Supabase **SQL Editor** run `schema.sql` and
+`supabase-auth.sql` once (brand-new database only), then run **`avilonx-update.sql`**.
+That one file contains every other setup file below, in the right order, and is safe
+to run again: run it after every AvilonX update. The Super Admin's **Setup checklist**
+page shows which parts are done. (`avilonx-update.sql` is built from the separate
+files by `tools/build-update-sql.sh`; rebuild it after changing any of them.)
+
+The separate files, for reference:
+
 1. Open your Supabase project (`utfxtwgqdbjkbxlooolr`) → **SQL Editor** and run, in order:
    1. `schema.sql` — **only for a brand-new database** (skip if you already ran it)
    2. `supabase-auth.sql` — skip if you already ran it
@@ -74,6 +83,9 @@ requests in the browser.
       tab: bond a bird without an RFID tag (ring, loft, name, colour, photo). It
       is entered on Race entries → **Sticker entries** (ring + sticker) and
       clocked with its sticker. Run it after `bird-bonding.sql`.
+  16. `race-day.sql` — change history (who changed races, entries, clocks and
+      birds, and when), practice races, instant result pop-ups (Supabase
+      Realtime) and the Setup checklist. Run it last.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.
@@ -279,3 +291,27 @@ offline notice, never credentials, API responses or clock submissions. If a page
 cannot be reached, reconnect and press **Try again**. Existing open-page requests
 continue to use their normal network error handling. Service worker updates take
 effect after the old app windows are closed; they do not reload an active race.
+
+## Race day and everyday tools
+
+- **Race day** (club admin): one screen per race with the release and closing
+  timers, live arrivals, members' loft readers (with an alert when a reader is
+  offline while its pigeons are still flying), show-ups still waiting, and buttons
+  for **Big screen** (a full-screen leaderboard for the clubhouse TV), **Export
+  Excel** and **Print / PDF**. Results can be exported from **Results** too.
+- **Practice races**: tick *Practice race* on Race schedules to try readers and
+  phones; practice races never appear in the public results.
+- **Change history**: every change to race schedules, entries, clocks and bonded
+  birds, with who made it and when.
+- **Members**: results pop up the moment a pigeon is clocked (live), phone
+  notifications can be turned on from the dashboard, reminders for show-ups and open
+  races, and a **My pigeons** page (photo, ring, RFID, races, best speed).
+- **Race entries**: tapping an RFID tag on Sticker entries switches to RFID entries
+  by itself; the member's birds from their last race are one click away; a tag
+  still active in another race is flagged before saving; Category, Race type and
+  Pooling are under *More options*.
+- **Bird bonding** shows bonded birds as a list; click a photo to see it full size.
+- **English / Tagalog** switch in the menu.
+- **Updates**: when a new version is published, a notice offers to reload it.
+- **ACR122U on Windows**: in the helper zip, *Install AvilonX ACR122U helper* sets it
+  to start with Windows; nothing to keep open.
