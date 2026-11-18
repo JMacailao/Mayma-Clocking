@@ -159,10 +159,17 @@ Create a club account with exactly that name to hand the old data to that club.
   USB-C or Lightning camera adapter, or Bluetooth paired as a keyboard) work on
   Android and iPhone; the NFC pages listen for them anywhere on the page.
 - **ACS ACR122U and other PC/SC readers** do not type like a keyboard, so browsers
-  cannot see them. On Windows, run `tools/nfc-reader/acr122u-keyboard.ps1`
-  (right-click → **Run with PowerShell**, nothing to install) and keep its window
-  open. It types each tapped tag's ID and Enter into the focused field. Every NFC
-  reader field links to it.
+  cannot see them. On Windows there are two helpers in `tools/nfc-reader/`
+  (nothing to install; double-click the `.cmd` file so Windows does not block the
+  script, and keep its window open):
+  - **Start ACR122U for AvilonX.cmd** (recommended): sends each tap straight to
+    AvilonX over the internet, like the ESP8266 reader, so it works whatever window
+    is in front. The first time it shows the computer's **Device serial**; the Super
+    Admin registers it on **Register RFID reader** (Used by: Club admin) and the
+    device key is pasted into the window. On Race entries, Bird bonding and Show up
+    choose **Wireless**.
+  - **Start ACR122U keyboard helper.cmd**: types each tag's ID and Enter into the
+    window in front (choose **Wired**). Click the browser page after starting it.
 - **ESP8266 + RC522 RFID reader** (`tools/rfid-reader/avilonx-rfid-reader/`). The
   reader sends every tag over Wi-Fi straight to AvilonX, so no phone or computer is
   needed beside it. Upload the sketch, join the reader's Wi-Fi `RFID-READER`
