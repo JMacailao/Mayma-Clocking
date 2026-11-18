@@ -73,9 +73,9 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/superadmin/nfc/`: register NFC tags in the global registry by tapping them
   on a USB NFC reader or Android phone.
 - `pages/superadmin/stickers/generate/`: generate unique barcode batches and choose
-  whether to register them for club use immediately, then export or print a landscape
-  A4 sheet. By default each sticker set is 6.3 × 0.5 cm (152 per page, four columns of
-  38): a 2.85 cm reference stub and a 3.45 × 0.5 cm clocking label, each with a dashed
+  whether to register them for club use immediately, then export or print an A4
+  sheet, portrait by default or landscape. By default each sticker set is 6.3 × 0.5 cm
+  (112 per A4 portrait, 152 landscape): a 2.85 cm reference stub and a 3.45 × 0.5 cm clocking label, each with a dashed
   box inside, the AvilonX mark, sticker number and barcode. Under **Show sticker size**,
   pick a preset (XS 0.5 × 6.3 cm up to XXL 2.54 × 12.7 cm), or choose a height and
   whole width, or custom left and right column widths, in cm;
