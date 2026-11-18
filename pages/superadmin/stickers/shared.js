@@ -47,6 +47,16 @@ const CUT_LINE_ALLOWANCE_MM=.18,ROW_ALLOWANCE_MM=.3,COLUMN_GAP_MM=5,PAGE_MIN_MAR
 const PAGE_WIDTH_MM=297,PAGE_HEIGHT_MM=210;
 export const STICKER_HEIGHT_RANGE_MM=[5,30];
 export const DEFAULT_STICKER_SIZE={heightMm:5,refWidthMm:28.5,labelWidthMm:34.5};
+// Ready-made sizes, smallest to largest. Each was checked to fit its A4 page and
+// to scan in blurred, lower-resolution tests.
+export const STICKER_SIZE_PRESETS=[
+  {key:'XS',name:'Extra small',heightMm:5,refWidthMm:28.5,labelWidthMm:34.5},
+  {key:'S',name:'Small',heightMm:6,refWidthMm:29,labelWidthMm:37},
+  {key:'M',name:'Medium',heightMm:8,refWidthMm:34,labelWidthMm:44},
+  {key:'L',name:'Large',heightMm:10,refWidthMm:38,labelWidthMm:50},
+  {key:'XL',name:'Extra large',heightMm:15,refWidthMm:45,labelWidthMm:62},
+  {key:'XXL',name:'Ticket (1 × 5 in)',heightMm:25.4,refWidthMm:50,labelWidthMm:77}
+];
 const r2=v=>Math.round(v*100)/100;
 // Text grows with the sticker: 4.5 pt at 0.5 cm, up to 12 pt.
 const textPtFor=heightMm=>r2(Math.min(12,Math.max(4.5,heightMm*.9)));

@@ -374,3 +374,4 @@ video#camera[hidden]{display:none}
 .sticker-size-toggle{grid-column:1/-1}
 .sticker-size-toggle .button{width:auto;justify-self:start}
 .sticker-size[hidden]{display:none}
+.sticker-size-preset{display:grid;gap:4px;font-size:12px;margin-bottom:10px}
