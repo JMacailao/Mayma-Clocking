@@ -971,3 +971,79 @@ body.login-page{min-height:100vh;background:#f3f6f9}
 .sheet-camera-status{margin:10px 2px;font-weight:600}
 .sheet-camera.is-found .sheet-camera-status{color:#86efac}
 .sheet-camera-actions{display:flex;justify-content:flex-end;gap:10px}
+
+/* Sidebar: grouped menu with line icons */
+.sidebar{padding:22px 16px 16px}
+.sidebar .brand{padding:0 6px 18px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.sidebar nav{display:block}
+.nav-group{display:grid;gap:2px;padding:10px 0;border-bottom:1px solid var(--line)}
+.nav-group:last-child{border-bottom:0}
+.nav-group-title{padding:6px 10px 6px;color:#0f2a44;font:800 13px Manrope,sans-serif;letter-spacing:0}
+.nav-link{gap:14px;padding:9px 12px;border-radius:10px;color:#0f2a44;font-size:14px;font-weight:600}
+.nav-link .nav-icon{display:grid;place-items:center;width:22px;height:22px;color:#0f2a44}
+.nav-link .nav-icon svg{width:22px;height:22px;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.nav-link:hover{background:#f1f6fb}
+.nav-link.active{background:#e8f0f8;color:#0f2a44;font-weight:800;box-shadow:inset 4px 0 0 var(--orange,#f05a00)}
+.nav-link.active .nav-icon{color:#0f2a44}
+.sidebar-bottom{padding-top:10px}
+.sidebar-bottom .signed-in{padding:6px 8px 8px}
+.sidebar-bottom .avatar{width:40px;height:40px;font-size:15px;background:#e8f0f8;color:#0f2a44}
+.sidebar-bottom .signed-email{font-weight:700;color:#0f2a44}
+.sidebar .lang-switch{display:flex;justify-content:space-around;margin:2px 0 4px;padding:0;background:none}
+.sidebar .lang-switch button{min-height:34px;padding:4px 10px;background:none;color:#8aa0b6;font-size:14px;font-weight:700;opacity:1}
+.sidebar .lang-switch button[aria-pressed="true"]{background:none;color:#0f2a44}
+.sidebar-bottom .install-app-button{display:flex;justify-content:center;width:100%;margin-top:10px;min-height:46px;border:1.5px solid #b9cbe0;border-radius:12px;background:#eef3f9;color:#0f2a44;font-size:14px;font-weight:800}
+.sidebar-bottom .install-app-button::before{display:none}
+
+/* Bird bonding (list layout) */
+.birds-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:0 0 22px}
+.birds-head h2{margin:0;font:800 clamp(30px,3.4vw,46px) Manrope;letter-spacing:-.035em;color:#0f2a44}
+.birds-add{min-height:52px;padding:0 26px;border:0;border-radius:10px;background:#f05a00;color:#fff;font-size:18px;font-weight:800;box-shadow:none}
+.birds-add:hover{background:#d94f00}
+.birds-filters{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) auto;gap:18px;align-items:center;margin:0 0 26px}
+.birds-search{position:relative;display:block}
+.birds-search svg{position:absolute;left:16px;top:50%;width:22px;height:22px;transform:translateY(-50%);stroke:#0f2a44;stroke-width:1.8;stroke-linecap:round}
+.birds-search input,.birds-filters select{width:100%;min-height:54px;border:1px solid #cfd9e2;border-radius:10px;background:#fff;color:var(--ink);font-size:16px}
+.birds-search input{padding:0 16px 0 52px}
+.birds-filters select{padding:0 16px}
+.birds-filters .bird-show-retired{display:flex;align-items:center;gap:10px;font-size:16px;color:#0f2a44;white-space:nowrap}
+.birds-filters .bird-show-retired input{width:20px;height:20px}
+.birds-list-section>h3{margin:0;font:800 26px Manrope;color:#0f2a44}
+.birds-count{margin:6px 0 18px;color:#526a80;font-size:16px}
+.birds-list-section .bird-table{width:100%;border-collapse:collapse}
+.birds-list-section .bird-table th{padding:12px;border-bottom:1px solid var(--line);color:#0f2a44;font-size:16px;font-weight:800;text-transform:none;letter-spacing:0;text-align:left;background:none}
+.birds-list-section .bird-table td{padding:12px;border-bottom:1px solid var(--line);color:#0f2a44;font-size:16px}
+.bird-ring-cell{display:flex;align-items:center;gap:18px}
+.bird-ring-cell .bird-thumb{width:60px;height:52px;border-radius:4px}
+.bird-status{font-weight:600}
+.bird-status.is-retired{color:#8a96a3}
+.bird-action{min-height:0;padding:2px 0;color:#f05a00;font-size:16px;font-weight:600}
+.bird-action.danger-text{color:#c62828}
+.bird-action-sep{margin:0 12px;color:#9aa8b6}
+.bird-actions .text-button+.text-button{margin-left:0}
+.bird-dialog{width:min(980px,calc(100% - 20px));max-height:calc(100% - 20px);padding:0;border:0;border-radius:16px;background:transparent;overflow:visible}
+.bird-dialog::backdrop{background:#0f2a4499}
+.bird-dialog>.panel{margin:0;max-height:calc(100vh - 24px);overflow:auto}
+.bird-dialog-close{position:absolute;top:10px;right:12px;z-index:2;width:38px;height:38px;border:0;border-radius:50%;background:#fff;color:#0f2a44;font-size:24px;cursor:pointer;box-shadow:0 2px 8px #0002}
+@media (max-width:900px){.birds-filters{grid-template-columns:1fr 1fr}.birds-filters .birds-search{grid-column:1/-1}}
+@media (max-width:720px){
+  .birds-add{width:100%;justify-content:center}
+  .birds-filters{grid-template-columns:1fr}
+  .table-scroll .bird-table tr{display:grid;grid-template-columns:1fr;row-gap:2px;padding:12px 2px}
+  .table-scroll .bird-table td{grid-column:1;font-size:14px}
+  .table-scroll .bird-table td.bird-col-ring{grid-row:auto}
+  .table-scroll .bird-table td[data-label="Bird name"],.table-scroll .bird-table td[data-label="Color"],.table-scroll .bird-table td[data-label="Member"]{display:inline;color:var(--muted)}
+}
+.sidebar{overflow-y:auto;overscroll-behavior:contain}
+@media (min-width:721px){.sidebar .nav-link{padding:8px 12px}.nav-group{padding:8px 0}}
+@media (max-width:720px){
+  .birds-list-section .table-scroll .bird-table tr{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;row-gap:4px;padding:12px 2px;border-bottom:1px solid var(--line)}
+  .birds-list-section .table-scroll .bird-table td{display:block;flex:0 0 auto;padding:0;border:0;font-size:14px}
+  .birds-list-section .table-scroll .bird-table td.bird-col-ring{flex:1 0 100%}
+  .birds-list-section .table-scroll .bird-table td[data-label="Bird name"],.birds-list-section .table-scroll .bird-table td[data-label="Color"],.birds-list-section .table-scroll .bird-table td[data-label="Member"]{color:var(--muted)}
+  .birds-list-section .table-scroll .bird-table td[data-label="Bird name"]::after,.birds-list-section .table-scroll .bird-table td[data-label="Color"]::after{content:" ·";color:var(--muted)}
+  .birds-list-section .table-scroll .bird-table td[data-label="RFID tag"],.birds-list-section .table-scroll .bird-table td[data-label="Status"]{flex:0 0 auto;font-size:13px}
+  .birds-list-section .table-scroll .bird-table td[data-label="RFID tag"]::before{content:"RFID ";color:var(--muted)}
+  .birds-list-section .table-scroll .bird-table td.bird-actions{flex:1 0 100%;padding-top:4px}
+  .bird-ring-cell .bird-thumb{width:64px;height:54px}
+}

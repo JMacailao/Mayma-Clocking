@@ -46,7 +46,7 @@ const friendlyError=error=>{
 // bird name, colour, loft name, its RFID tag and a photo.
 export async function render(view,identity,setPageCleanup=()=>{}) {
   const clubId=identity?.profile?.club_id;
-  const heading='<div class="split-heading"><div><span class="eyebrow">BEFORE RACE ENTRIES</span><h2>Bird bonding</h2><p>Bond each bird before it can be entered in a race: ring number, RFID tag, loft, bird name, colour and a photo. Birds raced with a sticker only can be bonded by ring number, without an RFID tag.</p></div></div>';
+  const heading='<div class="birds-head"><h2>Bird bonding</h2><button class="button birds-add" type="button" data-bond-new><span aria-hidden="true">＋</span> Bond a bird</button></div>';
   const [{data:members,error:memberError},{data:birdsData,error:birdError},{data:entryRows}]=await Promise.all([
     supabase.from('members').select('id,member_no,full_name,loft_name').order('member_no'),
     supabase.from('pigeons').select('*').order('created_at',{ascending:false}),
@@ -59,7 +59,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   let photoUrls=await birdPhotoUrls(birds.map(bird=>bird.photo_path)),editing=null;
 
   view.innerHTML=`${heading}
-  <section class="panel bird-form-panel entry-tabs"><div class="entry-tab-bar" role="tablist" aria-label="How the bird is bonded"><button type="button" role="tab" data-bond-tab="rfid" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 9.5a4 4 0 0 1 0 5M11.5 7a8 8 0 0 1 0 10M15 4.5a12 12 0 0 1 0 15"/><circle cx="4.5" cy="12" r="1"/></svg><span>RFID bond</span></button><button type="button" role="tab" data-bond-tab="ring" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 9v6M10.5 9v6M13 9v6M16 9v6"/></svg><span>Ring number only (sticker)</span></button></div><div class="entry-tab-pane">
+  <dialog class="bird-dialog" data-bird-dialog><button type="button" class="bird-dialog-close" data-bird-dialog-close aria-label="Close">×</button><section class="panel bird-form-panel entry-tabs"><div class="entry-tab-bar" role="tablist" aria-label="How the bird is bonded"><button type="button" role="tab" data-bond-tab="rfid" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 9.5a4 4 0 0 1 0 5M11.5 7a8 8 0 0 1 0 10M15 4.5a12 12 0 0 1 0 15"/><circle cx="4.5" cy="12" r="1"/></svg><span>RFID bond</span></button><button type="button" role="tab" data-bond-tab="ring" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 9v6M10.5 9v6M13 9v6M16 9v6"/></svg><span>Ring number only (sticker)</span></button></div><div class="entry-tab-pane">
   <div class="panel-heading"><h3 data-bird-form-title>Bond a bird</h3></div>
   <p class="entry-tab-intro bond-rfid-only">RFID bond: the bird is picked on Race entries by tapping its RFID tag, and can be clocked by reader, phone or sticker.</p><p class="entry-tab-intro bond-ring-only">Ring number only: no RFID tag. The bird is entered on Race entries → <strong>Sticker entries</strong> by its ring number and sticker, and is clocked with the sticker.</p>
   <form id="bird-form" class="entry-form-grid bird-form" data-bond="rfid">
@@ -73,10 +73,10 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     <div class="field span-6 reader-choice bond-rfid-only" role="radiogroup" aria-labelledby="bird-reader-label"><span id="bird-reader-label">Which RFID reader are you using?</span><div class="reader-choice-options"><label><input type="radio" name="nfc_read_with" value="wireless"><span><strong>Wireless</strong> ESP8266 Wi-Fi reader</span></label><label><input type="radio" name="nfc_read_with" value="wired"><span><strong>Wired</strong> USB reader</span></label><label><input type="radio" name="nfc_read_with" value="phone"><span><strong>Android phone</strong> NFC</span></label></div><small class="small usb-reader-status" data-usb-status hidden></small></div>
     <label class="field span-3 bond-rfid-only"><span>RFID tag</span><div class="input-with-button"><input name="nfc_tag" required maxlength="40" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Tap the bird's RFID tag"><button type="button" data-tap-nfc aria-label="Read the RFID tag with this phone" title="Read with this phone" hidden><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 9.5a4 4 0 0 1 0 5M11.5 7a8 8 0 0 1 0 10M15 4.5a12 12 0 0 1 0 15"/><circle cx="4.5" cy="12" r="1"/></svg></button></div><small class="small">Required: on Race entries the bird is picked by tapping this tag. The tag must be registered by the Super Admin.</small></label>
     <div class="field span-3 bird-photo-field"><span>Photo of the bird</span><div class="bird-photo-picker"><img data-photo-preview alt="" hidden><div class="bird-photo-empty" data-photo-empty>No photo yet</div><label class="button secondary bird-photo-button"><input name="photo" type="file" accept="image/*" capture="environment" hidden>Take or choose photo</label></div><small class="small" data-photo-hint>Required. Taken with the camera or chosen from the phone; it is made smaller before uploading.</small></div>
-    <div class="form-actions"><button class="button primary" type="submit" data-save-bird>Bond bird</button><button class="button secondary" type="button" data-cancel-edit hidden>Cancel edit</button></div>
-  </form></div></section>
-  <section class="panel"><div class="panel-heading"><h3>Bonded birds</h3><span class="count-pill" data-bird-count></span></div>
-  <div class="bird-filters"><label class="field"><span>Member</span><select data-filter-member><option value="">All members</option>${members.map(m=>`<option value="${m.id}">${escapeHTML(m.member_no)} · ${escapeHTML(m.full_name)}</option>`).join('')}</select></label><label class="field"><span>Search</span><input data-filter-text placeholder="Ring, bird name or colour"></label><label class="bird-show-retired"><input type="checkbox" data-filter-retired> Show retired birds</label></div>
+    <div class="form-actions"><button class="button primary" type="submit" data-save-bird>Bond bird</button><button class="button secondary" type="button" data-cancel-edit>Cancel</button></div>
+  </form></div></section></dialog>
+  <div class="birds-filters"><label class="birds-search"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><input data-filter-text placeholder="Search ring number or bird name" aria-label="Search ring number or bird name"></label><select data-filter-member aria-label="Member"><option value="">All members</option>${members.map(m=>`<option value="${m.id}">${escapeHTML(m.member_no)} · ${escapeHTML(m.full_name)}</option>`).join('')}</select><label class="bird-show-retired"><input type="checkbox" data-filter-retired> Show retired birds</label></div>
+  <section class="birds-list-section"><h3>Bonded birds</h3><p class="birds-count" data-bird-count></p>
   <div class="bird-list" data-bird-grid></div></section>`;
 
   const form=view.querySelector('#bird-form'),grid=view.querySelector('[data-bird-grid]'),count=view.querySelector('[data-bird-count]'),title=view.querySelector('[data-bird-form-title]'),saveButton=view.querySelector('[data-save-bird]'),cancelButton=view.querySelector('[data-cancel-edit]');
@@ -122,12 +122,18 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   const resetForm=()=>{
     editing=null;form.reset();photoBlob=null;showPreview(null);form.elements.color_other.hidden=true;form.elements.color_other.required=false;
     try{const saved=localStorage.getItem(READER_KEY);const radio=saved&&form.querySelector(`[name=nfc_read_with][value="${saved}"]`);if(radio)radio.checked=true;}catch{/* storage unavailable */}
-    title.textContent='Bond a bird';cancelButton.hidden=true;form.elements.member_id.disabled=false;
+    title.textContent='Bond a bird';form.elements.member_id.disabled=false;
     let savedBond='rfid';try{savedBond=localStorage.getItem(BOND_KEY)==='ring'?'ring':'rfid';}catch{/* storage unavailable */}
     setBond(savedBond);applyReaderChoice();
     view.querySelector('[data-photo-hint]').textContent='Required. Taken with the camera or chosen from the phone; it is made smaller before uploading.';
   };
-  cancelButton.onclick=resetForm;
+  const dialog=view.querySelector('[data-bird-dialog]');
+  const openDialog=()=>{try{dialog.showModal();}catch{dialog.setAttribute('open','');}};
+  const closeDialog=()=>{if(dialog.open)dialog.close();};
+  dialog.addEventListener('close',()=>{if(editing)resetForm();});
+  view.querySelector('[data-bird-dialog-close]').onclick=closeDialog;
+  view.querySelector('[data-bond-new]').onclick=()=>{resetForm();openDialog();form.elements.member_id.focus();};
+  cancelButton.onclick=()=>{resetForm();closeDialog();};
 
   const editBird=bird=>{
     resetForm();editing=bird;
@@ -139,9 +145,9 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     form.elements.nfc_tag.value=bird.nfc_tag?formatNfcUid(bird.nfc_tag):'';
     if(bird.nfc_read_with){const radio=form.querySelector(`[name=nfc_read_with][value="${bird.nfc_read_with}"]`);if(radio)radio.checked=true;applyReaderChoice();}
     showPreview(photoUrls.get(bird.photo_path)||null);
-    title.textContent=`Edit bird ${bird.ring_number}`;saveButton.textContent='Save changes';cancelButton.hidden=false;
+    title.textContent=`Edit bird ${bird.ring_number}`;saveButton.textContent='Save changes';
     view.querySelector('[data-photo-hint]').textContent='Keep the photo, or take or choose a new one.';
-    form.scrollIntoView({behavior:'smooth',block:'start'});
+    openDialog();
   };
 
   form.onsubmit=async event=>{
@@ -173,7 +179,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
       if(saveError)throw saveError;
       if(editing&&uploadedPath&&editing.photo_path)await supabase.storage.from(PHOTO_BUCKET).remove([editing.photo_path]);
       message(editing?`Bird ${record.ring_number.toUpperCase()} updated.`:`Bird ${record.ring_number.toUpperCase()} (${record.bird_name}) bonded to ${member.full_name}${ringOnly?' by ring number only (sticker entries)':''}.`,'success');
-      resetForm();await reload();
+      resetForm();closeDialog();await reload();
     }catch(error){
       if(uploadedPath)await supabase.storage.from(PHOTO_BUCKET).remove([uploadedPath]);
       message(friendlyError(error),'error');
@@ -190,18 +196,16 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     const memberFilter=Number(filterMember.value)||null,text=filterText.value.trim().toLowerCase(),showRetired=filterRetired.checked;
     const list=birds.filter(bird=>(showRetired||bird.status==='active')&&(!memberFilter||bird.member_id===memberFilter)&&(!text||[bird.ring_number,bird.bird_name,bird.color].some(value=>String(value||'').toLowerCase().includes(text))));
     const active=birds.filter(bird=>bird.status==='active').length;
-    count.textContent=`${active} bonded${birds.length>active?` · ${birds.length-active} retired`:''}`;
-    const rfidCell=bird=>bird.bond_type==='ring'?'<span class="bird-ring-only">Ring only · sticker</span>':bird.nfc_tag?`<code>${escapeHTML(formatNfcUid(bird.nfc_tag))}</code>`:'<span class="tag-expired">None: edit to add one</span>';
-    grid.innerHTML=list.length?`<div class="table-scroll"><table class="bird-table"><thead><tr><th>Photo</th><th>Ring</th><th>Bird</th><th>Colour</th><th>Loft</th><th>Member</th><th>RFID</th><th>Bonded</th><th></th></tr></thead><tbody>${list.map(bird=>{const member=memberById.get(bird.member_id),photo=photoUrls.get(bird.photo_path);return `<tr class="bird-row ${bird.status==='retired'?'is-retired':''}" data-bird="${bird.id}">
-      <td data-label="Photo" class="bird-col-photo">${photo?`<button type="button" class="bird-thumb" data-view-photo aria-label="View photo of ${escapeHTML(bird.bird_name)}"><img src="${escapeHTML(photo)}" alt="" loading="lazy"></button>`:'<span class="bird-thumb is-empty">No photo</span>'}</td>
-      <td data-label="Ring"><strong>${escapeHTML(bird.ring_number)}</strong>${bird.status==='retired'?' <span class="tag closed">Retired</span>':''}</td>
-      <td data-label="Bird">${escapeHTML(bird.bird_name)}${bird.sex||bird.hatch_year?`<br><span class="small">${escapeHTML([bird.sex==='cock'?'Cock':bird.sex==='hen'?'Hen':'',bird.hatch_year||''].filter(Boolean).join(' · '))}</span>`:''}</td>
-      <td data-label="Colour" class="bird-col-colour">${escapeHTML(bird.color)}</td>
-      <td data-label="Loft" class="bird-col-loft">${escapeHTML(bird.loft_name)}</td>
-      <td data-label="Member">${escapeHTML(member?`${member.member_no} · ${member.full_name}`:'—')}</td>
-      <td data-label="RFID">${rfidCell(bird)}</td>
-      <td data-label="Bonded" class="bird-col-date">${escapeHTML(formatDate(bird.created_at))}</td>
-      <td data-label="Actions" class="bird-actions"><button class="text-button" type="button" data-edit-bird>Edit</button><button class="text-button" type="button" data-retire-bird>${bird.status==='active'?'Retire':'Make active'}</button>${raced.has(bird.id)?'':'<button class="text-button danger-text" type="button" data-delete-bird>Delete</button>'}</td></tr>`;}).join('')}</tbody></table></div>`:`<p class="small">${birds.length?'No birds match the filters.':'No birds bonded yet. Bond the first bird above.'}</p>`;
+    count.textContent=`${list.length} bird${list.length===1?'':'s'}${!showRetired&&birds.length>active?` · ${birds.length-active} retired hidden`:''}`;
+    const rfidCell=bird=>bird.bond_type==='ring'?'<span class="bird-ring-only">Ring only · sticker</span>':bird.nfc_tag?escapeHTML(formatNfcUid(bird.nfc_tag)):'–';
+    grid.innerHTML=list.length?`<div class="table-scroll"><table class="bird-table"><thead><tr><th>Ring number</th><th>Bird name</th><th>Color</th><th>Member</th><th>RFID tag</th><th>Status</th><th>Actions</th></tr></thead><tbody>${list.map(bird=>{const member=memberById.get(bird.member_id),photo=photoUrls.get(bird.photo_path);return `<tr class="bird-row ${bird.status==='retired'?'is-retired':''}" data-bird="${bird.id}">
+      <td data-label="Ring number" class="bird-col-ring"><span class="bird-ring-cell">${photo?`<button type="button" class="bird-thumb" data-view-photo aria-label="View photo of ${escapeHTML(bird.bird_name)}"><img src="${escapeHTML(photo)}" alt="" loading="lazy"></button>`:'<span class="bird-thumb is-empty">—</span>'}<strong>${escapeHTML(bird.ring_number)}</strong></span></td>
+      <td data-label="Bird name">${escapeHTML(bird.bird_name)}</td>
+      <td data-label="Color">${escapeHTML(bird.color)}</td>
+      <td data-label="Member">${escapeHTML(member?.full_name||'—')}</td>
+      <td data-label="RFID tag">${rfidCell(bird)}</td>
+      <td data-label="Status"><span class="bird-status ${bird.status==='active'?'is-bonded':'is-retired'}">${bird.status==='active'?'Bonded':'Retired'}</span></td>
+      <td data-label="Actions" class="bird-actions"><button class="text-button bird-action" type="button" data-edit-bird>Edit</button><span class="bird-action-sep" aria-hidden="true">|</span><button class="text-button bird-action" type="button" data-retire-bird>${bird.status==='active'?'Retire':'Make active'}</button>${raced.has(bird.id)?'':'<span class="bird-action-sep" aria-hidden="true">|</span><button class="text-button bird-action danger-text" type="button" data-delete-bird>Delete</button>'}</td></tr>`;}).join('')}</tbody></table></div>`:`<p class="small">${birds.length?'No birds match the filters.':'No birds bonded yet. Press Bond a bird to add the first one.'}</p>`;
     grid.querySelectorAll('[data-bird]').forEach(card=>{
       const bird=birds.find(item=>item.id===Number(card.dataset.bird));
       card.querySelector('[data-edit-bird]').onclick=()=>editBird(bird);

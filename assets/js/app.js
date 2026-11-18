@@ -23,18 +23,50 @@ async function getIdentity() {
 // clocking link before signing in).
 const loginUrl=()=>`${url('pages/login/index.html')}?next=${encodeURIComponent(location.pathname+location.search)}`;
 const homeFor = (role) => url(role==='superadmin'?'pages/superadmin/clubs/index.html':['admin','staff'].includes(role)?'pages/admin/dashboard/index.html':'pages/member/dashboard/index.html');
+// Line icons for the menu.
+const ICON_PATHS={
+  home:'<path d="M4 11.5 12 5l8 6.5V20h-5.5v-5h-5v5H4z"/>',
+  user:'<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.7 3.6-5.6 7-5.6s6.2 1.9 7 5.6"/>',
+  users:'<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-4.9 5.5-4.9s4.9 1.7 5.5 4.9"/><path d="M15 5.6a3 3 0 0 1 0 5.8M17 14.4c1.9.5 3.1 2 3.5 4.6"/>',
+  bird:'<path d="M20 5.5c-1.8 0-3 .8-3.7 2.2L12 16H6.5c2.6-.9 4-2.4 4.7-4.4"/><path d="M16.3 7.7C13 7 9 8.4 6.8 11.4 5.5 13.2 4.6 15.4 4 18l4.6-2"/><path d="M17.6 6.4h.01"/><path d="M8.6 16 8 20M11.5 16l.6 3.6"/>',
+  target:'<circle cx="12" cy="12" r="6"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/>',
+  clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  list:'<rect x="5" y="4" width="14" height="16" rx="1.5"/><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4"/>',
+  check:'<rect x="4.5" y="4.5" width="15" height="15" rx="1.5"/><path d="m8.5 12.3 2.4 2.4 4.8-5"/>',
+  raceday:'<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/>',
+  clocking:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/>',
+  tick:'<path d="m5 12.5 4.2 4.2L19 7"/>',
+  wifi:'<path d="M4 9.5a12 12 0 0 1 16 0M7 12.8a7.5 7.5 0 0 1 10 0M10 16a3 3 0 0 1 4 0"/><path d="M12 19h.01"/>',
+  trend:'<path d="m4 17 5.5-5.5 3.5 3.5L20 8"/><path d="M14.5 8H20v5.5"/>',
+  history:'<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 9"/><path d="M4.5 4.5V9H9"/><path d="M12 8v4.3l2.8 1.7"/>',
+  signout:'<path d="M10 5H6a1.5 1.5 0 0 0-1.5 1.5v11A1.5 1.5 0 0 0 6 19h4"/><path d="M14 8l4 4-4 4M18 12H9"/>',
+  sticker:'<path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 9v6M10.5 9v6M13 9v6M16 9v6"/>',
+  nfc:'<path d="M8 9.5a4 4 0 0 1 0 5M11.5 7a8 8 0 0 1 0 10M15 4.5a12 12 0 0 1 0 15"/><circle cx="4.5" cy="12" r="1"/>',
+  grid:'<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 10h16M10 4v16"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.1.8-1.5 2.6-1.3-.6a7.7 7.7 0 0 1-1.7 1l-.2 1.5h-3l-.2-1.5a7.7 7.7 0 0 1-1.7-1l-1.3.6-1.5-2.6 1.2-.9a7 7 0 0 1 0-2l-1.2-.9 1.5-2.6 1.3.6a7.7 7.7 0 0 1 1.7-1l.2-1.5h3l.2 1.5a7.7 7.7 0 0 1 1.7 1l1.3-.6 1.5 2.6-1.2.9a7 7 0 0 1 0 2Z"/>'
+};
+const navIcon=name=>`<span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none">${ICON_PATHS[name]||ICON_PATHS.list}</svg></span>`;
+const navLinks=(links,active)=>links.map(([key,label,href,icon])=>`<a class="nav-link ${active===key?'active':''}" ${active===key?'aria-current="page"':''} href="${url(href)}">${navIcon(icon)}<span>${label}</span></a>`).join('');
+// Groups: [heading or '', links]
+const navGroups=(groups,active)=>groups.filter(([,links])=>links.length).map(([heading,links])=>`<div class="nav-group">${heading?`<div class="nav-group-title">${heading}</div>`:''}${navLinks(links,active)}</div>`).join('');
 function superadminNav(active) {
-  const links=[['clubs','Club accounts','pages/superadmin/clubs/index.html','⌂'],['sticker-register','Register Sticker','pages/superadmin/stickers/register/index.html','▣'],['nfc-register','Register NFC','pages/superadmin/nfc/index.html','◉'],['rfid-register','Register RFID reader','pages/superadmin/readers/index.html','⌁'],['sticker-generate','Generate Sticker','pages/superadmin/stickers/generate/index.html','▤'],['setup','Setup checklist','pages/superadmin/setup/index.html','✓']];
-  return links.map(([key,label,href,icon])=>`<a class="nav-link ${active===key?'active':''}" ${active===key?'aria-current="page"':''} href="${url(href)}"><span class="nav-icon">${icon}</span>${label}</a>`).join('');
+  return navGroups([
+    ['',[['clubs','Club accounts','pages/superadmin/clubs/index.html','users']]],
+    ['Registration',[['sticker-register','Register Sticker','pages/superadmin/stickers/register/index.html','sticker'],['nfc-register','Register NFC','pages/superadmin/nfc/index.html','nfc'],['rfid-register','Register RFID reader','pages/superadmin/readers/index.html','wifi'],['sticker-generate','Generate Sticker','pages/superadmin/stickers/generate/index.html','grid']]],
+    ['Administration',[['setup','Setup checklist','pages/superadmin/setup/index.html','check']]]
+  ],active);
 }
 function adminNav(active,canManageAccounts) {
-  const links=[['dashboard','Overview','pages/admin/dashboard/index.html','◧'],['raceday','Race day','pages/admin/raceday/index.html','◎'],['members','Members','pages/admin/members/index.html','♙'],['birds','Bird bonding','pages/admin/birds/index.html','❖'],['race-points','Race points','pages/admin/race-points/index.html','⌖'],['races','Races','pages/admin/races/index.html','◷'],['entries','Race entries','pages/admin/entries/index.html','▤'],['remarks','Entry remarks','pages/admin/remarks/index.html','☑'],['clocking','Clocking','pages/admin/clocking/index.html','◉'],['showup','Show up','pages/admin/showup/index.html','✔'],['readers','RFID readers','pages/admin/readers/index.html','⌁'],['results','Results','pages/admin/results/index.html','↗'],['history','Change history','pages/admin/history/index.html','⟲']];
-  if(canManageAccounts)links.push(['users','Team accounts','pages/admin/users/index.html','♧']);
-  return links.map(([key,label,href,icon])=>`<a class="nav-link ${active===key?'active':''}" ${active===key?'aria-current="page"':''} href="${url(href)}"><span class="nav-icon">${icon}</span>${label}</a>`).join('');
+  return navGroups([
+    ['',[['overview','Overview','pages/admin/dashboard/index.html','home']]],
+    ['Club directory',[['members','Members','pages/admin/members/index.html','user'],['birds','Bird bonding','pages/admin/birds/index.html','bird']]],
+    ['Race setup',[['race-points','Race points','pages/admin/race-points/index.html','target'],['races','Races','pages/admin/races/index.html','clock'],['entries','Race entries','pages/admin/entries/index.html','list'],['remarks','Entry remarks','pages/admin/remarks/index.html','check']]],
+    ['Race day operations',[['raceday','Race day','pages/admin/raceday/index.html','raceday'],['clocking','Clocking','pages/admin/clocking/index.html','clocking'],['showup','Show up','pages/admin/showup/index.html','tick'],['readers','RFID readers','pages/admin/readers/index.html','wifi'],['results','Results','pages/admin/results/index.html','trend']]],
+    ['Administration',[['history','Change history','pages/admin/history/index.html','history'],...(canManageAccounts?[['users','Team accounts','pages/admin/users/index.html','users']]:[])]]
+  ],active);
 }
 function memberNav(active) {
-  const links=[['dashboard','My races','pages/member/dashboard/index.html','◧'],['history','My clocking history','pages/member/history/index.html','◷'],['clocking','Clocking','pages/member/clocking/index.html','◉'],['pigeons','My pigeons','pages/member/pigeons/index.html','❖'],['results','Results','pages/member/results/index.html','↗'],['settings','Settings','pages/member/settings/index.html','⚙']];
-  return links.map(([key,label,href,icon])=>`<a class="nav-link ${active===key?'active':''}" ${active===key?'aria-current="page"':''} href="${url(href)}"><span class="nav-icon">${icon}</span>${label}</a>`).join('');
+  return navGroups([['',[['dashboard','My races','pages/member/dashboard/index.html','home'],['history','My clocking history','pages/member/history/index.html','history'],['clocking','Clocking','pages/member/clocking/index.html','clocking'],['pigeons','My pigeons','pages/member/pigeons/index.html','bird'],['results','Results','pages/member/results/index.html','trend'],['settings','Settings','pages/member/settings/index.html','settings']]]],active);
 }
 function bottomNav(active, role) {
   let links=[
@@ -63,7 +95,7 @@ async function guard(role,active) {
     if(identity.profile.role!==role&&!staffOnAdminPage) { location.href=homeFor(identity.profile.role); return null; }
     body.classList.toggle('member-body',role==='member');
     body.classList.toggle('admin-body',role==='admin');
-    document.querySelector('#app-shell').innerHTML=`<aside class="sidebar"><a class="brand" href="${homeFor(role)}"><img class="brand-logo" src="${url('assets/images/clocking-logo.png')}" alt="AvilonX pigeon clock logo" width="72" height="48"><span>AvilonX<span class="brand-sub">RACE CLOCKING</span></span></a><div class="nav-label">${role==='superadmin'?'SUPERADMIN':identity.profile.role==='admin'?'MANAGEMENT':identity.profile.role==='staff'?'STAFF':'MEMBER AREA'}</div><nav>${role==='superadmin'?superadminNav(active):role==='admin'?adminNav(active,identity.profile.role==='admin'):memberNav(active)}</nav><div class="sidebar-bottom"><div class="signed-in"><span class="avatar">${escapeHTML((identity.profile.username||'M')[0].toUpperCase())}</span><span class="signed-email">${escapeHTML(identity.profile.username||'Account')}</span></div>${languageSwitchHtml()}<button class="nav-link signout" id="sign-out"><span class="nav-icon">↪</span>Sign out</button></div></aside><main class="main"><div class="nav-backdrop" id="nav-backdrop"></div><header class="topbar"><div class="topbar-left"><button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open menu">☰</button><div><div class="eyebrow">${escapeHTML(role==='superadmin'?'SUPERADMIN':(identity.club?.name||'PIGEON RACING CLUB').toUpperCase())}</div><h1>${escapeHTML(document.body.dataset.title||'Race clocking')}</h1></div></div><div class="topbar-right"><span class="live-dot"></span><span>Supabase connected</span><span class="timezone">PH · UTC+8</span></div></header><div class="page-content"><div data-message class="notice" hidden></div><section class="page-view" data-view="${escapeHTML(body.dataset.view)}"></section><footer>Clock receipts are recorded by Supabase server time and remain provisional until verified by the club.</footer></div></main>${['member','admin'].includes(role)?bottomNav(active,role):''}`;
+    document.querySelector('#app-shell').innerHTML=`<aside class="sidebar"><a class="brand" href="${homeFor(role)}"><img class="brand-logo" src="${url('assets/images/clocking-logo.png')}" alt="AvilonX pigeon clock logo" width="72" height="48"><span>AvilonX<span class="brand-sub">RACE CLOCKING</span></span></a>${role==='superadmin'||identity.profile.role==='staff'?`<div class="nav-label">${role==='superadmin'?'SUPERADMIN':'STAFF'}</div>`:''}<nav>${role==='superadmin'?superadminNav(active):role==='admin'?adminNav(active,identity.profile.role==='admin'):memberNav(active)}</nav><div class="sidebar-bottom"><div class="signed-in"><span class="avatar">${escapeHTML((identity.profile.username||'M')[0].toUpperCase())}</span><span class="signed-email">${escapeHTML(identity.profile.username||'Account')}</span></div>${languageSwitchHtml()}<button class="nav-link signout" id="sign-out">${navIcon('signout')}<span>Sign out</span></button></div></aside><main class="main"><div class="nav-backdrop" id="nav-backdrop"></div><header class="topbar"><div class="topbar-left"><button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open menu">☰</button><div><div class="eyebrow">${escapeHTML(role==='superadmin'?'SUPERADMIN':(identity.club?.name||'PIGEON RACING CLUB').toUpperCase())}</div><h1>${escapeHTML(document.body.dataset.title||'Race clocking')}</h1></div></div><div class="topbar-right"><span class="live-dot"></span><span>Supabase connected</span><span class="timezone">PH · UTC+8</span></div></header><div class="page-content"><div data-message class="notice" hidden></div><section class="page-view" data-view="${escapeHTML(body.dataset.view)}"></section><footer>Clock receipts are recorded by Supabase server time and remain provisional until verified by the club.</footer></div></main>${['member','admin'].includes(role)?bottomNav(active,role):''}`;
     document.querySelector('#menu-toggle').onclick=()=>setMenu(!body.classList.contains('nav-open'));document.querySelector('#nav-backdrop').onclick=()=>setMenu(false);document.querySelector('[data-open-menu]')?.addEventListener('click',()=>setMenu(!body.classList.contains('nav-open')));document.querySelector('#sign-out').addEventListener('click',async(event)=>{const button=event.currentTarget;if(button.disabled)return;button.disabled=true;button.setAttribute('aria-busy','true');button.querySelector('.nav-icon').textContent='…';try{await Promise.race([signOutUser(),new Promise(resolve=>setTimeout(resolve,1800))]);}catch(error){console.warn('Supabase local sign-out failed; redirecting to sign-in:',error);}finally{location.replace(url('pages/login/index.html'));}});
     bindLanguageSwitch(document.querySelector('#app-shell'));startTranslation();
     return identity;
