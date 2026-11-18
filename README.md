@@ -66,6 +66,10 @@ requests in the browser.
       `entry-remarks.sql` again so public results leave out disqualified
       pigeons. Members get a pop-up with the result whenever one of their
       pigeons is clocked, including by their loft RFID reader.
+  14. `rfid-tag-in-use.sql` — each RFID tag can be entered **once per race**, and a
+      tag still active in another race (that race is not closed and the tag has
+      not expired there) cannot be entered in a new race. Run it after
+      `nfc-tags.sql`.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.
