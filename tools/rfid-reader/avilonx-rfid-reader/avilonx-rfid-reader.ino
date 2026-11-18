@@ -18,10 +18,13 @@
               (taps sent late, after being offline, are not filled in).
     Clocking  each tap clocks that tag's pigeon in an open race.
 
-  Tap times need the clock: the reader sets it from the internet (NTP) after it
-  first gets online, and keeps it while powered, also offline. A tap made
-  before the clock was ever set is clocked at the time AvilonX receives it.
-  So power the reader on with internet before the race, and keep it powered.
+  Tap times come from a DS3231 clock module (with its coin-cell battery), so
+  they stay accurate even when the ESP8266 is switched off or has no internet.
+  Whenever the reader is online it corrects the DS3231 from internet time.
+  Set it once: power the reader on with internet (the page shows "DS3231").
+  Without a DS3231 the sketch still works, using internet time kept while the
+  board stays powered; a tap made before the clock was ever set is clocked at
+  the time AvilonX receives it.
 
   Setup
     1. Arduino IDE: install the "ESP8266" boards package and the "MFRC522"
@@ -32,9 +35,13 @@
     4. On http://192.168.4.1 enter the device key, then pick your 2.4 GHz Wi-Fi
        and press Save & Connect. Tap a tag: the page shows AvilonX's reply.
 
-  Wiring (RC522 runs on 3.3 V only)
-    SDA->D2(GPIO4), RST->D1(GPIO5), SCK->D5(GPIO14), MISO->D6(GPIO12),
-    MOSI->D7(GPIO13), 3.3V->3V3, GND->GND.
+  Wiring (RC522 and DS3231 run on 3.3 V)
+    RC522:  SDA->D2(GPIO4), SCK->D5(GPIO14), MISO->D6(GPIO12), MOSI->D7(GPIO13),
+            RST->3.3V (not D1 any more: the RC522 is reset in software),
+            3.3V->3V3, GND->GND.
+    DS3231: SDA->D1(GPIO5), SCL->D3(GPIO0), VCC->3V3, GND->GND, with a CR2032
+            coin cell in the module. (D3 must be high while the board starts;
+            the module's pull-up keeps it high.)
     Hotspot reset button: D0(GPIO16) -> button -> GND, with a 10k resistor from
     D0 to 3.3V. Holding it 10 seconds restores ONLY the reader's own hotspot
     name/password to RFID-READER / RFID12345, blinks the LED three times and
@@ -51,11 +58,16 @@
 #include <EEPROM.h>
 #include <LittleFS.h>
 #include <time.h>
+#include <sys/time.h>
+#include <coredecls.h>   // settimeofday_cb: told when internet time arrives
+#include <Wire.h>
 #include <SPI.h>
 #include <MFRC522.h>
 
 #define RFID_SS_PIN  4
-#define RFID_RST_PIN 5
+#define RFID_RST_PIN UINT8_MAX  // RC522 RST is tied to 3.3V; reset in software
+#define RTC_SDA_PIN 5   // D1 -> DS3231 SDA
+#define RTC_SCL_PIN 0   // D3 -> DS3231 SCL
 #define RESET_BUTTON_PIN 16
 #define RESET_HOLD_MS 10000UL
 #define STATUS_LED_PIN 2   // built-in LED, lit when LOW
@@ -157,7 +169,7 @@ const char PAGE[] PROGMEM = R"HTML(
 const $=id=>document.getElementById(id);let previousUID='',updating=false,scanning=false;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 function statusBadge(el,label,good){el.textContent=label;el.className='status '+(good?'good':'bad');}
-async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=s.clock_synced?'clock is set, Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)';statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=s.ap_ssid||'RFID-READER';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
+async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=(s.clock_synced?'clock is set from '+(s.clock_source==='ds3231'?'the DS3231 battery clock':'internet time')+', Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)')+(s.clock_source==='ds3231_unset'?'. The DS3231 needs internet once to set its time':'')+(s.clock_source==='internet'?'. No DS3231 found: the time is lost if the reader is switched off':'');statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=s.ap_ssid||'RFID-READER';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
 async function scanNetworks(){if(scanning)return;scanning=true;const btn=$('scanBtn'),select=$('network');btn.disabled=true;select.replaceChildren(new Option('Scanning networks...',''));try{let items=null;for(let i=0;i<15&&!items;i++){const r=await fetch('/api/networks',{cache:'no-store'});if(r.status===202){await wait(1000);continue;}if(!r.ok)throw Error('scan failed');items=await r.json();}if(!items)throw Error('scan timed out');select.replaceChildren(new Option('Choose a Wi-Fi network',''));items.forEach(n=>select.add(new Option(n.ssid+' ('+n.rssi+' dBm)'+(n.open?' - Open':''),n.ssid)));$('message').textContent=items.length?'':'No Wi-Fi networks found. Try again.';}catch(e){select.replaceChildren(new Option('Could not scan',''));$('message').textContent='Wi-Fi scan failed. Try again.';}finally{scanning=false;btn.disabled=false;}}
 async function post(url,form,output){output.textContent='Saving...';try{const r=await fetch(url,{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok)update();}catch(e){output.textContent='Could not save. Check that you are connected to the reader hotspot.';}}
 $('scanBtn').addEventListener('click',scanNetworks);$('copySerial').addEventListener('click',()=>{const text=$('serial').textContent;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>{$('copySerial').textContent='Copied';});else window.prompt('Copy device serial',text);});$('wifiForm').addEventListener('submit',e=>{e.preventDefault();post('/wifi/save',e.target,$('message')).then(()=>$('password').value='');});$('keyForm').addEventListener('submit',e=>{e.preventDefault();post('/device/save',e.target,$('keyMessage')).then(()=>$('key').value='');});$('apForm').addEventListener('submit',async e=>{e.preventDefault();const form=e.target,output=$('apMessage'),pw=$('apPasswordInput').value;if(pw!==$('apConfirmInput').value){output.textContent='Passwords do not match.';return;}output.textContent='Saving hotspot credentials...';try{const r=await fetch('/ap/save',{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok){$('apPasswordInput').value='';$('apConfirmInput').value='';}}catch(err){output.textContent='Could not save; check your connection.';}});update();setInterval(update,1000);scanNetworks();
@@ -242,10 +254,135 @@ String manilaTime(uint32_t utcSeconds) {
   return String(label);
 }
 
-// Returns 0 when the clock has not been set from the internet since power-up.
-uint32_t readScanTime() {
+// ---- DS3231 battery-backed clock (I2C address 0x68), kept in UTC ----------
+const uint8_t DS3231_ADDR = 0x68;
+bool rtcPresent = false;     // a DS3231 answered on the I2C bus
+bool rtcValid = false;       // its time can be trusted (set and never stopped)
+bool settingClockFromRtc = false;
+volatile bool internetTimeArrived = false;
+
+uint8_t bcdToDec(uint8_t v) { return (v >> 4) * 10 + (v & 0x0F); }
+uint8_t decToBcd(uint8_t v) { return ((v / 10) << 4) | (v % 10); }
+
+// Days since 1970-01-01 for a calendar date, and back (no time zones involved).
+int32_t daysFromCivil(int y, unsigned m, unsigned d) {
+  y -= m <= 2;
+  const int era = (y >= 0 ? y : y - 399) / 400;
+  const unsigned yoe = (unsigned)(y - era * 400);
+  const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return era * 146097 + (int32_t)doe - 719468;
+}
+void civilFromDays(int32_t z, int &y, unsigned &m, unsigned &d) {
+  z += 719468;
+  const int32_t era = (z >= 0 ? z : z - 146096) / 146097;
+  const unsigned doe = (unsigned)(z - era * 146097);
+  const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+  const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  const unsigned mp = (5 * doy + 2) / 153;
+  d = doy - (153 * mp + 2) / 5 + 1;
+  m = mp < 10 ? mp + 3 : mp - 9;
+  y = (int)yoe + era * 400 + (m <= 2);
+}
+
+bool rtcReadRegister(uint8_t reg, uint8_t &value) {
+  Wire.beginTransmission(DS3231_ADDR); Wire.write(reg);
+  if (Wire.endTransmission() != 0 || Wire.requestFrom(DS3231_ADDR, (uint8_t)1) != 1) return false;
+  value = Wire.read();
+  return true;
+}
+
+// Reads the DS3231 as seconds since 1970 (UTC). False when it cannot be read.
+bool rtcRead(uint32_t &unixUtc) {
+  Wire.beginTransmission(DS3231_ADDR); Wire.write(0x00);
+  if (Wire.endTransmission() != 0 || Wire.requestFrom(DS3231_ADDR, (uint8_t)7) != 7) return false;
+  uint8_t sec = bcdToDec(Wire.read() & 0x7F), min = bcdToDec(Wire.read() & 0x7F), hourReg = Wire.read();
+  Wire.read();  // day of week
+  uint8_t day = bcdToDec(Wire.read() & 0x3F), monthReg = Wire.read(), year = bcdToDec(Wire.read());
+  uint8_t hour;
+  if (hourReg & 0x40) {  // 12-hour mode (this sketch always writes 24-hour)
+    hour = bcdToDec(hourReg & 0x1F) % 12 + ((hourReg & 0x20) ? 12 : 0);
+  } else {
+    hour = bcdToDec(hourReg & 0x3F);
+  }
+  uint8_t month = bcdToDec(monthReg & 0x1F);
+  int fullYear = 2000 + year + ((monthReg & 0x80) ? 100 : 0);
+  if (sec > 59 || min > 59 || hour > 23 || day < 1 || day > 31 || month < 1 || month > 12 || fullYear < 2024) return false;
+  unixUtc = (uint32_t)(daysFromCivil(fullYear, month, day) * 86400L + hour * 3600L + min * 60L + sec);
+  return true;
+}
+
+// Sets the DS3231 (UTC) and clears its "oscillator stopped" flag.
+void rtcWrite(uint32_t unixUtc) {
+  int32_t days = (int32_t)(unixUtc / 86400UL);
+  uint32_t rest = unixUtc % 86400UL;
+  int y; unsigned m, d;
+  civilFromDays(days, y, m, d);
+  if (y < 2000 || y > 2099) return;
+  Wire.beginTransmission(DS3231_ADDR);
+  Wire.write(0x00);
+  Wire.write(decToBcd(rest % 60));
+  Wire.write(decToBcd((rest / 60) % 60));
+  Wire.write(decToBcd(rest / 3600));            // 24-hour mode
+  Wire.write(decToBcd(((days + 4) % 7) + 1));   // 1970-01-01 was a Thursday
+  Wire.write(decToBcd(d));
+  Wire.write(decToBcd(m));
+  Wire.write(decToBcd(y - 2000));
+  if (Wire.endTransmission() != 0) return;
+  uint8_t status;
+  if (rtcReadRegister(0x0F, status)) {
+    Wire.beginTransmission(DS3231_ADDR); Wire.write(0x0F); Wire.write(status & 0x7F); Wire.endTransmission();
+  }
+  rtcValid = true;
+}
+
+// Called by the ESP8266 core whenever the clock is set, including by NTP.
+void onClockSet() {
+  if (!settingClockFromRtc) internetTimeArrived = true;
+}
+
+void beginRtc() {
+  Wire.begin(RTC_SDA_PIN, RTC_SCL_PIN);
+  Wire.beginTransmission(DS3231_ADDR);
+  rtcPresent = Wire.endTransmission() == 0;
+  if (!rtcPresent) { Serial.println(F("No DS3231 found: using internet time only.")); return; }
+  uint8_t status = 0x80;
+  uint32_t now = 0;
+  // Bit 7 of the status register means the clock stopped (battery flat or removed).
+  rtcValid = rtcReadRegister(0x0F, status) && !(status & 0x80) && rtcRead(now);
+  if (rtcValid) {
+    timeval tv = { (time_t)now, 0 };
+    settingClockFromRtc = true; settimeofday(&tv, nullptr); settingClockFromRtc = false;
+    Serial.print(F("Clock set from DS3231: ")); Serial.println(manilaTime(now));
+  } else {
+    Serial.println(F("DS3231 has no valid time yet: connect to the internet once to set it."));
+  }
+}
+
+// Copies internet time into the DS3231 after each NTP sync (about hourly).
+void keepRtcInStep() {
+  if (!internetTimeArrived) return;
+  internetTimeArrived = false;
   time_t t = time(nullptr);
-  return t >= 1700000000 ? (uint32_t)t : 0;
+  if (rtcPresent && t >= 1700000000) {
+    rtcWrite((uint32_t)t);
+    Serial.println(F("DS3231 set from internet time."));
+  }
+}
+
+// Tap time in seconds since 1970 (UTC): from the DS3231 when it is valid,
+// otherwise from internet time kept since power-up. 0 = time unknown.
+uint32_t readScanTime() {
+  uint32_t t = 0;
+  if (rtcPresent && rtcValid && rtcRead(t)) return t;
+  time_t now = time(nullptr);
+  return now >= 1700000000 ? (uint32_t)now : 0;
+}
+
+const char* clockSource() {
+  if (rtcPresent && rtcValid) return "ds3231";
+  if (rtcPresent) return "ds3231_unset";
+  return time(nullptr) >= 1700000000 ? "internet" : "none";
 }
 
 // True when this tag is already saved and waiting to be sent.
@@ -432,7 +569,9 @@ void handleStatus() {
   result += String(pendingCount);
   result += F(",\"clock_synced\":");
   result += readScanTime() ? F("true") : F("false");
-  result += F(",\"reader_time\":\"");
+  result += F(",\"clock_source\":\"");
+  result += clockSource();
+  result += F("\",\"reader_time\":\"");
   if (readScanTime()) result += manilaTime(readScanTime());
   result += F("\",\"storage_ready\":");
   result += storageReady ? F("true") : F("false");
@@ -699,8 +838,9 @@ void setup() {
   Serial.println(F("Reader page: http://192.168.4.1"));
   beginRouterConnection();
   // The clock runs in UTC (what AvilonX expects) and the page shows Philippine
-  // time. It is set from the internet once the router connects, and keeps
-  // running while powered, also through an internet outage.
+  // time. The DS3231 sets it at power-up; internet time corrects both.
+  settimeofday_cb(onClockSet);
+  beginRtc();
   configTime(0, 0, "pool.ntp.org", "time.google.com");
 
   SPI.begin();
@@ -732,6 +872,7 @@ void loop() {
   }
   if (restartAfterApChange && (int32_t)(millis() - apChangeRestartAt) >= 0) ESP.restart();
   readRFID();
+  keepRtcInStep();
   sendPending();
   if (config.ssid[0] != '\0' && WiFi.status() != WL_CONNECTED &&
       (unsigned long)(millis() - lastReconnectAttempt) >= 30000UL) {
