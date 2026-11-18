@@ -83,7 +83,10 @@ The separate files, for reference:
       tab: bond a bird without an RFID tag (ring, loft, name, colour, photo). It
       is entered on Race entries → **Sticker entries** (ring + sticker) and
       clocked with its sticker. Run it after `bird-bonding.sql`.
-  16. `race-day.sql` — change history (who changed races, entries, clocks and
+  16. `race-tag-expiry.sql` — **RFID tag expiry is set per race** on Race schedules
+      (for example 3 days after the official release) and applies to every RFID
+      entry of that race; Race entries no longer choose it per pigeon.
+  17. `race-day.sql` — change history (who changed races, entries, clocks and
       birds, and when), practice races, instant result pop-ups (Supabase
       Realtime) and the Setup checklist. Run it last.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
@@ -315,3 +318,14 @@ effect after the old app windows are closed; they do not reload an active race.
 - **Updates**: when a new version is published, a notice offers to reload it.
 - **ACR122U on Windows**: in the helper zip, *Install AvilonX ACR122U helper* sets it
   to start with Windows; nothing to keep open.
+
+## Scanning the loading form
+
+On Race entries → **Scan race sheet**, upload a photo or PDF of the loading form, or
+press **Take photo with guide** to use the camera with a frame to line the form up.
+The preview shows the table the reader found: coloured boxes on the **Member ID**
+(Loft name), **Ring** (Pigeon I.D.), **Remarks** (P1/P2/P3) and **Sticker** columns of
+each row. If they do not line up, rotate the photo or take a new one straight on.
+Sticker barcodes are decoded (or their printed reference number read); handwriting
+is read as well as a browser can, and the review table shows a picture of each cell
+next to what was read, so misread values can be corrected before saving.

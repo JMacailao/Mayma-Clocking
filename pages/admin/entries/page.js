@@ -15,7 +15,7 @@ function loadSpreadsheetZipReader(){
   return spreadsheetZipReaderPromise;
 }
 let documentOcrPromise=null;
-function loadDocumentOCR(){
+export function loadDocumentOCR(){
   if(window.Tesseract?.createWorker)return Promise.resolve(window.Tesseract);
   if(!documentOcrPromise)documentOcrPromise=new Promise((resolve,reject)=>{
     const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';script.crossOrigin='anonymous';script.dataset.tesseract='';
@@ -42,17 +42,22 @@ async function scanSheetBarcodes(source,rows,reader,onProgress=()=>{}){
     if(!region){row.barcodeScanError='Barcode area could not be located. Enter or correct the barcode manually.';onProgress(index+1,rows.length);continue;}
     const left=Math.max(0,Math.floor(region.left)),top=Math.max(0,Math.floor(region.top)),right=Math.min(source.width,Math.ceil(region.right)),bottom=Math.min(source.height,Math.ceil(region.bottom)),width=right-left,height=bottom-top;
     if(width<8||height<8){row.barcodeScanError='Barcode area could not be located. Enter or correct the barcode manually.';onProgress(index+1,rows.length);continue;}
-    const scale=Math.min(3,Math.max(1,900/width)),crop=document.createElement('canvas');crop.width=Math.max(1,Math.round(width*scale));crop.height=Math.max(1,Math.round(height*scale));crop.getContext('2d').drawImage(source,left,top,width,height,0,0,crop.width,crop.height);
+    // Several crops: the whole cell, inside its border lines, and the bars only (above the printed numbers).
+    const cropOf=(x,y,w,h,threshold=false)=>{const scale=Math.min(3,Math.max(1,900/w)),crop=document.createElement('canvas');crop.width=Math.max(1,Math.round(w*scale)+40);crop.height=Math.max(1,Math.round(h*scale)+40);const context=crop.getContext('2d',{willReadFrequently:true});context.fillStyle='#fff';context.fillRect(0,0,crop.width,crop.height);context.drawImage(source,x,y,w,h,20,20,crop.width-40,crop.height-40);
+      if(threshold){const pixels=context.getImageData(0,0,crop.width,crop.height),data=pixels.data;let sum=0;for(let i=0;i<data.length;i+=4)sum+=data[i]*.299+data[i+1]*.587+data[i+2]*.114;const cut=sum/(data.length/4)-25;for(let i=0;i<data.length;i+=4){const v=(data[i]*.299+data[i+1]*.587+data[i+2]*.114)<cut?0:255;data[i]=data[i+1]=data[i+2]=v;}context.putImageData(pixels,0,0);}
+      return crop;};
+    const inset=Math.round(Math.min(width,height)*.06),crops=[cropOf(left,top,width,height),cropOf(left+inset,top+inset,width-2*inset,height-2*inset),cropOf(left+inset,top+inset,width-2*inset,Math.round(height*.62)),cropOf(left+inset,top+inset,width-2*inset,Math.round(height*.62),true)];
     let result=null;
-    for(const angle of [0,90,270,180]){try{result=reader.decodeFromCanvas(angle?rotateDocumentCanvas(crop,angle):crop);break;}catch{}}
+    search:for(const crop of crops)for(const angle of [0,180,90,270]){try{result=reader.decodeFromCanvas(angle?rotateDocumentCanvas(crop,angle):crop);break search;}catch{}}
     const value=result?.getText?.().trim().replace(/\s+/g,'')||'';
     if(value){row.barcode=value;row.barcodeDetected=true;row.barcodeScanError='';}
+    else if(row.printedBarcode){row.barcode=row.printedBarcode;row.barcodeDetected=false;row.barcodeScanError='';}
     else{row.barcodeDetected=false;row.barcodeScanError='Barcode image was not detected. Type or correct the barcode.';}
     reader.reset?.();onProgress(index+1,rows.length);
   }
   return rows;
 }
-async function documentFileToCanvas(file){
+export async function documentFileToCanvas(file){
   if(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf')){
     const pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs');
     pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
@@ -70,11 +75,107 @@ async function documentFileToCanvas(file){
     canvas.getContext('2d',{willReadFrequently:true}).drawImage(bitmap||image,0,0,canvas.width,canvas.height);return canvas;
   }finally{bitmap?.close();if(objectUrl)URL.revokeObjectURL(objectUrl);}
 }
-function rotateDocumentCanvas(source,rotation){
+export function rotateDocumentCanvas(source,rotation){
   const sideways=rotation%180!==0,canvas=document.createElement('canvas');canvas.width=sideways?source.height:source.width;canvas.height=sideways?source.width:source.height;
-  const context=canvas.getContext('2d',{willReadFrequently:true});context.translate(canvas.width/2,canvas.height/2);context.rotate(rotation*Math.PI/180);context.drawImage(source,-source.width/2,-source.height/2);return canvas;
+  const context=canvas.getContext('2d',{willReadFrequently:true});context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.translate(canvas.width/2,canvas.height/2);context.rotate(rotation*Math.PI/180);context.drawImage(source,-source.width/2,-source.height/2);return canvas;
 }
-function documentGridRules(canvas){
+// Finds the loading form's table in a photo: long, thin ruled lines (the
+// paper may be a little tilted, the desk around it dark). Returns the column
+// lines and row lines, or null when no table is found.
+export function detectTableGrid(canvas){
+  const scale=Math.min(1,1400/Math.max(canvas.width,canvas.height)),W=Math.max(1,Math.round(canvas.width*scale)),H=Math.max(1,Math.round(canvas.height*scale));
+  const small=document.createElement('canvas');small.width=W;small.height=H;const sctx=small.getContext('2d',{willReadFrequently:true});sctx.drawImage(canvas,0,0,W,H);
+  const rgba=sctx.getImageData(0,0,W,H).data,gray=new Float32Array(W*H);
+  for(let i=0;i<W*H;i++)gray[i]=rgba[i*4]*.299+rgba[i*4+1]*.587+rgba[i*4+2]*.114;
+  // Dark compared with the neighbourhood (copes with shadows across the paper).
+  const integral=new Float64Array((W+1)*(H+1));
+  for(let y=0;y<H;y++){let row=0;for(let x=0;x<W;x++){row+=gray[y*W+x];integral[(y+1)*(W+1)+x+1]=integral[y*(W+1)+x+1]+row;}}
+  const R=12,dark=new Uint8Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const x0=Math.max(0,x-R),x1=Math.min(W,x+R+1),y0=Math.max(0,y-R),y1=Math.min(H,y+R+1),sum=integral[y1*(W+1)+x1]-integral[y0*(W+1)+x1]-integral[y1*(W+1)+x0]+integral[y0*(W+1)+x0],mean=sum/((x1-x0)*(y1-y0));dark[y*W+x]=gray[y*W+x]<mean-14?1:0;}
+  const D=5,isV=(x,y)=>x>=D&&x<W-D&&dark[y*W+x]&&!(dark[y*W+x-D]&&dark[y*W+x+D]),isH=(x,y)=>y>=D&&y<H-D&&dark[y*W+x]&&!(dark[(y-D)*W+x]&&dark[(y+D)*W+x]);
+  const slopes=[-0.06,-0.045,-0.03,-0.02,-0.01,0,0.01,0.02,0.03,0.045,0.06];
+  // Longest run along a (slightly tilted) line, allowing small gaps.
+  const longest=(length,at)=>{let best=0,start=-1,last=-1,gap=0;for(let t=0;t<length;t++){if(at(t)){if(start<0)start=t;last=t;gap=0;}else if(start>=0&&++gap>10){best=Math.max(best,last-start);start=-1;gap=0;}}if(start>=0)best=Math.max(best,last-start);return best;};
+  const runFrom=(length,at)=>{let best=[0,0,0],start=-1,last=-1,gap=0;const close=()=>{if(start>=0&&last-start>best[0])best=[last-start,start,last];};for(let t=0;t<length;t++){if(at(t)){if(start<0)start=t;last=t;gap=0;}else if(start>=0&&++gap>10){close();start=-1;gap=0;}}close();return best;};
+  const lines=(count,length,test)=>{const found=[];for(let p=0;p<count;p+=2){let best=null;for(const slope of slopes){const run=runFrom(length,t=>{const q=Math.round(p+t*slope);return q>=1&&q<count-1&&(test(q,t)||test(q-1,t)||test(q+1,t));});if(!best||run[0]>best.run)best={pos:p,slope,run:run[0],from:run[1],to:run[2]};}if(best.run>length*.3)found.push(best);}
+    // Keep the strongest of lines that are close together.
+    const kept=[];found.sort((a,b)=>b.run-a.run).forEach(line=>{if(!kept.some(other=>Math.abs(other.pos-line.pos)<length*.012+6))kept.push(line);});return kept.sort((a,b)=>a.pos-b.pos);};
+  const horizontal=lines(H,W,(y,x)=>isH(x,y));
+  const median=list=>{const sorted=[...list].sort((a,b)=>a-b);return sorted[Math.floor(sorted.length/2)];};
+  const long=horizontal.filter(line=>line.run>W*.4);
+  if(long.length<4)return null;
+  const left=median(long.map(line=>line.from)),right=median(long.map(line=>line.to)),tableWidth=right-left;
+  const rowLines=horizontal.filter(line=>line.run>tableWidth*.55).sort((a,b)=>a.pos-b.pos);
+  const yOn=(line,x)=>line.pos+x*line.slope;
+  // Each band between two row lines: where the column lines cross it (the
+  // paper may curve, so this is worked out per band).
+  const bands=[];
+  for(let index=1;index<rowLines.length;index++){
+    const a=rowLines[index-1],b=rowLines[index],profile=[];
+    for(let x=Math.max(D,Math.round(left-25));x<Math.min(W-D,Math.round(right+25));x++){
+      const top=Math.round(yOn(a,x))+4,bottom=Math.round(yOn(b,x))-4;if(bottom-top<6){profile.push([x,0]);continue;}
+      let hit=0;for(let y=top;y<=bottom;y++)if(isV(x,y)||isV(x-1,y)||isV(x+1,y))hit++;profile.push([x,hit/(bottom-top+1)]);
+    }
+    const peaks=[];profile.forEach(([x,value],k)=>{if(value<.55)return;if(profile.slice(Math.max(0,k-6),k+7).some(([,other])=>other>value))return;if(peaks.length&&x-peaks[peaks.length-1]<15)return;peaks.push(x);});
+    bands.push({a,b,peaks});
+  }
+  // Columns per band, using the loading form's layout: No. | Loft name | Pigeon
+  // I.D. | Remarks | Sticker. The sticker's barcode shows as a run of many
+  // close "lines": its first one is the Remarks|Sticker line.
+  const layout=bands.map(band=>{
+    const peaks=band.peaks;let best=null;
+    for(let start=0;start<peaks.length;start++){let end=start;while(end+1<peaks.length&&peaks[end+1]-peaks[end]<38)end++;if(end-start>=3&&(!best||end-start>best[1]-best[0]))best=[start,end];}
+    if(!best)return null;
+    const before=peaks.slice(0,best[0]);if(before.length<2)return null;
+    return {remarksSticker:peaks[best[0]],right:peaks[best[1]],pigeonRemarks:before[before.length-1],loftPigeon:before[before.length-2],earlier:before.slice(0,-2)};
+  });
+  const known=layout.filter(Boolean);
+  if(known.length<2)return null;
+  // The member (Loft name) column's width, from bands where its left line was found.
+  const memberWidths=known.map(item=>{const left=[...item.earlier].reverse().find(x=>item.loftPigeon-x>30);return left===undefined?null:item.loftPigeon-left;}).filter(Boolean);
+  const memberWidth=memberWidths.length?median(memberWidths):median(known.map(item=>item.pigeonRemarks-item.loftPigeon));
+  const gap=(a,b)=>median(known.map(item=>item[b]-item[a]));
+  const toFull=value=>value/scale;
+  return {bands:bands.map((band,index)=>{
+    let item=layout[index];
+    if(!item){// No sticker barcode seen in this band (heading or empty row): use the usual layout.
+      const loft=band.peaks.find(x=>Math.abs(x-median(known.map(k=>k.loftPigeon)))<40);if(loft===undefined)return null;
+      item={loftPigeon:loft,pigeonRemarks:loft+gap('loftPigeon','pigeonRemarks'),remarksSticker:loft+gap('loftPigeon','remarksSticker'),right:loft+gap('loftPigeon','right'),earlier:band.peaks.filter(x=>x<loft-30)};
+    }
+    const left=[...item.earlier].reverse().find(x=>item.loftPigeon-x>memberWidth*.85&&item.loftPigeon-x<memberWidth*1.08);
+    const memberLeft=left===undefined?item.loftPigeon-memberWidth:left;
+    const columns=[memberLeft-40,memberLeft,item.loftPigeon,item.pigeonRemarks,item.remarksSticker,Math.max(item.right+6,item.remarksSticker+40)].map(toFull);
+    const midX=(columns[1]+columns[5])/2*scale;
+    return {columns,top:toFull(yOn(band.a,midX)),bottom:toFull(yOn(band.b,midX)),hasSticker:Boolean(layout[index])};
+  }).filter(Boolean)};
+}
+// One entry per data row of the table found by detectTableGrid. The values
+// are read later, cell by cell (refineHandwrittenEntryFields and the barcodes).
+export function entrySheetRowsFromGrid(grid,canvas){
+  const regions=grid.bands.map(band=>({band,region:j=>({left:band.columns[j],right:band.columns[j+1],top:band.top,bottom:band.bottom})}));
+  const withBarcode=regions.filter(({band,region})=>band.bottom-band.top>=14&&(band.hasSticker||barcodeGraphicPresent(canvas,region(4).left,region(4).right,band.top,band.bottom)));
+  const typical=withBarcode.length?withBarcode.map(({band})=>band.bottom-band.top).sort((a,b)=>a-b)[Math.floor(withBarcode.length/2)]:null;
+  const results=[];
+  for(const {band,region} of regions){
+    const height=band.bottom-band.top;if(height<14)continue;
+    const barcodeGraphic=withBarcode.some(item=>item.band===band);
+    if(typical&&height<typical*.72)continue;// the heading row (LOFT NAME, PIGEON I.D, ...) is shorter
+    // A data row has its sticker, or writing in the ring column and the usual row height.
+    if(!barcodeGraphic&&!(typical&&height>typical*.6&&height<typical*1.6&&inkInRegion(canvas,region(2))&&inkInRegion(canvas,region(1))&&results.length))continue;
+    results.push({id:`sheet-${Date.now()}-${results.length}-${Math.random().toString(36).slice(2,7)}`,sheetRow:String(results.length+1),member_no:'',memberConfidence:0,pigeon_ring:'',ringConfidence:0,remarks_text:'',remarksConfidence:0,memberRegion:region(1),ringRegion:region(2),remarksRegion:region(3),stickerTextRegion:{...region(4),top:band.top+(band.bottom-band.top)*.62},barcode:'',printedBarcode:'',barcodeDetected:false,barcodeScanError:'',barcodeRegion:region(4),errors:[],member:null,saved:false});
+  }
+  return results;
+}
+// Some writing in a cell (not just its border lines).
+function inkInRegion(canvas,region){
+  const left=Math.max(0,Math.floor(region.left+6)),top=Math.max(0,Math.floor(region.top+6)),right=Math.min(canvas.width,Math.ceil(region.right-6)),bottom=Math.min(canvas.height,Math.ceil(region.bottom-6));
+  if(right-left<6||bottom-top<6)return false;
+  const data=canvas.getContext('2d',{willReadFrequently:true}).getImageData(left,top,right-left,bottom-top).data;let dark=0,total=0,sum=0;
+  for(let i=0;i<data.length;i+=16){const g=data[i]*.299+data[i+1]*.587+data[i+2]*.114;sum+=g;total++;}
+  const mean=sum/Math.max(1,total);for(let i=0;i<data.length;i+=16){const g=data[i]*.299+data[i+1]*.587+data[i+2]*.114;if(g<mean-40)dark++;}
+  return dark/Math.max(1,total)>.004;
+}
+export function documentGridRules(canvas){
   const {width,height}=canvas,rgba=canvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,width,height).data,xDark=new Uint32Array(width),yDark=new Uint32Array(height);let xSamples=0,ySamples=0;
   for(let y=0;y<height;y+=2){for(let x=0;x<width;x+=2){const i=(y*width+x)*4,gray=rgba[i]*.299+rgba[i+1]*.587+rgba[i+2]*.114;if(gray<145){xDark[x]++;yDark[y]++;}}}
   xSamples=Math.ceil(height/2);ySamples=Math.ceil(width/2);
@@ -95,7 +196,35 @@ function barcodeGraphicPresent(canvas,left,right,top,bottom){
   }
   return barcodeLikeLines>=2;
 }
-function entrySheetRowsFromOCR(ocrData,canvas){
+// Loading form columns: No. | Loft name (member ID) | Pigeon I.D. (ring, may
+// be written on two lines, e.g. "MCHPFC / 0088") | Remarks (P1/P2/P3) | Sticker.
+const compactCode=value=>String(value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+// Handwritten remarks such as "P1/P2/P3" or "Pl / Pz": common misreads fixed.
+export function sheetRemarks(text){
+  return [...new Set(String(text||'').toUpperCase().replace(/[\\|,;+]/g,'/').split(/[\/\s]+/).map(token=>token.replace(/[^A-Z0-9]/g,''))
+    .map(token=>/^P[1IL!]$/.test(token)?'P1':/^P[2Z]$/.test(token)?'P2':/^P[3]$/.test(token)?'P3':/^P[4A]$/.test(token)?'P4':/^P[5S]$/.test(token)?'P5':token.replace(/^0CP$/,'OCP'))
+    .filter(token=>token&&token.length<=12))];
+}
+// The sticker's reference number from the printed text, when the barcode itself could not be decoded.
+const stickerFromText=text=>{const tokens=String(text||'').toUpperCase().replace(/[^A-Z0-9\s-]/g,' ').split(/\s+/).filter(Boolean);return tokens.find(token=>/^N\d{6,}$/.test(token))||tokens.find(token=>/^\d{7,}-?[A-Z]?$/.test(token))||'';};
+// A member by the ID written on the sheet (member number or id, also "161" for "M-161").
+export function sheetMember(members,code){
+  const wanted=String(code||'').trim().toUpperCase();if(!wanted)return null;
+  return members.find(member=>String(member.member_no).trim().toUpperCase()===wanted)||members.find(member=>String(member.id)===wanted)
+    ||members.find(member=>compactCode(member.member_no)===compactCode(wanted))
+    ||(()=>{const digits=wanted.replace(/\D/g,'');if(!digits)return null;const hits=members.filter(member=>String(member.member_no).replace(/\D/g,'').replace(/^0+/,'')===digits.replace(/^0+/,''));return hits.length===1?hits[0]:null;})();
+}
+// The member's bonded bird for a ring written on the sheet: exact, then
+// ignoring spaces and dashes, then by its number alone (e.g. "0088").
+export function sheetBird(birds,memberId,ring){
+  const mine=(birds||[]).filter(bird=>bird.member_id===memberId&&bird.status==='active'),wanted=compactCode(ring);if(!wanted)return null;
+  const exact=mine.find(bird=>String(bird.ring_number).toUpperCase()===String(ring).trim().toUpperCase())||mine.find(bird=>compactCode(bird.ring_number)===wanted);
+  if(exact)return exact;
+  const digits=wanted.replace(/\D/g,'');if(digits.length<3)return null;
+  const hits=mine.filter(bird=>{const own=compactCode(bird.ring_number),ownDigits=own.replace(/\D/g,'');return own.endsWith(wanted)||wanted.endsWith(own)||ownDigits===digits||ownDigits.endsWith(digits);});
+  return hits.length===1?hits[0]:null;
+}
+export function entrySheetRowsFromOCR(ocrData,canvas){
   const rules=documentGridRules(canvas),fallback=[0,.13,.35,.55,.76,1].map(ratio=>Math.round(canvas.width*ratio));
   let columns=fallback;
   if(rules.vertical.length>=6){columns=rules.vertical.sort((a,b)=>b.strength-a.strength).slice(0,6).sort((a,b)=>a.position-b.position).map(rule=>rule.position);}
@@ -119,32 +248,56 @@ function entrySheetRowsFromOCR(ocrData,canvas){
     const words=group.words;
     const cells=Array.from({length:5},(_,index)=>cellText(words,columns[index],columns[index+1]));
     if(!cells.some(cell=>cell.length)&&!group.barcodeGraphic)continue;
-    const numberText=cells[0].join(' ').match(/\d{1,4}/)?.[0]||String(results.length+1),memberNo=cells[1].join(' ').trim(),ring=cells[2].join('').replace(/\s+/g,'').trim(),barcode=cells[4].join('').replace(/\s+/g,'').trim(),allCellText=cells.flat().join(' ').toLowerCase();
-    if(!cells[0].join(' ').match(/\d/)&&/member/.test(allCellText)&&/ring/.test(allCellText)&&/barcode/.test(allCellText))continue;
+    const numberText=cells[0].join(' ').match(/\d{1,4}/)?.[0]||String(results.length+1),memberNo=cells[1].join(' ').trim(),ring=cells[2].join('').replace(/\s+/g,'').trim(),barcode=stickerFromText(cells[4].join(' ')),remarksText=sheetRemarks(cells[3].join(' ')).join('/'),allCellText=cells.flat().join(' ').toLowerCase();
+    if(!cells[0].join(' ').match(/\d/)&&((/member|loft/.test(allCellText)&&/ring|pigeon/.test(allCellText))||/sticker|barcode|remarks/.test(allCellText)))continue;
     const top=group.top??Math.min(...words.map(word=>word.bbox.y0)),bottom=group.bottom??Math.max(...words.map(word=>word.bbox.y1));
-    results.push({id:`sheet-${Date.now()}-${results.length}-${Math.random().toString(36).slice(2,7)}`,sheetRow:numberText,member_no:memberNo,memberConfidence:cellConfidence(words,columns[1],columns[2]),pigeon_ring:ring,ringConfidence:cellConfidence(words,columns[2],columns[3]),memberRegion:{left:columns[1],right:columns[2],top,bottom},ringRegion:{left:columns[2],right:columns[3],top,bottom},barcode,barcodeDetected:false,barcodeScanError:'',barcodeRegion:{left:columns[4],right:columns[5],top,bottom},errors:[],member:null,saved:false});
+    results.push({id:`sheet-${Date.now()}-${results.length}-${Math.random().toString(36).slice(2,7)}`,sheetRow:numberText,member_no:memberNo,memberConfidence:cellConfidence(words,columns[1],columns[2]),pigeon_ring:ring,ringConfidence:cellConfidence(words,columns[2],columns[3]),memberRegion:{left:columns[1],right:columns[2],top,bottom},ringRegion:{left:columns[2],right:columns[3],top,bottom},remarks_text:remarksText,remarksConfidence:cellConfidence(words,columns[3],columns[4]),remarksRegion:{left:columns[3],right:columns[4],top,bottom},barcode,printedBarcode:barcode,barcodeDetected:false,barcodeScanError:'',barcodeRegion:{left:columns[4],right:columns[5],top,bottom},errors:[],member:null,saved:false});
   }
   return results;
 }
+// The writing inside a cell: its border lines left out and the blank paper
+// around the writing trimmed, so small handwriting can be enlarged.
+function inkBox(source,region){
+  const pad=Math.max(5,Math.round((region.bottom-region.top)*.08)),left=Math.max(0,Math.floor(region.left)+pad),top=Math.max(0,Math.floor(region.top)+pad),right=Math.min(source.width,Math.ceil(region.right)-pad),bottom=Math.min(source.height,Math.ceil(region.bottom)-pad),w=right-left,h=bottom-top;
+  if(w<8||h<8)return null;
+  const data=source.getContext('2d',{willReadFrequently:true}).getImageData(left,top,w,h).data;let sum=0;for(let i=0;i<data.length;i+=4)sum+=data[i]*.299+data[i+1]*.587+data[i+2]*.114;const cut=sum/(data.length/4)-45;
+  let x0=w,y0=h,x1=-1,y1=-1;for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4;if(data[i]*.299+data[i+1]*.587+data[i+2]*.114<cut){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}}
+  if(x1<0)return {left,top,right,bottom};
+  const margin=8;return {left:Math.max(left,left+x0-margin),top:Math.max(top,top+y0-margin),right:Math.min(right,left+x1+margin),bottom:Math.min(bottom,top+y1+margin)};
+}
 function handwritingOCRBatch(source,rows,regionKey){
   const width=760,gap=24,crops=[];let height=12;
-  rows.forEach((row,index)=>{const region=row[regionKey];if(!region)return;const left=Math.max(0,Math.floor(region.left)+4),top=Math.max(0,Math.floor(region.top)+4),right=Math.min(source.width,Math.ceil(region.right)-4),bottom=Math.min(source.height,Math.ceil(region.bottom)-4),cropWidth=right-left,cropHeight=bottom-top;if(cropWidth<8||cropHeight<8)return;const scale=Math.min(3,(width-32)/cropWidth),drawWidth=Math.max(1,Math.round(cropWidth*scale)),drawHeight=Math.max(1,Math.round(cropHeight*scale));crops.push({row,index,left,top,cropWidth,cropHeight,drawWidth,drawHeight});height+=drawHeight+gap;});
+  rows.forEach((row,index)=>{const region=row[regionKey];if(!region)return;const cell=inkBox(source,region);if(!cell)return;const {left,top}=cell,cropWidth=cell.right-cell.left,cropHeight=cell.bottom-cell.top;if(cropWidth<8||cropHeight<8)return;const scale=Math.min(4,(width-32)/cropWidth,90/Math.max(1,cropHeight)*(cropHeight>cropWidth*.6?1.6:1)),drawWidth=Math.max(1,Math.round(cropWidth*scale)),drawHeight=Math.max(1,Math.round(cropHeight*scale));crops.push({row,index,left,top,cropWidth,cropHeight,drawWidth,drawHeight});height+=drawHeight+gap;});
   const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const context=canvas.getContext('2d',{willReadFrequently:true});context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);const placements=[];let y=6;
-  for(const crop of crops){const x=Math.round((width-crop.drawWidth)/2);context.drawImage(source,crop.left,crop.top,crop.cropWidth,crop.cropHeight,x,y,crop.drawWidth,crop.drawHeight);placements.push({row:crop.row,index:crop.index,top:y,bottom:y+crop.drawHeight});y+=crop.drawHeight+gap;}
-  const pixels=context.getImageData(0,0,canvas.width,canvas.height),data=pixels.data;for(let index=0;index<data.length;index+=4){const gray=data[index]*.299+data[index+1]*.587+data[index+2]*.114,value=gray<192?0:255;data[index]=data[index+1]=data[index+2]=value;}context.putImageData(pixels,0,0);return {canvas,placements};
+  for(const crop of crops){const x=Math.round((width-crop.drawWidth)/2);context.drawImage(source,crop.left,crop.top,crop.cropWidth,crop.cropHeight,x,y,crop.drawWidth,crop.drawHeight);placements.push({row:crop.row,index:crop.index,top:y,bottom:y+crop.drawHeight,x,w:crop.drawWidth});y+=crop.drawHeight+gap;}
+  const pixels=context.getImageData(0,0,canvas.width,canvas.height),data=pixels.data;
+  // Per crop: ink is clearly darker than that crop's paper (copes with shadows).
+  // Per cell: the paper's brightness (most of the cell), ink clearly darker than that.
+  for(const placement of placements){const y0=placement.top,y1=placement.bottom,xa=placement.x,xb=placement.x+placement.w,levels=[];for(let y=y0;y<y1;y+=2)for(let x=xa;x<xb;x+=2){const i=(y*width+x)*4;levels.push(data[i]*.299+data[i+1]*.587+data[i+2]*.114);}levels.sort((a,b)=>a-b);const paper=levels[Math.floor(levels.length*.7)]||255,cut=paper-Math.max(30,paper*.22);
+    for(let y=y0;y<y1;y++)for(let x=xa;x<xb;x++){const i=(y*width+x)*4,gray=data[i]*.299+data[i+1]*.587+data[i+2]*.114,value=gray<cut?0:255;data[i]=data[i+1]=data[i+2]=value;}}
+  context.putImageData(pixels,0,0);return {canvas,placements};
 }
 async function refineHandwrittenEntryFields(worker,source,rows,members,onProgress=()=>{}){
   if(!worker?.setParameters||!worker?.recognize)return;
-  try{await worker.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_/.'});}catch{return;}
-  const fields=[['member_no','memberRegion','memberConfidence','Member ID'],['pigeon_ring','ringRegion','ringConfidence','Ring number']],batchSize=24;
-  for(const [field,regionKey,confidenceKey,label] of fields){const candidates=rows.filter(row=>row[regionKey]),total=candidates.length;
+  const ALNUM='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_/.';
+  const numericMembers=members.length&&members.every(member=>/^\d+$/.test(String(member.member_no).trim()));
+  // What each column can contain: member IDs digits only (when the club's are), remarks like P1/P2/P3/OCP.
+  const settings={member_no:{tessedit_pageseg_mode:'6',tessedit_char_whitelist:numericMembers?'0123456789':ALNUM},pigeon_ring:{tessedit_pageseg_mode:'6',tessedit_char_whitelist:ALNUM},remarks_text:{tessedit_pageseg_mode:'6',tessedit_char_whitelist:'P0123456789/OC'},barcode:{tessedit_pageseg_mode:'6',tessedit_char_whitelist:'N0123456789-X'}};
+  try{await worker.setParameters(settings.member_no);}catch{return;}
+  const fields=[['member_no','memberRegion','memberConfidence','Member ID'],['pigeon_ring','ringRegion','ringConfidence','Ring number'],['remarks_text','remarksRegion','remarksConfidence','Remarks'],['barcode','stickerTextRegion','barcodeConfidence','Sticker number']],batchSize=24;
+  for(const [field,regionKey,confidenceKey,label] of fields){
+    try{await worker.setParameters(settings[field]);}catch{/* keep the previous settings */}
+    // The sticker's printed number only where its barcode could not be decoded.
+    const candidates=rows.filter(row=>row[regionKey]&&!(field==='barcode'&&row.barcodeDetected)),total=candidates.length;if(!total)continue;
     for(let offset=0;offset<total;offset+=batchSize){const batch=candidates.slice(offset,offset+batchSize),prepared=handwritingOCRBatch(source,batch,regionKey),{data}=await worker.recognize(prepared.canvas),words=data.words?.length?data.words:(data.lines||[]).flatMap(line=>line.words||[]);
-      for(const placement of prepared.placements){const matches=words.filter(word=>{const center=(word.bbox.y0+word.bbox.y1)/2;return center>=placement.top-5&&center<=placement.bottom+5;}).sort((a,b)=>a.bbox.x0-b.bbox.x0),recognized=matches.map(word=>String(word.text||'').trim()).filter(Boolean).join('').replace(/[^A-Za-z0-9_./-]/g,'');if(!recognized)continue;const confidence=matches.length?matches.reduce((sum,word)=>sum+(Number(word.confidence)||0),0)/matches.length:Number(data.confidence)||0;
+      for(const placement of prepared.placements){let matches=words.filter(word=>{const center=(word.bbox.y0+word.bbox.y1)/2;return center>=placement.top-5&&center<=placement.bottom+5;}).sort((a,b)=>{const ay=(a.bbox.y0+a.bbox.y1)/2,by=(b.bbox.y0+b.bbox.y1)/2,line=Math.max(8,(a.bbox.y1-a.bbox.y0+b.bbox.y1-b.bbox.y0)/4);return Math.abs(ay-by)>line?ay-by:a.bbox.x0-b.bbox.x0;}),recognized=matches.map(word=>String(word.text||'').trim()).filter(Boolean).join(field==='pigeon_ring'?' ':'').replace(/[^A-Za-z0-9_./ -]/g,'').trim();if(!recognized)continue;const confidence=matches.length?matches.reduce((sum,word)=>sum+(Number(word.confidence)||0),0)/matches.length:Number(data.confidence)||0;
         const row=placement.row,current=String(row[field]||''),currentConfidence=Number(row[confidenceKey])||0;
-        if(field==='member_no'){
+        if(field==='member_no'){const numbered=recognized.match(/^(\d{1,2})\.(.+)$/);if(numbered&&numbered[1]===String(row.sheetRow))recognized=numbered[2];
           const isRegistered=value=>members.some(member=>String(member.member_no).trim().toUpperCase()===value.trim().toUpperCase()||String(member.id)===value.trim()),currentValid=isRegistered(current),candidateValid=isRegistered(recognized);
           if((candidateValid&&!currentValid)||(!current&&confidence>0)||(!currentValid&&!candidateValid&&confidence>currentConfidence+8)){row[field]=recognized;row[confidenceKey]=confidence;}
-        }else if(!current||confidence>currentConfidence+5){row[field]=recognized;row[confidenceKey]=confidence;}
+        }else if(field==='remarks_text'){const parsed=sheetRemarks(recognized).join('/');if(parsed&&(!current||confidence>currentConfidence+5)){row[field]=parsed;row[confidenceKey]=confidence;}}
+        else if(field==='barcode'){const number=stickerFromText(recognized.replace(/-/g,' - ').replace(/\s-\s/g,'-'));if(number&&!row.barcodeDetected){row.barcode=number;row.barcodeScanError='';row[confidenceKey]=confidence;}}
+        else if(!current||confidence>currentConfidence+5){row[field]=recognized;row[confidenceKey]=confidence;}
       }
       onProgress(label,Math.min(offset+batchSize,total),total);
     }
@@ -155,15 +308,15 @@ function entrySheetRowsFromWorksheet(XLSX,arrayBuffer){
   if(!workbook.SheetNames?.length)throw new Error('The Excel file has no worksheet.');
   const sheet=workbook.Sheets[workbook.SheetNames[0]],matrix=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false,blankrows:true});
   if(!matrix.length)throw new Error('The first worksheet is empty.');
-  const aliases={sheetRow:['no','number','row','rownumber','sheetrow'],memberNo:['memberid','memberno','membernumber'],ring:['ring','ringnumber','pigeonring','pigeonringnumber'],barcode:['barcode','barcodenumber','stickercode','stickernumber']};
+  const aliases={sheetRow:['no','number','row','rownumber','sheetrow'],memberNo:['memberid','memberno','membernumber','loftname','loft'],ring:['ring','ringnumber','pigeonring','pigeonringnumber','pigeonid'],barcode:['barcode','barcodenumber','stickercode','stickernumber','sticker','stickerreferencenumber','referencenumber'],remarks:['remarks','remark','skipnotes','notes']};
   const headerRowIndex=matrix.slice(0,10).findIndex(row=>{const headers=new Set(row.map(normalizeImportHeader));return aliases.memberNo.some(name=>headers.has(name))&&aliases.ring.some(name=>headers.has(name))&&aliases.barcode.some(name=>headers.has(name));});
   if(headerRowIndex<0)throw new Error('Could not find the required headings in the first 10 rows. Use the template columns Member ID, Ring Number, and Barcode Number.');
-  const header=matrix[headerRowIndex].map(normalizeImportHeader),findColumn=names=>header.findIndex(value=>names.includes(value)),columns={sheetRow:findColumn(aliases.sheetRow),memberNo:findColumn(aliases.memberNo),ring:findColumn(aliases.ring),barcode:findColumn(aliases.barcode)};
+  const header=matrix[headerRowIndex].map(normalizeImportHeader),findColumn=names=>header.findIndex(value=>names.includes(value)),columns={sheetRow:findColumn(aliases.sheetRow),memberNo:findColumn(aliases.memberNo),ring:findColumn(aliases.ring),barcode:findColumn(aliases.barcode),remarks:findColumn(aliases.remarks)};
   const cell=(row,column)=>column<0?'':String(row[column]??'').trim(),dataRows=matrix.slice(headerRowIndex+1).map((row,index)=>({row,rowNumber:headerRowIndex+index+2})).filter(item=>item.row.some(value=>String(value??'').trim()!==''));
   if(!dataRows.length)throw new Error('No entry rows were found below the headings. Add one pigeon per row.');
   if(dataRows.length>1000)throw new Error('Import up to 1,000 race entries at a time. Split the worksheet into smaller batches.');
   const barcodeValue=value=>/^(?:=|#(?:N\/A|VALUE!|NAME\?|REF!|DIV\/0!))/i.test(value)||/(?:DISPIMG|IMAGE)\s*\(/i.test(value)?'':value;
-  return dataRows.map((item,index)=>({id:`sheet-${Date.now()}-${index}-${Math.random().toString(36).slice(2,7)}`,sheetRow:cell(item.row,columns.sheetRow)||String(item.rowNumber),sourceRowNumber:item.rowNumber,barcodeExcelColumn:columns.barcode,member_no:cell(item.row,columns.memberNo),pigeon_ring:cell(item.row,columns.ring),barcode:barcodeValue(cell(item.row,columns.barcode)),barcodeDetected:false,barcodeScanError:'',barcodeRegion:null,errors:[],member:null,saved:false}));
+  return dataRows.map((item,index)=>({id:`sheet-${Date.now()}-${index}-${Math.random().toString(36).slice(2,7)}`,sheetRow:cell(item.row,columns.sheetRow)||String(item.rowNumber),sourceRowNumber:item.rowNumber,barcodeExcelColumn:columns.barcode,member_no:cell(item.row,columns.memberNo),pigeon_ring:cell(item.row,columns.ring),remarks_text:sheetRemarks(cell(item.row,columns.remarks)).join('/'),barcode:barcodeValue(cell(item.row,columns.barcode)),barcodeDetected:false,barcodeScanError:'',barcodeRegion:null,errors:[],member:null,saved:false}));
 }
 const EXCEL_RELATIONSHIP_NAMESPACE='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 function excelXMLNodes(node,localName){return Array.from(node.getElementsByTagNameNS('*',localName));}
@@ -245,24 +398,27 @@ function clockWays(entry,readerByMember){
   return ways;
 }
 function distanceMeters(lat1,lon1,lat2,lon2){const rad=n=>n*Math.PI/180;const a=Math.sin(rad(lat2-lat1)/2)**2+Math.cos(rad(lat1))*Math.cos(rad(lat2))*Math.sin(rad(lon2-lon1)/2)**2;return 6371008.8*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
-function mountEntrySheetImport(view,races,members,entries,readerByMember=new Map(),birds=null){
+function mountEntrySheetImport(view,races,members,entries,readerByMember=new Map(),birds=null,remarkLabels=[]){
   const birdById=new Map((birds||[]).map(bird=>[bird.id,bird]));
   const existingForm=view.querySelector('#entry-form');
-  const importPanel=`<div class="entry-sheet-panel"><p class="entry-tab-intro" data-sheet-only>Upload a photo or PDF of the race sheet. Handwritten member IDs and ring numbers are read and the barcodes scanned.</p><p class="entry-tab-intro" data-excel-only>Download the Excel template, fill it in, then import it. Required columns: Member ID, Ring Number, and Barcode Number.</p><div class="entry-sheet-controls" data-sheet-only><label class="field"><span>Document photo or PDF</span><input type="file" data-sheet-file accept="image/*,.pdf,application/pdf" capture="environment"><small class="small">Reads handwritten IDs and ring numbers; review red rows because handwriting can be misread. PDF uploads read the first page. Rotate if the text is sideways.</small></label></div><div class="entry-sheet-actions" data-excel-only><button class="button secondary" type="button" data-download-entry-template>Download Excel template</button><button class="button secondary" type="button" data-open-entry-excel>Import Excel</button><input type="file" data-entry-excel accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden></div><p class="small" data-excel-only>Template columns: No. (optional), Member ID, Ring Number, Skip / Notes (ignored), Barcode Number. Enter barcode values as text to preserve leading zeroes. For barcode pictures, use an .xlsx file with the image in the Barcode Number cell; the importer will scan it.</p><div class="entry-sheet-actions" data-sheet-only><button class="button secondary" type="button" data-rotate-sheet disabled>Rotate 90°</button><button class="button primary" type="button" data-read-sheet disabled>Read photo + scan barcodes</button></div><p class="entry-sheet-status" data-sheet-status aria-live="polite">Choose the race schedule above, then upload a photo/PDF or import an Excel file.</p><div class="entry-sheet-preview" data-sheet-preview data-sheet-only hidden><canvas data-sheet-preview-canvas></canvas></div><section class="entry-sheet-review" data-sheet-review hidden><div class="panel-heading"><div><h3>Review race entries</h3><p class="small">All detected rows stay in the table. Red rows show errors; fix them before saving those entries.</p></div><span class="count-pill" data-sheet-count></span></div><div data-sheet-table></div><div class="form-actions"><button class="button secondary" type="button" data-clear-sheet>Clear scan</button><button class="button primary" type="button" data-save-sheet disabled>Save valid entries</button></div></section></div>`;
+  const importPanel=`<div class="entry-sheet-panel"><p class="entry-tab-intro" data-sheet-only>Upload a photo or PDF of the loading form. Columns are read left to right: <strong>member ID</strong> (Loft name), <strong>ring number</strong> (Pigeon I.D.), <strong>remarks</strong> (P1/P2/P3) and the <strong>sticker</strong> (its barcode, or the printed reference number).</p><p class="entry-tab-intro" data-excel-only>Download the Excel template, fill it in, then import it. Required columns: Member ID, Ring Number, and Barcode Number.</p><div class="entry-sheet-controls" data-sheet-only><label class="field"><span>Document photo or PDF</span><input type="file" data-sheet-file accept="image/*,.pdf,application/pdf" capture="environment"><small class="small">Handwriting can be misread: review red rows before saving. PDF uploads read the first page. Rotate if the text is sideways.</small></label></div><div class="entry-sheet-actions" data-excel-only><button class="button secondary" type="button" data-download-entry-template>Download Excel template</button><button class="button secondary" type="button" data-open-entry-excel>Import Excel</button><input type="file" data-entry-excel accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden></div><p class="small" data-excel-only>Template columns: No. (optional), Member ID, Ring Number, Remarks (optional, e.g. P1/P2/P3), Barcode Number. Enter barcode values as text to preserve leading zeroes. For barcode pictures, use an .xlsx file with the image in the Barcode Number cell; the importer will scan it.</p><div class="entry-sheet-actions" data-sheet-only><button class="button secondary" type="button" data-sheet-camera>Take photo with guide</button><button class="button secondary" type="button" data-rotate-sheet disabled>Rotate 90°</button><button class="button primary" type="button" data-read-sheet disabled>Read photo + scan barcodes</button></div><p class="entry-sheet-status" data-sheet-status aria-live="polite">Choose the race schedule above, then upload a photo/PDF or import an Excel file.</p><div class="entry-sheet-grid-note" data-sheet-grid-note data-sheet-only hidden></div><div class="entry-sheet-preview" data-sheet-preview data-sheet-only hidden><canvas data-sheet-preview-canvas></canvas></div><section class="entry-sheet-review" data-sheet-review hidden><div class="panel-heading"><div><h3>Review race entries</h3><p class="small">All detected rows stay in the table. Red rows show errors; fix them before saving those entries.</p></div><span class="count-pill" data-sheet-count></span></div><div data-sheet-table></div><div class="form-actions"><button class="button secondary" type="button" data-clear-sheet>Clear scan</button><button class="button primary" type="button" data-save-sheet disabled>Save valid entries</button></div></section></div>`;
   // Insert the panel without re-rendering the page, so the handlers already set
   // on the entry form (save, camera scan, NFC) keep working.
   const importPane=view.querySelector('[data-entry-pane="import"]');
   if(importPane)importPane.insertAdjacentHTML('beforeend',importPanel);
   else if(existingForm)existingForm.closest('section').insertAdjacentHTML('beforebegin',importPanel);
   else view.insertAdjacentHTML('afterbegin',importPanel);
-  const fileInput=view.querySelector('[data-sheet-file]'),excelFileInput=view.querySelector('[data-entry-excel]'),raceSelect=view.querySelector('[data-sheet-race]'),readButton=view.querySelector('[data-read-sheet]'),rotateButton=view.querySelector('[data-rotate-sheet]'),status=view.querySelector('[data-sheet-status]'),preview=view.querySelector('[data-sheet-preview]'),previewCanvas=view.querySelector('[data-sheet-preview-canvas]'),review=view.querySelector('[data-sheet-review]'),table=view.querySelector('[data-sheet-table]'),count=view.querySelector('[data-sheet-count]'),saveButton=view.querySelector('[data-save-sheet]');
+  const fileInput=view.querySelector('[data-sheet-file]'),excelFileInput=view.querySelector('[data-entry-excel]'),raceSelect=view.querySelector('[data-sheet-race]'),readButton=view.querySelector('[data-read-sheet]'),rotateButton=view.querySelector('[data-rotate-sheet]'),status=view.querySelector('[data-sheet-status]'),preview=view.querySelector('[data-sheet-preview]'),previewCanvas=view.querySelector('[data-sheet-preview-canvas]'),review=view.querySelector('[data-sheet-review]'),table=view.querySelector('[data-sheet-table]'),count=view.querySelector('[data-sheet-count]'),saveButton=view.querySelector('[data-save-sheet]'),gridNote=view.querySelector('[data-sheet-grid-note]'),cameraButton=view.querySelector('[data-sheet-camera]');
   if(!fileInput)return;
   let sourceCanvas=null,rotation=0,rows=[],validationTimer=null,validationSequence=0;
   const drawRegistered=()=>{const raceId=Number(raceSelect.value),mapped=entries.filter(entry=>!raceId||Number(entry.race_id)===raceId).map(entry=>({...entry,member:members.find(member=>member.id===entry.member_id),race:races.find(race=>race.id===entry.race_id)}));view.querySelector('[data-registered-entries]').innerHTML=tableRows(mapped,[{key:'race',label:'Race',render:item=>escapeHTML(item.race?.name||'—')},{key:'member',label:'Member',render:item=>`<span title="${escapeHTML(item.member?.member_no||'')}">${escapeHTML(item.member?.full_name||item.member?.member_no||'—')}</span>`},{key:'pigeon_ring',label:'Ring number',render:r=>{const bird=r.pigeon_id&&birdById.get(r.pigeon_id);return `${escapeHTML(ringLabel(r.pigeon_ring,r.remarks))}${bird?`<br><span class="small">${escapeHTML(bird.bird_name)} · ${escapeHTML(bird.color)}</span>`:''}`;}},{key:'barcode',label:'Sticker barcode',render:r=>escapeHTML(r.barcode||'—')},{key:'nfc_tag',label:'NFC tag',render:r=>r.nfc_tag?`${escapeHTML(formatNfcUid(r.nfc_tag))}${r.nfc_expires_at?`<br><span class="small ${tagExpired(r)?'tag-expired':''}">${tagExpired(r)?'Expired':'Expires'} ${escapeHTML(formatDate(r.nfc_expires_at))}</span>`:''}${r.nfc_read_with?`<br><span class="small">via ${({wireless:'wireless reader',wired:'USB reader',phone:'Android phone'})[r.nfc_read_with]||escapeHTML(r.nfc_read_with)}</span>`:''}`:'—'},{key:'clock_with',label:'Clock with',render:r=>escapeHTML(clockWays(r,readerByMember).join(' · ')||'—')},{key:'distance_m',label:'Distance',render:item=>`${number(item.distance_m)} m`}],raceId?'No pigeons registered for this race yet.':'No pigeons registered.',false);};
   drawRegistered();raceSelect.addEventListener('change',drawRegistered);
+  // A small picture of the cell as written on the sheet, to check what was read.
+  let cellSource=null;
+  const cellImage=(row,key)=>{const g=row[key];if(!cellSource||!g)return '';if(!row.pictures)row.pictures={};if(!(key in row.pictures)){try{const w=Math.max(1,Math.round(g.right-g.left)),h=Math.max(1,Math.round(g.bottom-g.top)),scale=Math.min(1,220/w),c=document.createElement('canvas');c.width=Math.max(1,Math.round(w*scale));c.height=Math.max(1,Math.round(h*scale));c.getContext('2d').drawImage(cellSource,g.left,g.top,w,h,0,0,c.width,c.height);row.pictures[key]=c.toDataURL('image/jpeg',.7);}catch{row.pictures[key]='';}}return row.pictures[key]?`<img class="entry-sheet-cell" src="${row.pictures[key]}" alt="">`:'';};
   const redrawRows=()=>{
     review.hidden=!rows.length;count.textContent=`${rows.length} row${rows.length===1?'':'s'}`;
-    table.innerHTML=rows.length?`<div class="table-scroll entry-sheet-table"><table><thead><tr><th>Sheet row</th><th>Member ID</th><th>Ring</th><th>Barcode</th><th>Error / status</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr data-sheet-row="${escapeHTML(row.id)}" class="${row.saved?'is-saved':row.errors?.length?'has-errors':''}"><td data-label="Sheet row"><span class="entry-sheet-row-number">${escapeHTML(row.sheetRow)}</span></td><td data-label="Member ID"><input class="entry-sheet-input" data-sheet-field="member_no" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.member_no)}" aria-label="Member ID, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Ring"><input class="entry-sheet-input" data-sheet-field="pigeon_ring" data-sheet-id="${escapeHTML(row.id)}" maxlength="80" value="${escapeHTML(row.pigeon_ring)}" aria-label="Ring number, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Barcode"><input class="entry-sheet-input" data-sheet-field="barcode" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.barcode)}" aria-label="Barcode, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Error / status"><span class="entry-sheet-row-status ${row.saved?'is-saved':row.errors?.length?'has-error':''}" data-sheet-row-status="${escapeHTML(row.id)}">${row.saved?'Saved':'Checking…'}</span></td><td data-label="Remove"><button class="text-button danger-text" type="button" data-remove-sheet-row="${escapeHTML(row.id)}" ${row.saved?'disabled':''}>Remove</button></td></tr>`).join('')}</tbody></table></div>`:'';
+    table.innerHTML=rows.length?`<div class="table-scroll entry-sheet-table"><table><thead><tr><th>Sheet row</th><th>Member ID</th><th>Ring</th><th>Remarks</th><th>Sticker</th><th>Error / status</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr data-sheet-row="${escapeHTML(row.id)}" class="${row.saved?'is-saved':row.errors?.length?'has-errors':''}"><td data-label="Sheet row"><span class="entry-sheet-row-number">${escapeHTML(row.sheetRow)}</span></td><td data-label="Member ID">${cellImage(row,'memberRegion')}<input class="entry-sheet-input" data-sheet-field="member_no" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.member_no)}" aria-label="Member ID, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Ring">${cellImage(row,'ringRegion')}<input class="entry-sheet-input" data-sheet-field="pigeon_ring" data-sheet-id="${escapeHTML(row.id)}" maxlength="80" value="${escapeHTML(row.pigeon_ring)}" aria-label="Ring number, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Remarks">${cellImage(row,'remarksRegion')}<input class="entry-sheet-input entry-sheet-remarks" data-sheet-field="remarks_text" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.remarks_text||'')}" placeholder="P1/P2" aria-label="Remarks, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Sticker">${cellImage(row,'barcodeRegion')}<input class="entry-sheet-input" data-sheet-field="barcode" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.barcode)}" aria-label="Barcode, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Error / status"><span class="entry-sheet-row-status ${row.saved?'is-saved':row.errors?.length?'has-error':''}" data-sheet-row-status="${escapeHTML(row.id)}">${row.saved?'Saved':'Checking…'}</span></td><td data-label="Remove"><button class="text-button danger-text" type="button" data-remove-sheet-row="${escapeHTML(row.id)}" ${row.saved?'disabled':''}>Remove</button></td></tr>`).join('')}</tbody></table></div>`:'';
     table.querySelectorAll('[data-sheet-field]').forEach(input=>input.addEventListener('input',()=>{const row=rows.find(item=>item.id===input.dataset.sheetId);if(row){row[input.dataset.sheetField]=input.value;if(input.dataset.sheetField==='barcode')row.barcodeScanError='';}clearTimeout(validationTimer);validationTimer=setTimeout(()=>validateRows(),400);}));
     table.querySelectorAll('[data-remove-sheet-row]').forEach(button=>button.onclick=()=>{rows=rows.filter(row=>row.id!==button.dataset.removeSheetRow);redrawRows();validateRows();});
   };
@@ -275,19 +431,21 @@ function mountEntrySheetImport(view,races,members,entries,readerByMember=new Map
       const indicator=table.querySelector(`[data-sheet-row-status="${row.id}"]`),rowElement=table.querySelector(`[data-sheet-row="${row.id}"]`);
       if(row.saved){row.errors=[];savedCount++;if(indicator){indicator.textContent='Saved';indicator.classList.remove('has-error','is-ready');indicator.classList.add('is-saved');}rowElement?.classList.remove('has-errors');rowElement?.classList.add('is-saved');continue;}
       const errors=[],memberCode=row.member_no.trim(),ring=row.pigeon_ring.trim().toUpperCase(),barcode=row.barcode.trim();
-      row.member=members.find(member=>String(member.member_no).trim().toUpperCase()===memberCode.toUpperCase())||members.find(member=>String(member.id)===memberCode)||null;
+      row.member=sheetMember(members,memberCode);
       if(!raceId)errors.push('Choose a race.');
       if(!memberCode||!row.member)errors.push('Member ID is not registered in this club.');
       if(!ring)errors.push('Ring number is missing.');
       // With bird bonding, each row must be one of the member's active bonded birds.
       row.pigeon_id=null;
-      if(birds&&ring&&row.member){const bird=birds.find(item=>item.member_id===row.member.id&&item.status==='active'&&String(item.ring_number).toUpperCase()===ring);if(bird)row.pigeon_id=bird.id;else errors.push('Ring is not bonded to this member. Bond it on Bird bonding first.');}
+      if(birds&&ring&&row.member){const bird=sheetBird(birds,row.member.id,ring);if(bird){row.pigeon_id=bird.id;row.bondedRing=bird.ring_number;}else errors.push('Ring is not bonded to this member. Bond it on Bird bonding first.');}
+      row.remarks=sheetRemarks(row.remarks_text);
+      if(remarkLabels.length){const unknown=row.remarks.filter(token=>!remarkLabels.some(label=>label.toUpperCase()===token));if(unknown.length)errors.push(`Remark ${unknown.join(', ')} is not in the club's remarks list (Entry remarks).`);row.remarks=row.remarks.map(token=>remarkLabels.find(label=>label.toUpperCase()===token)||token);}
       if(!barcode)errors.push(row.barcodeScanError||'Barcode is missing.');
       else if(row.barcodeScanError)errors.push(row.barcodeScanError);
       if(barcode.length>120)errors.push('Barcode is longer than 120 characters.');
       if(registryError&&barcode)errors.push('Could not verify the sticker registry. Check the connection.');
       else if(barcode&&!registered.has(barcode))errors.push('Barcode is not registered by Super Admin.');
-      if(ring&&raceEntries.some(entry=>String(entry.pigeon_ring||'').toUpperCase()===ring))errors.push('Ring is already registered for this race.');
+      const savedRing=String(row.bondedRing||ring).toUpperCase();if(ring&&raceEntries.some(entry=>String(entry.pigeon_ring||'').toUpperCase()===savedRing||(row.pigeon_id&&entry.pigeon_id===row.pigeon_id)))errors.push('Ring is already registered for this race.');
       if(barcode&&raceEntries.some(entry=>entry.barcode===barcode))errors.push('Barcode is already registered for this race.');
       if(ring&&seenRings.has(ring))errors.push('Ring is duplicated in this scan.');
       if(barcode&&seenCodes.has(barcode))errors.push('Barcode is duplicated in this scan.');
@@ -297,11 +455,25 @@ function mountEntrySheetImport(view,races,members,entries,readerByMember=new Map
     }
     saveButton.disabled=!ready||!raceId;saveButton.textContent=ready?`Save ${ready} valid entr${ready===1?'y':'ies'}`:'Save valid entries';count.textContent=`${rows.length} items · ${savedCount} saved · ${ready} ready · ${errorCount} errors`;
   }
-  const drawPreview=()=>{if(!sourceCanvas)return;const rotated=rotateDocumentCanvas(sourceCanvas,rotation);previewCanvas.width=rotated.width;previewCanvas.height=rotated.height;previewCanvas.getContext('2d').drawImage(rotated,0,0);preview.hidden=false;rotateButton.disabled=false;readButton.disabled=false;};
+  // The preview shows the table the reader found: each row's Member ID, Ring,
+  // Remarks and Sticker cells, so the photo can be rotated or retaken before reading.
+  const COLUMN_STYLES=[['Member ID','#2563eb'],['Ring','#16a34a'],['Remarks','#f97316'],['Sticker','#9333ea']];
+  const drawGridOverlay=(context,found)=>{
+    const keys=['memberRegion','ringRegion','remarksRegion','barcodeRegion'],line=Math.max(2,Math.round(context.canvas.width/450));
+    found.forEach((row,index)=>keys.forEach((key,k)=>{const g=row[key];if(!g)return;const [label,colour]=COLUMN_STYLES[k];context.fillStyle=`${colour}22`;context.strokeStyle=colour;context.lineWidth=line;context.fillRect(g.left,g.top,g.right-g.left,g.bottom-g.top);context.strokeRect(g.left+line,g.top+line,g.right-g.left-2*line,g.bottom-g.top-2*line);
+      if(!index){const size=Math.max(14,Math.round(context.canvas.width/70));context.font=`700 ${size}px sans-serif`;const width=context.measureText(label).width+size;context.fillStyle=colour;context.fillRect(g.left,g.top-size*1.6,width,size*1.5);context.fillStyle='#fff';context.fillText(label,g.left+size/2,g.top-size*.45);}}));
+    const size=Math.max(14,Math.round(context.canvas.width/70));context.font=`700 ${size}px sans-serif`;found.forEach(row=>{const g=row.memberRegion;context.fillStyle='#0f2a44';context.fillText(row.sheetRow,g.left-size*1.6,(g.top+g.bottom)/2+size/3);});
+  };
+  let previewGrid=null;
+  const drawPreview=()=>{if(!sourceCanvas)return;const rotated=rotateDocumentCanvas(sourceCanvas,rotation);previewCanvas.width=rotated.width;previewCanvas.height=rotated.height;const context=previewCanvas.getContext('2d');context.drawImage(rotated,0,0);preview.hidden=false;rotateButton.disabled=false;readButton.disabled=false;
+    let found=[];try{const grid=detectTableGrid(rotated);found=grid?entrySheetRowsFromGrid(grid,rotated):[];}catch(error){console.warn('Table check failed:',error);}
+    previewGrid=found.length?found:null;if(found.length)drawGridOverlay(context,found);
+    gridNote.hidden=false;gridNote.className=`entry-sheet-grid-note ${found.length?'is-ok':'is-bad'}`;
+    gridNote.innerHTML=found.length?`<strong>Table found: ${found.length} row${found.length===1?'':'s'}.</strong> Check that the coloured boxes sit on the Member ID, Ring, Remarks and Sticker columns. If they do not, rotate the photo or take a new one straight on.`:'<strong>Table not found.</strong> Rotate the photo until the text is upright, or take a new photo straight on with the whole form inside and no shadows. The text can still be read without the table, but less reliably.';};
   view.querySelector('[data-download-entry-template]').onclick=async event=>{
     const button=event.currentTarget;button.disabled=true;
     try{
-      const XLSX=await loadSpreadsheetParser(),workbook=XLSX.utils.book_new(),sheet=XLSX.utils.aoa_to_sheet([['No.','Member ID','Ring Number','Skip / Notes','Barcode Number']]),instructions=XLSX.utils.aoa_to_sheet([['Race entry Excel template'],['Fill one pigeon per row on the Race Entries sheet.'],['Required: Member ID, Ring Number, Barcode Number.'],['No. and Skip / Notes are optional; Skip / Notes is ignored.'],['Member ID must already exist in this club.'],['Barcode Number must already be registered by Super Admin.'],['Enter barcode values as Text to preserve leading zeroes.'],['Barcode pictures in the Barcode Number column are decoded when importing .xlsx files.'],['Import the completed workbook in Admin → Race entries, review red errors, then save valid entries.']]);
+      const XLSX=await loadSpreadsheetParser(),workbook=XLSX.utils.book_new(),sheet=XLSX.utils.aoa_to_sheet([['No.','Member ID','Ring Number','Remarks','Barcode Number']]),instructions=XLSX.utils.aoa_to_sheet([['Race entry Excel template'],['Fill one pigeon per row on the Race Entries sheet.'],['Required: Member ID, Ring Number, Barcode Number.'],['No. and Remarks are optional. Remarks: the club\'s remarks separated by /, for example P1/P2/P3.'],['Member ID must already exist in this club.'],['Barcode Number must already be registered by Super Admin.'],['Enter barcode values as Text to preserve leading zeroes.'],['Barcode pictures in the Barcode Number column are decoded when importing .xlsx files.'],['Import the completed workbook in Admin → Race entries, review red errors, then save valid entries.']]);
       sheet['!cols']=[{wch:10},{wch:20},{wch:24},{wch:24},{wch:24}];instructions['!cols']=[{wch:100}];XLSX.utils.book_append_sheet(workbook,sheet,'Race Entries');XLSX.utils.book_append_sheet(workbook,instructions,'Instructions');XLSX.writeFile(workbook,'avilonx-race-entries-template.xlsx');message('Race entry Excel template downloaded. Fill one pigeon per row, then import it for review.','success');
     }catch(error){message(error.message||'Could not create the Excel template.','error');}
     finally{button.disabled=false;}
@@ -328,20 +500,51 @@ function mountEntrySheetImport(view,races,members,entries,readerByMember=new Map
     finally{excelFileInput.value='';}
   };
   fileInput.onchange=async()=>{const file=fileInput.files?.[0];if(!file)return;rows=[];redrawRows();readButton.disabled=true;rotateButton.disabled=true;status.textContent='Preparing the document…';try{sourceCanvas=await documentFileToCanvas(file);rotation=0;drawPreview();status.textContent=`${file.name} is ready. Rotate if needed, then read it.`;}catch(error){sourceCanvas=null;preview.hidden=true;status.textContent=error.message;message(error.message,'error');}};
+  // Camera with a guide: line the form up with the frame; the boxes turn green
+  // when the table is found, then take the photo.
+  cameraButton.onclick=async()=>{
+    if(!navigator.mediaDevices?.getUserMedia){message('This browser cannot open the camera here. Use Choose File (it can take a photo on phones).','error');return;}
+    let stream=null,timer=null,busy=false;
+    const dialog=document.createElement('dialog');dialog.className='sheet-camera';
+    dialog.innerHTML='<div class="sheet-camera-stage"><video playsinline muted autoplay></video><canvas class="sheet-camera-overlay"></canvas><div class="sheet-camera-frame" aria-hidden="true"><span>Member ID</span><span>Ring</span><span>Remarks</span><span>Sticker</span></div></div><p class="sheet-camera-status" data-camera-status>Hold the form upright inside the frame, straight on, with good light.</p><div class="sheet-camera-actions"><button type="button" class="button secondary" data-camera-cancel>Cancel</button><button type="button" class="button primary" data-camera-take>Take photo</button></div>';
+    document.body.append(dialog);
+    const video=dialog.querySelector('video'),overlay=dialog.querySelector('.sheet-camera-overlay'),cameraStatus=dialog.querySelector('[data-camera-status]');
+    const close=()=>{clearInterval(timer);stream?.getTracks().forEach(track=>track.stop());dialog.close();dialog.remove();};
+    dialog.querySelector('[data-camera-cancel]').onclick=close;dialog.addEventListener('cancel',close);
+    try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:2560},height:{ideal:1920}},audio:false});}catch(error){dialog.remove();message('The camera could not be opened. Allow camera access, or use Choose File.','error');return;}
+    video.srcObject=stream;try{dialog.showModal();}catch{dialog.setAttribute('open','');}
+    // Live check: find the table in the camera picture about twice a second.
+    timer=setInterval(()=>{
+      if(busy||!video.videoWidth)return;busy=true;
+      try{const scale=Math.min(1,900/Math.max(video.videoWidth,video.videoHeight)),frame=document.createElement('canvas');frame.width=Math.round(video.videoWidth*scale);frame.height=Math.round(video.videoHeight*scale);frame.getContext('2d').drawImage(video,0,0,frame.width,frame.height);
+        const grid=detectTableGrid(frame),found=grid?entrySheetRowsFromGrid(grid,frame):[];
+        overlay.width=frame.width;overlay.height=frame.height;const context=overlay.getContext('2d');context.clearRect(0,0,overlay.width,overlay.height);if(found.length)drawGridOverlay(context,found);
+        dialog.classList.toggle('is-found',found.length>0);cameraStatus.textContent=found.length?`Table found: ${found.length} row${found.length===1?'':'s'}. Hold still and take the photo.`:'Looking for the table… keep the whole form inside the frame, upright and straight on.';
+      }catch(error){console.warn('Live table check failed:',error);}finally{busy=false;}
+    },500);
+    dialog.querySelector('[data-camera-take]').onclick=()=>{
+      if(!video.videoWidth)return;const scale=Math.min(1,2600/Math.max(video.videoWidth,video.videoHeight)),canvas=document.createElement('canvas');canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);canvas.getContext('2d',{willReadFrequently:true}).drawImage(video,0,0,canvas.width,canvas.height);
+      close();rows=[];redrawRows();sourceCanvas=canvas;rotation=0;fileInput.value='';drawPreview();status.textContent='Photo taken. Check the boxes on the preview, then read it.';
+    };
+  };
   rotateButton.onclick=()=>{rotation=(rotation+90)%360;drawPreview();status.textContent=`Preview rotated ${rotation}°. Read it when the text is upright.`;};
   readButton.onclick=async()=>{
     if(!sourceCanvas)return;if(!Number(raceSelect.value)){message('Choose the race schedule for this sheet first.','error');raceSelect.focus();return;}
     readButton.disabled=true;rotateButton.disabled=true;status.textContent='Loading the document reader…';let worker=null;
     try{
       const OCR=await loadDocumentOCR();worker=await OCR.createWorker('eng',1,{workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',langPath:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int',logger:progress=>{if(progress.status==='recognizing text')status.textContent=`Reading document… ${Math.round((progress.progress||0)*100)}%`;else if(progress.status)status.textContent=`${progress.status}…`;}});
-      const rotated=rotateDocumentCanvas(sourceCanvas,rotation),result=await worker.recognize(rotated);rows=entrySheetRowsFromOCR(result.data,rotated);
+      const rotated=rotateDocumentCanvas(sourceCanvas,rotation),grid=detectTableGrid(rotated);cellSource=rotated;
+      // A photo of the loading form: rows from its ruled table, then each cell read on its own.
+      if(grid)rows=entrySheetRowsFromGrid(grid,rotated);
+      if(!grid||!rows.length){const result=await worker.recognize(rotated);rows=entrySheetRowsFromOCR(result.data,rotated);}
       if(!rows.length){status.textContent='No rows were detected. Rotate the document or use a clearer scan, then try again.';review.hidden=true;return;}
       status.textContent=`Detected ${rows.length} item${rows.length===1?'':'s'}. Checking handwritten IDs and ring numbers…`;
-      try{await refineHandwrittenEntryFields(worker,rotated,rows,members,(field,current,total)=>{status.textContent=`Reading ${field.toLowerCase()}… ${current} of ${total}`;});}catch(error){console.warn('Handwriting OCR refinement failed:',error);}
-      redrawRows();
       status.textContent=`Detected ${rows.length} item${rows.length===1?'':'s'}. Scanning each barcode…`;
       try{const barcodeReader=await loadDocumentBarcodeReader();await scanSheetBarcodes(rotated,rows,barcodeReader,(current,total)=>{status.textContent=`Scanning barcode images… ${current} of ${total}`;});}
       catch(error){console.warn('Race-sheet barcode decoding is unavailable:',error);rows.forEach(row=>{row.barcodeDetected=false;row.barcodeScanError='Barcode scanner could not load. Type or confirm this barcode manually.';});}
+      status.textContent='Reading the handwriting…';
+      try{await refineHandwrittenEntryFields(worker,rotated,rows,members,(field,current,total)=>{status.textContent=`Reading ${field.toLowerCase()}… ${current} of ${total}`;});}catch(error){console.warn('Handwriting OCR refinement failed:',error);}
+      redrawRows();
       redrawRows();status.textContent=`Scanned ${rows.length} item${rows.length===1?'':'s'}. Red rows show the errors to fix; review the OCR values before saving.`;await validateRows();review.scrollIntoView({behavior:'smooth',block:'start'});
     }catch(error){status.textContent=error.message||'Could not read this document.';message(status.textContent,'error');}
     finally{if(worker)await worker.terminate();readButton.disabled=!sourceCanvas;rotateButton.disabled=!sourceCanvas;}
@@ -350,7 +553,7 @@ function mountEntrySheetImport(view,races,members,entries,readerByMember=new Map
   view.querySelector('[data-clear-sheet]').onclick=()=>{rows=[];sourceCanvas=null;rotation=0;fileInput.value='';excelFileInput.value='';preview.hidden=true;review.hidden=true;readButton.disabled=true;rotateButton.disabled=true;saveButton.disabled=true;status.textContent='Choose the race schedule above, then upload a photo/PDF or import an Excel file.';};
   saveButton.onclick=async()=>{
     await validateRows();const race=races.find(item=>item.id===Number(raceSelect.value)),valid=rows.filter(row=>!row.saved&&!row.errors.length&&row.member);if(!race||!valid.length){message('There are no valid rows to save. Correct the red rows in the table.','error');return;}
-    const payload=valid.map(row=>({race_id:race.id,member_id:row.member.id,pigeon_ring:row.pigeon_ring.trim().toUpperCase(),barcode:row.barcode.trim(),pooling:0,category:'Open Category',race_type:'Regular Race/Set',distance_m:distanceMeters(race.release_latitude,race.release_longitude,row.member.latitude,row.member.longitude),...(row.pigeon_id?{pigeon_id:row.pigeon_id}:{})}));
+    const payload=valid.map(row=>({race_id:race.id,member_id:row.member.id,pigeon_ring:String(row.bondedRing||row.pigeon_ring).trim().toUpperCase(),barcode:row.barcode.trim(),...(row.remarks?.length?{remarks:row.remarks}:{}),pooling:0,category:'Open Category',race_type:'Regular Race/Set',distance_m:distanceMeters(race.release_latitude,race.release_longitude,row.member.latitude,row.member.longitude),...(row.pigeon_id?{pigeon_id:row.pigeon_id}:{})}));
     saveButton.disabled=true;saveButton.textContent='Saving…';const {error}=await supabase.from('race_entries').insert(payload);if(error){message(dbError(error),'error');await validateRows();return;}
     valid.forEach(row=>{row.saved=true;row.errors=[];});entries.unshift(...payload.map((entry,index)=>({...entry,id:`sheet-entry-${Date.now()}-${index}`})));drawRegistered();redrawRows();await validateRows();
     const errorsLeft=rows.filter(row=>!row.saved).length;status.textContent=errorsLeft?`Saved ${valid.length} pigeon${valid.length===1?'':'s'}; ${errorsLeft} row${errorsLeft===1?'':'s'} still have errors.`:`Saved ${valid.length} pigeon${valid.length===1?'':'s'}. All scanned items remain visible in the table.`;message(status.textContent,errorsLeft?'info':'success');
@@ -537,7 +740,7 @@ export async function entriesPage(view,setPageCleanup=()=>{}) {
   const stopDeviceScans=listenForDeviceScans((uid,reader)=>{if(readerChoice()!=='wireless'||!tabIsRegister())return;tapFromReader(uid,reader);});
   setPageCleanup(()=>{disposed=true;stopEntryNfc();clearTimeout(nfcTimer);stopStickerScanner();stopReaderKeys();stopDeviceScans();});
   if(tapButton)tapButton.onclick=async()=>{tapButton.disabled=true;message('Hold the pigeon\'s NFC tag against the back of the phone…','info');let stop=()=>{};try{stop=await startPhoneNfc(uid=>{stop();tapButton.disabled=false;handleTag(uid,'the phone');},error=>message(error.message,'error'));stopEntryNfc=stop;if(disposed){stop();return;}nfcTimer=setTimeout(()=>{if(tapButton.disabled){stop();tapButton.disabled=false;}},30000);}catch(error){tapButton.disabled=false;message(error.message,'error');}};
-  mountEntrySheetImport(view,races,members,entries,readerByMember,birds);
+  mountEntrySheetImport(view,races,members,entries,readerByMember,birds,remarkOptions);
   view.querySelector('#entry-race').addEventListener('change',()=>showLastRace());
   entryForm.addEventListener('entry-mode',()=>showLastRace());
   // More options: show the current choices in its heading.

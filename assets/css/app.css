@@ -952,3 +952,22 @@ body.login-page{min-height:100vh;background:#f3f6f9}
   .entries-tab-bar{padding:0 4px}
   .entries-options .button.primary{width:100%}
 }
+
+/* Scan race sheet: table check, cell pictures, camera guide */
+.entry-sheet-grid-note{margin-top:12px;padding:10px 14px;border-radius:10px;font-size:13px;line-height:1.5}
+.entry-sheet-grid-note[hidden]{display:none}
+.entry-sheet-grid-note.is-ok{background:#e7f6ee;color:#11653a}
+.entry-sheet-grid-note.is-bad{background:#fff4dc;color:#8a5a00}
+.entry-sheet-cell{display:block;max-width:180px;max-height:64px;margin:0 0 6px;border:1px solid var(--line);border-radius:6px;background:#fff;object-fit:contain}
+.sheet-camera{width:min(760px,calc(100% - 16px));max-height:calc(100% - 16px);padding:12px;border:0;border-radius:16px;background:#0f1a16;color:#fff}
+.sheet-camera::backdrop{background:#000c}
+.sheet-camera-stage{position:relative;overflow:hidden;border-radius:10px;background:#000}
+.sheet-camera-stage video,.sheet-camera-overlay{display:block;width:100%;height:auto;max-height:70vh;object-fit:contain}
+.sheet-camera-overlay{position:absolute;inset:0;height:100%;pointer-events:none}
+.sheet-camera-frame{position:absolute;inset:8% 6%;display:grid;grid-template-columns:34fr 22fr 20fr 19fr;margin-left:5%;border:3px dashed #ffffffaa;border-radius:8px;pointer-events:none}
+.sheet-camera-frame span{display:flex;align-items:flex-start;justify-content:center;padding-top:6px;border-left:2px dashed #ffffff66;color:#fff;font-size:12px;font-weight:700;text-shadow:0 1px 2px #000}
+.sheet-camera-frame span:first-child{border-left:0}
+.sheet-camera.is-found .sheet-camera-frame{border-color:#22c55e;opacity:.35}
+.sheet-camera-status{margin:10px 2px;font-weight:600}
+.sheet-camera.is-found .sheet-camera-status{color:#86efac}
+.sheet-camera-actions{display:flex;justify-content:flex-end;gap:10px}
