@@ -32,54 +32,66 @@ export async function barcodePngDataUrl(code,options){
   }finally{URL.revokeObjectURL(objectUrl);}
 }
 
-// Small, readable and scannable: each sticker set is about 62.8 x 5 mm, a
-// 28.5 mm reference stub and a 34.5 x 5 mm clocking label (9 mm number +
-// barcode). Pieces are sized from their barcodes plus BARCODE_QUIET_MM of white
-// on each side, so there is little blank space; the barcodes fill the rest,
-// which makes their bars thicker (about 0.3 mm) and easier to scan.
-// Four sets with 5 mm cutting gaps fit across an A4 landscape sheet, 38 rows
-// down (152 per page). Each piece has a dashed box drawn just inside its edge;
-// the clocking label's box holds both the number and the barcode. The 8-digit
-// reference barcode is 24 mm and the 6-digit clocking barcode 21 mm wide, about
-// 2.2 mm tall, with BARCODE_QUIET_MM of white before the box line; text is
-// 4.5 pt. Box lines are dashed because a solid line beside a barcode stopped it
-// scanning in tests.
-export const CODES_PER_ROW=4,STICKER_ROWS=38,STICKERS_PER_PAGE=CODES_PER_ROW*STICKER_ROWS;
-// White kept on each side of a barcode, inside its box (the quiet zone).
+// Sticker size and A4 landscape layout, worked out from a chosen height and the
+// widths of the left column (reference stub) and right column (clocking label).
+// Barcodes, text and boxes scale to fit; the bars never get thinner than
+// MIN_BAR_MM (about 0.28 mm, the narrowest that read reliably in scan tests),
+// and each barcode keeps at least BARCODE_QUIET_MM of white before its box line.
+// Box lines are dashed because a solid line beside a barcode stopped it
+// scanning in tests. The default is 6.3 x 0.5 cm: a 2.85 cm stub and a
+// 3.45 x 0.5 cm label, 152 per page.
 export const BARCODE_QUIET_MM=1.8;
-const REF_BARCODE_WIDTH_MM=24,CLOCK_BARCODE_WIDTH_MM=21;
-// Each piece is just wide enough for its content: barcode + quiet zones + box
-// inset and line + cut line.
-const PIECE_FRAME_MM=2*.25+.4;
-export const STICKER_REFERENCE_WIDTH_MM=Math.round((REF_BARCODE_WIDTH_MM+2*BARCODE_QUIET_MM+PIECE_FRAME_MM)*10)/10;
-const STICKER_NUMBER_PART_WIDTH_MM=9;
-export const STICKER_CLOCK_LABEL_WIDTH_MM=Math.round((STICKER_NUMBER_PART_WIDTH_MM+CLOCK_BARCODE_WIDTH_MM+2*BARCODE_QUIET_MM+PIECE_FRAME_MM)*10)/10;
-export const STICKER_HEIGHT_MM=5;
-const STICKER_BARCODE_PART_WIDTH_MM=STICKER_CLOCK_LABEL_WIDTH_MM-STICKER_NUMBER_PART_WIDTH_MM;
-export const STICKER_SET_WIDTH_MM=STICKER_REFERENCE_WIDTH_MM+STICKER_CLOCK_LABEL_WIDTH_MM;
-const COLUMN_GAP_MM=5;
-const SHEET_WIDTH_MM=CODES_PER_ROW*STICKER_SET_WIDTH_MM+(CODES_PER_ROW-1)*COLUMN_GAP_MM;
-// The cut lines add about 0.3 mm to each printed row, so cells are drawn that
-// much shorter to keep each sticker 5 mm tall and 38 rows on one page.
-const STICKER_CELL_HEIGHT_MM=STICKER_HEIGHT_MM-.3;
-// The same applies across: each cut line adds about half its width to the cells
-// on both sides, so widths are drawn that much narrower to print at their real
-// size and keep the grid centred.
-const CUT_LINE_ALLOWANCE_MM=.18;
-const cellWidth=mm=>Math.round((mm-CUT_LINE_ALLOWANCE_MM)*100)/100;
-// The box inside each piece sits this far in from the piece's edge.
-const BOX_INSET_MM=.25;
-const boxWidth=mm=>Math.round((cellWidth(mm)-2*BOX_INSET_MM)*100)/100;
-const BOX_HEIGHT_MM=Math.round((STICKER_CELL_HEIGHT_MM-2*BOX_INSET_MM)*100)/100;
-const PAGE_MARGIN=`${Math.round((210-STICKER_ROWS*STICKER_HEIGHT_MM)/2*10)/10}mm ${Math.round((297-SHEET_WIDTH_MM)/2*10)/10}mm`;
-// Blank space between the two columns, for cutting.
+const MIN_BAR_MM=.28,REF_BAR_UNITS=79,CLOCK_BAR_UNITS=68; // 8-digit and 6-digit Code 128
+const BOX_INSET_MM=.25,PIECE_FRAME_MM=2*BOX_INSET_MM+.4;
+const CUT_LINE_ALLOWANCE_MM=.18,ROW_ALLOWANCE_MM=.3,COLUMN_GAP_MM=5,PAGE_MIN_MARGIN_MM=8;
+const PAGE_WIDTH_MM=297,PAGE_HEIGHT_MM=210;
+export const STICKER_HEIGHT_RANGE_MM=[5,30];
+export const DEFAULT_STICKER_SIZE={heightMm:5,refWidthMm:28.5,labelWidthMm:34.5};
+const r2=v=>Math.round(v*100)/100;
+// Text grows with the sticker: 4.5 pt at 0.5 cm, up to 12 pt.
+const textPtFor=heightMm=>r2(Math.min(12,Math.max(4.5,heightMm*.9)));
+const numberPartWidth=pt=>r2(Math.max(9,8*.556*pt*.3528+1.5));
+// The widest barcode that fits the space while keeping its quiet zone.
+const barcodeWidthFor=(spaceMm,units)=>r2(Math.min(spaceMm-2*BARCODE_QUIET_MM,spaceMm/(1+12/units)));
+// Smallest widths that still give barcodes with readable bars.
+export function stickerMinimumWidths(heightMm=DEFAULT_STICKER_SIZE.heightMm){
+  const quiet=Math.max(BARCODE_QUIET_MM,6*MIN_BAR_MM);
+  return {refWidthMm:r2(REF_BAR_UNITS*MIN_BAR_MM+2*quiet+PIECE_FRAME_MM),
+    labelWidthMm:r2(numberPartWidth(textPtFor(heightMm))+CLOCK_BAR_UNITS*MIN_BAR_MM+2*quiet+PIECE_FRAME_MM)};
+}
+// Returns the full layout, or {errors:[...]} when the size cannot print readable stickers.
+export function stickerLayout({heightMm=DEFAULT_STICKER_SIZE.heightMm,refWidthMm=DEFAULT_STICKER_SIZE.refWidthMm,labelWidthMm=DEFAULT_STICKER_SIZE.labelWidthMm}={}){
+  const errors=[],cm=mm=>`${r2(mm/10)} cm`;
+  const [minH,maxH]=STICKER_HEIGHT_RANGE_MM;
+  if(!(heightMm>=minH&&heightMm<=maxH))errors.push(`Height must be ${cm(minH)} to ${cm(maxH)}.`);
+  const mins=stickerMinimumWidths(heightMm);
+  if(!(refWidthMm>=mins.refWidthMm))errors.push(`Left column (reference stub) must be at least ${cm(mins.refWidthMm)} wide, or its barcode is too small to scan.`);
+  if(!(labelWidthMm>=mins.labelWidthMm))errors.push(`Right column (clocking label) must be at least ${cm(mins.labelWidthMm)} wide at this height, or its barcode is too small to scan.`);
+  const setWidthMm=r2(refWidthMm+labelWidthMm);
+  const perRow=Math.floor((PAGE_WIDTH_MM-2*PAGE_MIN_MARGIN_MM+COLUMN_GAP_MM)/(setWidthMm+COLUMN_GAP_MM));
+  const rows=Math.floor((PAGE_HEIGHT_MM-2*PAGE_MIN_MARGIN_MM)/heightMm);
+  if(!errors.length&&perRow<1)errors.push(`The whole sticker must be at most ${cm(PAGE_WIDTH_MM-2*PAGE_MIN_MARGIN_MM)} wide to fit on A4.`);
+  if(errors.length)return {errors};
+  const textPt=textPtFor(heightMm),textMm=textPt*.3528,brandPt=r2(Math.max(3,textPt*.67)),logoMm=r2(brandPt*.32);
+  const cellHeight=r2(heightMm-ROW_ALLOWANCE_MM),boxHeight=r2(cellHeight-2*BOX_INSET_MM);
+  const barcodeHeight=r2(Math.min(15,boxHeight-textMm-.45));
+  const numberWidth=numberPartWidth(textPt);
+  const refBarcodeWidth=barcodeWidthFor(refWidthMm-PIECE_FRAME_MM,REF_BAR_UNITS);
+  const clockBarcodeWidth=barcodeWidthFor(labelWidthMm-PIECE_FRAME_MM-numberWidth,CLOCK_BAR_UNITS);
+  const cellWidth=mm=>r2(mm-CUT_LINE_ALLOWANCE_MM),boxWidth=mm=>r2(cellWidth(mm)-2*BOX_INSET_MM);
+  const sheetWidth=r2(perRow*setWidthMm+(perRow-1)*COLUMN_GAP_MM);
+  const pageMargin=`${r2((PAGE_HEIGHT_MM-rows*heightMm)/2)}mm ${r2((PAGE_WIDTH_MM-sheetWidth)/2)}mm`;
+  const css=`.sticker-sheet{width:${sheetWidth}mm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{height:${cellHeight}mm;max-height:${cellHeight}mm;padding:0;border:.5pt solid #e1e6e2;overflow:hidden;vertical-align:middle;text-align:center}.sticker-sheet>tbody>tr>td.sticker-gap{width:${cellWidth(COLUMN_GAP_MM)}mm;border:none;background:#fff}.sticker-sheet>tbody>tr>td.sticker-ref-part{width:${cellWidth(refWidthMm)}mm}.sticker-sheet>tbody>tr>td.sticker-label-part{width:${cellWidth(labelWidthMm)}mm}.sticker-box{table-layout:fixed;border-collapse:separate;border-spacing:0;border:.5pt dashed #888;height:${boxHeight}mm;margin:0 auto}.sticker-ref-part .sticker-box{width:${boxWidth(refWidthMm)}mm}.sticker-label-part .sticker-box{width:${boxWidth(labelWidthMm)}mm}.sticker-box td{padding:0;vertical-align:middle;text-align:center;overflow:hidden}.sticker-box td.sticker-number-part{width:${r2(numberWidth-BOX_INSET_MM)}mm}.sticker-ref-part .sticker-brand-line{display:none}.sticker-ref-part img.sticker-ref-code,.sticker-ref-part svg{display:block;width:${refBarcodeWidth}mm;height:${barcodeHeight}mm;margin:0 auto .05mm}.sticker-brand-line{display:block;height:${r2(logoMm+.05)}mm;line-height:${r2(logoMm+.05)}mm;margin-bottom:.15mm;white-space:nowrap;text-align:center}.sticker-logo{display:inline;height:${logoMm}mm;width:auto;vertical-align:middle;margin-right:.4mm}.sticker-brand-text{display:inline;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:${brandPt}pt;font-weight:700;color:#555}.sticker-number,.sticker-code-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:${textPt}pt;font-weight:700;line-height:1;color:#111;white-space:nowrap;text-align:center}.sticker-code-part img,.sticker-code-part svg{display:block;width:${clockBarcodeWidth}mm;height:${barcodeHeight}mm;margin:0 auto .05mm}`;
+  return {heightMm,refWidthMm,labelWidthMm,setWidthMm,perRow,rows,perPage:perRow*rows,css,pageMargin,textPt,
+    refBarcode:{widthMm:refBarcodeWidth,heightMm:barcodeHeight},clockBarcode:{widthMm:clockBarcodeWidth,heightMm:barcodeHeight}};
+}
+export const DEFAULT_STICKER_LAYOUT=stickerLayout(DEFAULT_STICKER_SIZE);
+// Blank space between the columns, for cutting.
 const COLUMN_GAP_CELL='<td class="sticker-gap" aria-hidden="true"></td>';
-// Barcode drawn without its own margin: the barcode piece keeps about 2.9 mm
-// (10 bar widths) of white on each side, the quiet zone scanners need.
+// Barcode drawn without its own margin: the white around it comes from the layout.
 export const STICKER_BARCODE={height:28,width:1.2,margin:0};
 export const DEFAULT_STICKER_LABEL='AvilonX';
 // Layout shared by the screen preview and the printed/Word sheet, in real units.
-const STICKER_CSS=`.sticker-sheet{width:${SHEET_WIDTH_MM}mm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{height:${STICKER_CELL_HEIGHT_MM}mm;max-height:${STICKER_CELL_HEIGHT_MM}mm;padding:0;border:.5pt solid #e1e6e2;overflow:hidden;vertical-align:middle;text-align:center}.sticker-sheet>tbody>tr>td.sticker-gap{width:${cellWidth(COLUMN_GAP_MM)}mm;border:none;background:#fff}.sticker-sheet>tbody>tr>td.sticker-ref-part{width:${cellWidth(STICKER_REFERENCE_WIDTH_MM)}mm}.sticker-sheet>tbody>tr>td.sticker-label-part{width:${cellWidth(STICKER_CLOCK_LABEL_WIDTH_MM)}mm}.sticker-box{table-layout:fixed;border-collapse:separate;border-spacing:0;border:.5pt dashed #888;height:${BOX_HEIGHT_MM}mm;margin:0 auto}.sticker-ref-part .sticker-box{width:${boxWidth(STICKER_REFERENCE_WIDTH_MM)}mm}.sticker-label-part .sticker-box{width:${boxWidth(STICKER_CLOCK_LABEL_WIDTH_MM)}mm}.sticker-box td{padding:0;vertical-align:middle;text-align:center;overflow:hidden}.sticker-box td.sticker-number-part{width:${STICKER_NUMBER_PART_WIDTH_MM-BOX_INSET_MM}mm}.sticker-ref-part .sticker-brand-line{display:none}.sticker-ref-part img.sticker-ref-code,.sticker-ref-part svg{display:block;width:${REF_BARCODE_WIDTH_MM}mm;height:2.2mm;margin:0 auto .05mm}.sticker-brand-line{display:block;height:1mm;line-height:1mm;margin-bottom:.15mm;white-space:nowrap;text-align:center}.sticker-logo{display:inline;height:.95mm;width:auto;vertical-align:middle;margin-right:.4mm}.sticker-brand-text{display:inline;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:3pt;font-weight:700;color:#555}.sticker-number{display:block;font-family:Arial,Helvetica,sans-serif;font-size:4.5pt;font-weight:700;line-height:1;color:#111;white-space:nowrap;text-align:center}.sticker-code-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:4.5pt;font-weight:700;line-height:1;color:#111;white-space:nowrap;text-align:center}.sticker-code-part img,.sticker-code-part svg{display:block;width:${CLOCK_BARCODE_WIDTH_MM}mm;height:2.2mm;margin:0 auto .05mm}`;
 
 // The barcode printed on a sticker: the secret scratch code when there is one.
 export const stickerBarcodeValue=code=>code.scratch||code.number;
@@ -129,17 +141,17 @@ export function stickerPreviewCell(code,label=DEFAULT_STICKER_LABEL,logo=''){
 export function drawStickerPreviews(root){
   root.querySelectorAll('[data-sticker-preview]').forEach(svg=>{drawBarcode(svg,svg.dataset.stickerPreview,STICKER_BARCODE);const w=svg.getAttribute('width'),h=svg.getAttribute('height');if(w&&h){svg.setAttribute('viewBox',`0 0 ${parseFloat(w)} ${parseFloat(h)}`);svg.removeAttribute('width');svg.removeAttribute('height');}});
 }
-export function stickerGroups(codes){const pages=[];for(let i=0;i<codes.length;i+=STICKERS_PER_PAGE)pages.push(codes.slice(i,i+STICKERS_PER_PAGE));return pages;}
+export function stickerGroups(codes,layout=DEFAULT_STICKER_LAYOUT){const pages=[];for(let i=0;i<codes.length;i+=layout.perPage)pages.push(codes.slice(i,i+layout.perPage));return pages;}
 // renderCode(code) returns the two <td> pieces of one code (or of an empty slot).
-export function stickerSheetTable(codes,renderCode){
-  const cells=[...codes];const rows=Math.ceil(cells.length/CODES_PER_ROW)||1;while(cells.length<rows*CODES_PER_ROW)cells.push(null);
-  return `<table class="sticker-sheet"><tbody>${Array.from({length:rows},(_,row)=>`<tr>${cells.slice(row*CODES_PER_ROW,(row+1)*CODES_PER_ROW).map(code=>renderCode(code)).join(COLUMN_GAP_CELL)}</tr>`).join('')}</tbody></table>`;
+export function stickerSheetTable(codes,renderCode,layout=DEFAULT_STICKER_LAYOUT){
+  const perRow=layout.perRow,cells=[...codes];const rows=Math.ceil(cells.length/perRow)||1;while(cells.length<rows*perRow)cells.push(null);
+  return `<table class="sticker-sheet"><tbody>${Array.from({length:rows},(_,row)=>`<tr>${cells.slice(row*perRow,(row+1)*perRow).map(code=>renderCode(code)).join(COLUMN_GAP_CELL)}</tr>`).join('')}</tbody></table>`;
 }
-export const stickerPreviewStyle=()=>`<style>${STICKER_CSS}</style>`;
-export function wordStickerDocument(pages,label=DEFAULT_STICKER_LABEL,logo=''){
+export const stickerPreviewStyle=(layout=DEFAULT_STICKER_LAYOUT)=>`<style>${layout.css}</style>`;
+export function wordStickerDocument(pages,label=DEFAULT_STICKER_LABEL,logo='',layout=DEFAULT_STICKER_LAYOUT){
   const cell=code=>code?stickerPieces(code,`<img src="${code.image}" alt="">`,label,logo,`<img class="sticker-ref-code" src="${code.refImage||code.image}" alt="">`):emptyPieces;
-  const sheets=pages.map(page=>`<section class="sticker-page">${stickerSheetTable(page,cell)}</section>`).join('');
-  return `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>AvilonX barcode stickers</title><style>@page{size:297mm 210mm;margin:${PAGE_MARGIN}}body{font-family:Arial,sans-serif;margin:0}.sticker-page{page-break-after:always;break-after:page}.sticker-page:last-child{page-break-after:auto;break-after:auto}${STICKER_CSS}</style></head><body>${sheets}</body></html>`;
+  const sheets=pages.map(page=>`<section class="sticker-page">${stickerSheetTable(page,cell,layout)}</section>`).join('');
+  return `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>AvilonX barcode stickers</title><style>@page{size:297mm 210mm;margin:${layout.pageMargin}}body{font-family:Arial,sans-serif;margin:0}.sticker-page{page-break-after:always;break-after:page}.sticker-page:last-child{page-break-after:auto;break-after:auto}${layout.css}</style></head><body>${sheets}</body></html>`;
 }
 // Camera scanner dialog used with bindStickerScanner().
 export const stickerScannerDialogHtml=()=>`<dialog class="scanner-dialog scanner-camera-dialog" id="sticker-camera-dialog" aria-label="Scan sticker barcode"><div class="scanner-dialog-content"><div class="scanner-preview"><div class="scanner-placeholder" id="sticker-camera-placeholder"><span class="scanner-placeholder-mark" aria-hidden="true">⌗</span><span>Camera preview will appear here.</span></div><video id="sticker-camera" playsinline autoplay muted hidden aria-label="Live barcode camera preview"></video><div class="scanner-top-controls"><button class="scanner-close-button" type="button" data-close-sticker-camera aria-label="Close scanner">×</button><span class="scanner-live-indicator"><span></span>Scan barcode</span></div><div class="scanner-viewfinder" aria-hidden="true"><span class="scanner-corner top-left"></span><span class="scanner-corner top-right"></span><span class="scanner-corner bottom-left"></span><span class="scanner-corner bottom-right"></span></div><div class="scanner-bottom-controls"><p class="barcode-scan-status" id="sticker-camera-status" aria-live="polite" aria-atomic="true" hidden></p></div></div></div></dialog>`;
