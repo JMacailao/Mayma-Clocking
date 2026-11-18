@@ -26,7 +26,7 @@ function superadminNav(active) {
   return links.map(([key,label,href,icon])=>`<a class="nav-link ${active===key?'active':''}" ${active===key?'aria-current="page"':''} href="${url(href)}"><span class="nav-icon">${icon}</span>${label}</a>`).join('');
 }
 function adminNav(active,canManageAccounts) {
-  const links=[['dashboard','Overview','pages/admin/dashboard/index.html','◧'],['members','Members','pages/admin/members/index.html','♙'],['race-points','Race points','pages/admin/race-points/index.html','⌖'],['races','Races','pages/admin/races/index.html','◷'],['entries','Race entries','pages/admin/entries/index.html','▤'],['clocking','Clocking','pages/admin/clocking/index.html','◉'],['readers','RFID readers','pages/admin/readers/index.html','⌁'],['results','Results','pages/admin/results/index.html','↗']];
+  const links=[['dashboard','Overview','pages/admin/dashboard/index.html','◧'],['members','Members','pages/admin/members/index.html','♙'],['race-points','Race points','pages/admin/race-points/index.html','⌖'],['races','Races','pages/admin/races/index.html','◷'],['entries','Race entries','pages/admin/entries/index.html','▤'],['remarks','Entry remarks','pages/admin/remarks/index.html','☑'],['clocking','Clocking','pages/admin/clocking/index.html','◉'],['readers','RFID readers','pages/admin/readers/index.html','⌁'],['results','Results','pages/admin/results/index.html','↗']];
   if(canManageAccounts)links.push(['users','Team accounts','pages/admin/users/index.html','♧']);
   return links.map(([key,label,href,icon])=>`<a class="nav-link ${active===key?'active':''}" ${active===key?'aria-current="page"':''} href="${url(href)}"><span class="nav-icon">${icon}</span>${label}</a>`).join('');
 }
@@ -80,6 +80,7 @@ async function renderPage(view,role,identity,page=body.dataset.view,setCleanup=f
   else if(page==='races'){const pageModule=await import('../../pages/admin/races/page.js');await pageModule.render(view);}
   else if(page==='entries'){const pageModule=await import('../../pages/admin/entries/page.js');await pageModule.entriesPage(view,setCleanup);}
   else if(page==='clocking'&&role==='admin'){const pageModule=await import('../../pages/admin/clocking/page.js');await pageModule.render(view,identity,setCleanup);}
+  else if(page==='entry-remarks'&&role==='admin'){const pageModule=await import('../../pages/admin/remarks/page.js');await pageModule.render(view,identity);}
   else if(page==='rfid-readers'&&role==='admin'){const pageModule=await import('../../pages/admin/readers/page.js');await pageModule.render(view,identity);}
   else if(page==='results'&&role==='admin'){const pageModule=await import('../../pages/admin/results/page.js');await pageModule.render(view);}
   else if(page==='dashboard'&&role==='member'){const pageModule=await import('../../pages/member/dashboard/page.js');await pageModule.render(view,identity);}
@@ -150,6 +151,14 @@ const routes=[
     "view": "results",
     "role": "admin",
     "active": "results"
+  },
+  {
+    "path": "pages/admin/remarks/index.html",
+    "documentTitle": "Entry remarks \u00b7 AvilonX Clocking",
+    "title": "Entry remarks",
+    "view": "entry-remarks",
+    "role": "admin",
+    "active": "remarks"
   },
   {
     "path": "pages/admin/readers/index.html",

@@ -571,3 +571,17 @@ video#camera[hidden]{display:none}
 @media(max-width:720px){.reader-choice-options{display:grid}.entry-form-grid .span-6{grid-column:1/-1}}
 .input-with-button button[hidden]{display:none}
 .input-with-button:has(button[hidden]) input{border-radius:7px!important}
+
+/* Entry remarks */
+.remark-add{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:12px}
+.remark-suggestions .text-button{font-size:12px}
+.remark-list{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.remark-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:9px;background:#fff}
+.remark-list li.is-hidden{background:#f7f9fb;color:var(--muted)}
+.remark-label{font-size:14px;font-weight:600}
+.remark-actions{display:flex;flex-wrap:wrap;gap:2px}
+.entry-remarks-options{display:flex;flex-wrap:wrap;gap:8px}
+.entry-remarks-options label{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border:1px solid #dce5ed;border-radius:20px;background:#fff;color:var(--ink);font-size:13px;font-weight:500;cursor:pointer}
+.entry-remarks-options input{width:16px;height:16px;margin:0;accent-color:var(--green)}
+.entry-remarks-options label:has(input:checked){border-color:var(--green);background:#eaf2f8;font-weight:700}
+@media(max-width:560px){.remark-add{grid-template-columns:1fr}.remark-list li{align-items:flex-start;flex-direction:column}}
