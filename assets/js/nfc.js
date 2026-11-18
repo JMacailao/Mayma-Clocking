@@ -7,7 +7,7 @@ import { pageUrl, supabase } from './shared.js';
 // Download link for the Windows helper that makes an ACS ACR122U (or other PC/SC
 // reader) type tag IDs like a keyboard.
 export const readerHelperUrl=()=>pageUrl('tools/nfc-reader/acr122u-avilonx-helper.zip');
-export const readerHelperLink=()=>`<a href="${readerHelperUrl()}" download>Download the ACR122U helper</a> (Windows: unzip it, double-click <strong>Start ACR122U for AvilonX</strong>, keep its window open, then choose Wired).`;
+export const readerHelperLink=()=>`<a href="${readerHelperUrl()}" download>Download the ACR122U helper</a> (Windows: unzip it, double-click <strong>Install AvilonX ACR122U helper</strong> once; it then starts with Windows. Choose Wired).`;
 
 export const NFC_HELP='That is not a valid NFC tag ID. Tag IDs are hex, for example 04:A2:3B:1C:5D:80:00. If your USB reader types only digits, set it to output the UID in hex (see the reader manual).';
 
@@ -70,7 +70,7 @@ export const nfcSetupGuideHtml=()=>`<details class="nfc-setup"><summary>Reader s
 <h4>iPhone (XS or newer)</h4><ol><li>The tag must carry its clocking link, or nothing happens when you tap it. The Super Admin writes it when registering the tag on an Android phone, or with an iPhone as below.</li><li>Unlock the iPhone and hold its <strong>top edge</strong> near the tag.</li><li>Tap the notification. The Clocking page opens and clocks the pigeon. Sign in first if asked.</li></ol><p class="small">iPhone browsers cannot read tags directly, so the Start phone NFC button does not appear on iPhone.</p>
 <h4>Write a tag's link with an iPhone</h4><ol><li>Install the free <strong>NFC Tools</strong> app from the App Store.</li><li>In Safari open <strong>Register NFC</strong>, find the tag and tap <strong>Copy link</strong>.</li><li>In NFC Tools: <strong>Write → Add a record → URL / URI</strong>, paste the link, then <strong>Write</strong> and hold the iPhone's top edge to the tag.</li></ol><p class="small">Use NTAG213, NTAG215 or NTAG216 tags. iPhones cannot use MIFARE Classic tags (common key fobs): in NFC Tools tap <strong>Read</strong> to see a tag's type. Close the camera and Wallet before tapping.</p>
 <h4>Phone or computer with an external NFC reader (Android, iPhone, Windows, Mac)</h4><ol><li>Use a reader that works as a <strong>keyboard</strong> (often sold as "keyboard emulation" or "HID" mode).</li><li>Connect it: <strong>Android</strong> with a USB-OTG adapter; <strong>iPhone or iPad</strong> with a USB-C adapter or a Lightning to USB camera adapter; or pair a <strong>Bluetooth</strong> reader as a keyboard in the phone's Bluetooth settings.</li><li>Open the NFC page and tap the tag on the reader. There is no need to tap the reader field first; the ID is sent automatically.</li><li>The reader must type the ID in <strong>hex</strong> (letters and numbers). If it types only digits, switch it to hex as its manual describes. To check a reader, open the Notes app and tap a tag: letters and numbers should appear.</li></ol>
-<h4>ACS ACR122U (Windows only)</h4><ol><li>${readerHelperLink()}</li><li>Keep its window open, choose <strong>Wired</strong> as the reader, then tap tags on the ACR122U. Nothing to register. If the browser asks to allow access to devices on your network, choose Allow.</li></ol><p class="small">The ACR122U does not work on Android phones, iPhone, iPad or Mac: phone browsers cannot use this kind of reader. Use a keyboard-type reader on phones.</p>
+<h4>ACS ACR122U (Windows only)</h4><ol><li>${readerHelperLink()}</li><li>Install it once with <strong>Install AvilonX ACR122U helper</strong> (it then starts with Windows), choose <strong>Wired</strong> as the reader, then tap tags on the ACR122U. Nothing to register. If the browser asks to allow access to devices on your network, choose Allow.</li></ol><p class="small">The ACR122U does not work on Android phones, iPhone, iPad or Mac: phone browsers cannot use this kind of reader. Use a keyboard-type reader on phones.</p>
 </div></details>`;
 
 // Keyboard-type NFC readers (USB, or Bluetooth paired as a keyboard) type the
@@ -209,7 +209,7 @@ export function usbReaderStatus(element){
     if(helper){
       element.className=`small usb-reader-status ${helper==='connected'?'is-ok':'is-bad'}`;
       element.textContent=helper==='connected'?`ACR122U helper connected${reader?` (${reader})`:''}. Tap a tag on the reader.`
-        :'ACR122U helper not found. On Windows, start "Start ACR122U for AvilonX" and keep its window open. If it is open, the browser may have blocked it: click the icon left of the web address, allow access to apps and devices on this computer (local network), and reload. Keyboard-type USB readers work without it.';
+        :'ACR122U helper not found. On Windows, install it with "Install AvilonX ACR122U helper" (or start "Start ACR122U for AvilonX"). If it is open, the browser may have blocked it: click the icon left of the web address, allow access to apps and devices on this computer (local network), and reload. Keyboard-type USB readers work without it.';
       return;
     }
     if(ended==='helper'){
