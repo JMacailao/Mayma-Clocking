@@ -43,6 +43,11 @@ CREATE INDEX IF NOT EXISTS idx_pigeons_member ON public.pigeons(member_id);
 -- One ring number per club, and one RFID tag per active bird (tags are global).
 CREATE UNIQUE INDEX IF NOT EXISTS pigeons_club_ring_key ON public.pigeons (club_id, upper(btrim(ring_number)));
 CREATE UNIQUE INDEX IF NOT EXISTS pigeons_active_nfc_tag_key ON public.pigeons (nfc_tag) WHERE nfc_tag IS NOT NULL AND status = 'active';
+-- Race entries pick a bird by tapping its RFID tag, so an active bird needs
+-- one. NOT VALID: birds bonded earlier without a tag are left as they are
+-- until they are edited.
+ALTER TABLE public.pigeons DROP CONSTRAINT IF EXISTS pigeons_active_needs_nfc_tag;
+ALTER TABLE public.pigeons ADD CONSTRAINT pigeons_active_needs_nfc_tag CHECK (status <> 'active' OR nfc_tag IS NOT NULL) NOT VALID;
 
 -- Tidy values, check the member and the RFID tag.
 CREATE OR REPLACE FUNCTION public._pigeon_before_save()
@@ -98,6 +103,9 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'That bonded bird was not found.' USING ERRCODE = '22023'; END IF;
   IF v_pigeon.status <> 'active' THEN
     RAISE EXCEPTION 'Bird % is retired and cannot be entered in a race.', v_pigeon.ring_number USING ERRCODE = '22023';
+  END IF;
+  IF v_pigeon.nfc_tag IS NULL THEN
+    RAISE EXCEPTION 'Bird % has no RFID tag. Add its tag on Bird bonding first.', v_pigeon.ring_number USING ERRCODE = '22023';
   END IF;
   SELECT r.club_id INTO v_race_club FROM public.races AS r WHERE r.id = NEW.race_id;
   IF v_race_club IS DISTINCT FROM v_pigeon.club_id THEN

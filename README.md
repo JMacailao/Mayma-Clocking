@@ -55,7 +55,8 @@ requests in the browser.
       the club admin or staff bonds it with its ring number, RFID tag, loft name,
       bird name, colour and a photo (stored in the private `pigeon-photos`
       Supabase Storage bucket this file creates). Race entries then choose one of
-      the member's bonded birds; the ring and RFID come from the bond. Run it after
+      the member's bonded birds by tapping the bird's bonded RFID tag (every
+      bonded bird needs one); the ring and RFID come from the bond. Run it after
       `nfc-tags.sql`; safe to re-run.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
