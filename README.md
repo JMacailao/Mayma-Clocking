@@ -46,6 +46,9 @@ requests in the browser.
   10. `rfid-devices.sql` — enables external ESP8266 + RC522 RFID readers. The
       Super Admin registers each reader by serial number for a club on **Register
       RFID reader**; unregistered readers are refused. Run it after `nfc-tags.sql`; it is safe to re-run.
+  11. `entry-remarks.sql` — lets the club administrator build a list of remarks
+      (**Entry remarks**) that appear as tick boxes when registering a pigeon on
+      Race entries. Safe to re-run.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.
