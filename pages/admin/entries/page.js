@@ -1,6 +1,6 @@
 import { supabase, escapeHTML, message, dbError, number, tableRows, loadSpreadsheetParser, normalizeImportHeader } from '../../../assets/js/shared.js';
 import { bindStickerScanner, stickerScannerDialogHtml } from '../../superadmin/stickers/shared.js';
-import { normalizeNfcUid, formatNfcUid, phoneNfcSupported, startPhoneNfc, NFC_HELP, readerHelperLink, listenForReaderKeys } from '../../../assets/js/nfc.js';
+import { normalizeNfcUid, formatNfcUid, startPhoneNfc, NFC_HELP, readerHelperLink, listenForReaderKeys } from '../../../assets/js/nfc.js';
 
 let spreadsheetZipReaderPromise=null;
 function loadSpreadsheetZipReader(){
