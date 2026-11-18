@@ -734,3 +734,69 @@ video#camera[hidden]{display:none}
 .setup-state{font-size:12px;font-weight:700}
 .is-ok .setup-state{color:#11653a}.is-bad .setup-state{color:#a11d1d}
 .setup-steps{display:grid;gap:6px;margin:8px 0 10px;padding-left:20px}
+
+/* Race day */
+.raceday-head{align-items:flex-end;gap:16px;flex-wrap:wrap}
+.raceday-actions{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.raceday-actions .field{min-width:220px;margin:0}
+.raceday-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.raceday-stats .stat-card strong{font-size:22px}
+.raceday-clock{font-variant-numeric:tabular-nums}
+.raceday-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+.raceday-side{display:grid;gap:18px}
+.raceday-side .panel{margin:0}
+.raceday-alert{margin-bottom:14px}
+.raceday-arrivals tr.is-out{opacity:.55}
+.raceday-readers{display:grid;gap:0;margin:0;padding:0;list-style:none}
+.raceday-readers li{display:grid;grid-template-columns:12px minmax(0,1fr);column-gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.raceday-readers li:last-child{border-bottom:0}
+.raceday-readers li>span:nth-child(2){display:grid}
+.raceday-readers li>span:last-child{grid-column:2}
+.reader-dot{width:10px;height:10px;margin-top:5px;border-radius:50%;background:#c7d0d9}
+.is-online .reader-dot{background:#16a34a;box-shadow:0 0 0 3px #16a34a26}
+.is-offline .reader-dot{background:#dc2626}
+.raceday-showup{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.raceday-showup div{display:grid;padding:10px 4px;border-radius:10px;background:#f4f7fa}
+.raceday-showup strong{font:800 22px Manrope}
+.raceday-showup span{color:var(--muted);font-size:12px}
+.raceday-waiting{margin:12px 0 0;padding-left:18px;font-size:13px;display:grid;gap:4px}
+.tag.practice{background:#efe7ff;color:#5b21b6}
+@media (max-width:980px){.raceday-grid{grid-template-columns:1fr}.raceday-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Race day: big-screen leaderboard for the clubhouse TV */
+body.raceday-tv-on{overflow:hidden}
+.raceday-tv{position:fixed;inset:0;z-index:200;overflow:auto;padding:clamp(18px,3vw,40px);background:radial-gradient(circle at top,#0b4a78,#021c33 70%);color:#fff}
+.raceday-tv[hidden]{display:none}
+.tv-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:24px}
+.tv-head span{color:#ffcf5a;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:clamp(12px,1.2vw,16px)}
+.tv-head h2{margin:6px 0 4px;color:#fff;font:800 clamp(28px,4vw,56px)/1.05 Manrope}
+.tv-head p{margin:0;color:#c9dcef;font-size:clamp(14px,1.4vw,20px)}
+.tv-clock{font:800 clamp(30px,4.5vw,64px) Manrope;font-variant-numeric:tabular-nums;color:#ffcf5a}
+.tv-exit{position:absolute;top:12px;right:12px;padding:6px 12px;border:1px solid #ffffff55;border-radius:8px;background:#ffffff14;color:#fff;cursor:pointer;font-size:12px}
+.tv-list{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.tv-list li{display:grid;grid-template-columns:clamp(50px,6vw,90px) minmax(0,1fr) auto auto;align-items:center;gap:clamp(12px,2vw,30px);padding:clamp(10px,1.4vw,18px) clamp(14px,2vw,26px);border-radius:14px;background:#ffffff12;font-size:clamp(18px,2.2vw,34px)}
+.tv-list li:first-child{background:linear-gradient(90deg,#ffcf5a33,#ffffff12);box-shadow:inset 0 0 0 2px #ffcf5a88}
+.tv-rank{font:800 1.2em Manrope;color:#ffcf5a;text-align:center}
+.tv-ring{display:grid;font-weight:800;overflow-wrap:anywhere}
+.tv-ring small{color:#c9dcef;font-weight:500;font-size:.6em}
+.tv-time{font-variant-numeric:tabular-nums;color:#e6eef7}
+.tv-speed{display:grid;justify-items:end;font:800 1.05em Manrope;font-variant-numeric:tabular-nums}
+.tv-speed small{color:#c9dcef;font-weight:500;font-size:.5em}
+.tv-empty{font-size:clamp(20px,3vw,40px);color:#c9dcef;text-align:center;margin-top:12vh}
+.tv-foot{margin-top:20px;color:#9fbad4;text-align:center;font-size:clamp(12px,1.2vw,16px)}
+@media (max-width:720px){.tv-list li{grid-template-columns:44px minmax(0,1fr) auto}.tv-time{display:none}}
+
+/* Printing (Print / PDF): only the page content */
+@media print{
+  .sidebar,.topbar,.member-bottom-nav,.raceday-actions,footer,[data-toast-stack],.nav-backdrop{display:none!important}
+  .main{margin:0!important;padding:0!important}
+  .panel{box-shadow:none!important;break-inside:avoid}
+  .raceday-grid{grid-template-columns:1fr}
+  .table-scroll{overflow:visible!important}
+}
+.schedule-practice{display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px dashed #c4b5fd;border-radius:10px;background:#faf7ff;font-size:13px;cursor:pointer}
+.schedule-practice input{margin-top:3px}
+.schedule-practice span{display:grid;gap:2px;color:var(--muted)}
+.schedule-practice strong{color:var(--ink)}
+.results-actions{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.results-actions .field{margin:0}

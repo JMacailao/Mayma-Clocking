@@ -26,7 +26,7 @@ function superadminNav(active) {
   return links.map(([key,label,href,icon])=>`<a class="nav-link ${active===key?'active':''}" ${active===key?'aria-current="page"':''} href="${url(href)}"><span class="nav-icon">${icon}</span>${label}</a>`).join('');
 }
 function adminNav(active,canManageAccounts) {
-  const links=[['dashboard','Overview','pages/admin/dashboard/index.html','◧'],['members','Members','pages/admin/members/index.html','♙'],['birds','Bird bonding','pages/admin/birds/index.html','❖'],['race-points','Race points','pages/admin/race-points/index.html','⌖'],['races','Races','pages/admin/races/index.html','◷'],['entries','Race entries','pages/admin/entries/index.html','▤'],['remarks','Entry remarks','pages/admin/remarks/index.html','☑'],['clocking','Clocking','pages/admin/clocking/index.html','◉'],['showup','Show up','pages/admin/showup/index.html','✔'],['readers','RFID readers','pages/admin/readers/index.html','⌁'],['results','Results','pages/admin/results/index.html','↗']];
+  const links=[['dashboard','Overview','pages/admin/dashboard/index.html','◧'],['raceday','Race day','pages/admin/raceday/index.html','◎'],['members','Members','pages/admin/members/index.html','♙'],['birds','Bird bonding','pages/admin/birds/index.html','❖'],['race-points','Race points','pages/admin/race-points/index.html','⌖'],['races','Races','pages/admin/races/index.html','◷'],['entries','Race entries','pages/admin/entries/index.html','▤'],['remarks','Entry remarks','pages/admin/remarks/index.html','☑'],['clocking','Clocking','pages/admin/clocking/index.html','◉'],['showup','Show up','pages/admin/showup/index.html','✔'],['readers','RFID readers','pages/admin/readers/index.html','⌁'],['results','Results','pages/admin/results/index.html','↗'],['history','Change history','pages/admin/history/index.html','⟲']];
   if(canManageAccounts)links.push(['users','Team accounts','pages/admin/users/index.html','♧']);
   return links.map(([key,label,href,icon])=>`<a class="nav-link ${active===key?'active':''}" ${active===key?'aria-current="page"':''} href="${url(href)}"><span class="nav-icon">${icon}</span>${label}</a>`).join('');
 }
@@ -75,6 +75,8 @@ async function renderPage(view,role,identity,page=body.dataset.view,setCleanup=f
   else if(page==='setup'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/setup/page.js');await pageModule.render(view);}
   else if(page==='sticker-generate'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/stickers/generate/page.js');await pageModule.render(view);}
   else if(page==='team-users'&&role==='admin'&&identity.profile.role==='admin'){const pageModule=await import('../../pages/admin/users/page.js');await pageModule.render(view,identity);}
+  else if(page==='race-day'&&role==='admin'){const pageModule=await import('../../pages/admin/raceday/page.js');await pageModule.render(view,identity,setCleanup);}
+  else if(page==='change-history'&&role==='admin'){const pageModule=await import('../../pages/admin/history/page.js');await pageModule.render(view,identity);}
   else if(page==='dashboard'&&role==='admin'){const pageModule=await import('../../pages/admin/dashboard/page.js');await pageModule.render(view);}
   else if(page==='members'){const pageModule=await import('../../pages/admin/members/page.js');await pageModule.render(view,identity.profile.role==='admin');}
   else if(page==='race-points'){const pageModule=await import('../../pages/admin/race-points/page.js');await pageModule.render(view,identity.profile.role==='admin');}
