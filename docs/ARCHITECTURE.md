@@ -55,7 +55,7 @@ Race entries (`pages/admin/entries/`):
 |---|---|
 | `page.js` | The entry form: RFID entries and Sticker entries, readers, bonded birds, last-race birds, rules shown before saving. |
 | `sheet-import.js` | The Scan race sheet and Import Excel tabs: preview with the found grid, camera with guide, review table with cell pictures, saving. |
-| `sheet-reader.js` | Reading a photo or PDF: rotation, finding the loading form's table, reading handwriting cell by cell (Tesseract), decoding sticker barcodes (ZXing). |
+| `sheet-reader.js` | Reading a photo or PDF: rotation, finding the loading form's table, **Align on guide** (the form's layout `FORM_GUIDE`, straightening the table from 4 corners, rows from the guide), reading handwriting cell by cell (Tesseract), decoding sticker barcodes (ZXing). |
 | `sheet-parse.js` | Pure rules with no browser code: remarks (P1/P2/P3), member IDs, matching rings to bonded birds, sticker numbers. |
 | `excel-import.js` | Reading Excel files, including barcode pictures inside cells. |
 | `entry-helpers.js` | Small helpers: tag expiry, ways to clock, distance. |

@@ -1047,3 +1047,16 @@ body.login-page{min-height:100vh;background:#f3f6f9}
   .birds-list-section .table-scroll .bird-table td.bird-actions{flex:1 0 100%;padding-top:4px}
   .bird-ring-cell .bird-thumb{width:64px;height:54px}
 }
+
+/* Scan race sheet: Align on guide */
+.sheet-align{width:min(1000px,calc(100% - 16px));max-height:calc(100% - 16px);padding:14px;border:0;border-radius:16px;background:#fff;overflow:auto}
+.sheet-align::backdrop{background:#0f2a44b3}
+.sheet-align-head{display:grid;gap:4px;margin-bottom:10px}
+.sheet-align-head strong{font:800 20px Manrope;color:#0f2a44}
+.sheet-align-head span{color:var(--muted);font-size:14px}
+.sheet-align-stage{display:grid;place-items:center;background:#eef2f6;border-radius:10px;overflow:hidden}
+.sheet-align-stage canvas{display:block;max-width:100%;max-height:68vh;width:auto;height:auto;touch-action:none;cursor:crosshair}
+.sheet-align-actions{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:12px}
+.sheet-align-actions .field{margin:0;width:150px}
+.sheet-align-spacer{flex:1}
+@media (max-width:720px){.sheet-align-actions .button{flex:1 1 45%}.sheet-align-spacer{display:none}}

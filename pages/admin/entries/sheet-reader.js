@@ -260,3 +260,61 @@ export async function refineHandwrittenEntryFields(worker,source,rows,members,on
     }
   }
 }
+
+// ---- Align on guide ------------------------------------------------------------
+// The loading form's layout as parts of the table's width and height (No. |
+// Loft name | Pigeon I.D. | Remarks | Sticker; a short heading row, then equal
+// rows). Measured on the club's printed form.
+export const FORM_GUIDE={columns:[0,.05,.392,.606,.8,1],header:.038,rows:15,margin:.03};
+
+// The 4 corners of the table in the photo, as found by detectTableGrid, or a
+// frame inside the photo when it was not found. Order: top-left, top-right,
+// bottom-right, bottom-left.
+export function tableCorners(canvas){
+  try{
+    const grid=detectTableGrid(canvas);
+    if(grid?.bands?.length>=3){
+      // The first band is the heading row (LOFT NAME, PIGEON I.D, ...): the table's top.
+      const first=grid.bands[0],last=grid.bands[grid.bands.length-1];
+      return [[first.columns[0],first.top],[first.columns[5],first.top],[last.columns[5],last.bottom],[last.columns[0],last.bottom]];
+    }
+  }catch{/* fall back to a frame */}
+  const w=canvas.width,h=canvas.height;return [[w*.1,h*.15],[w*.9,h*.15],[w*.9,h*.92],[w*.1,h*.92]];
+}
+
+// Maps the unit square onto a quadrilateral (projective transform).
+function squareToQuad(q){
+  const [[x0,y0],[x1,y1],[x2,y2],[x3,y3]]=q,dx1=x1-x2,dx2=x3-x2,dy1=y1-y2,dy2=y3-y2,sx=x0-x1+x2-x3,sy=y0-y1+y2-y3;
+  let g=0,h=0;
+  if(Math.abs(sx)>1e-9||Math.abs(sy)>1e-9){const det=dx1*dy2-dx2*dy1;g=(sx*dy2-dx2*sy)/det;h=(dx1*sy-sx*dy1)/det;}
+  return {a:x1-x0+g*x1,b:x3-x0+h*x3,c:x0,d:y1-y0+g*y1,e:y3-y0+h*y3,f:y0,g,h};
+}
+export function quadPoint(q,u,v){const m=squareToQuad(q),den=m.g*u+m.h*v+1;return [(m.a*u+m.b*v+m.c)/den,(m.d*u+m.e*v+m.f)/den];}
+
+// The table cut out of the photo and straightened to a rectangle, with a thin
+// margin of the photo around it (so its border lines are kept).
+export function straightenTable(canvas,corners,width=1400,margin=FORM_GUIDE.margin){
+  const top=Math.hypot(corners[1][0]-corners[0][0],corners[1][1]-corners[0][1]),bottom=Math.hypot(corners[2][0]-corners[3][0],corners[2][1]-corners[3][1]);
+  const leftSide=Math.hypot(corners[3][0]-corners[0][0],corners[3][1]-corners[0][1]),rightSide=Math.hypot(corners[2][0]-corners[1][0],corners[2][1]-corners[1][1]);
+  const W=Math.round(width),H=Math.max(1,Math.round(W*((leftSide+rightSide)/2)/Math.max(1,(top+bottom)/2))),span=1+2*margin;
+  const source=canvas.getContext('2d',{willReadFrequently:true}).getImageData(0,0,canvas.width,canvas.height),src=source.data,sw=canvas.width,sh=canvas.height;
+  const out=document.createElement('canvas');out.width=W;out.height=H;const context=out.getContext('2d',{willReadFrequently:true}),image=context.createImageData(W,H),dst=image.data;
+  const m=squareToQuad(corners);
+  for(let y=0;y<H;y++){const v=(y+.5)/H*span-margin;for(let x=0;x<W;x++){const u=(x+.5)/W*span-margin,den=m.g*u+m.h*v+1,sx=(m.a*u+m.b*v+m.c)/den,sy=(m.d*u+m.e*v+m.f)/den,o=(y*W+x)*4;
+    if(sx<0||sy<0||sx>=sw-1||sy>=sh-1){dst[o]=dst[o+1]=dst[o+2]=255;dst[o+3]=255;continue;}
+    const x0=Math.floor(sx),y0=Math.floor(sy),fx=sx-x0,fy=sy-y0,i=(y0*sw+x0)*4,j=i+sw*4;
+    for(let k=0;k<3;k++)dst[o+k]=(src[i+k]*(1-fx)+src[i+4+k]*fx)*(1-fy)+(src[j+k]*(1-fx)+src[j+4+k]*fx)*fy;dst[o+3]=255;}}
+  context.putImageData(image,0,0);return out;
+}
+
+// Rows from the guide alone, for a straightened table whose lines were not found.
+export function entrySheetRowsFromGuide(canvas,guide=FORM_GUIDE){
+  // The table inside the margin left by straightenTable.
+  const m=guide.margin||0,span=1+2*m,left=canvas.width*m/span,tableW=canvas.width/span,tableTop=canvas.height*m/span,tableH=canvas.height/span;
+  const top=tableTop+tableH*guide.header,rowHeight=(tableH*(1-guide.header))/guide.rows,x=guide.columns.map(part=>left+part*tableW),results=[];
+  for(let index=0;index<guide.rows;index++){
+    const rowTop=top+index*rowHeight,rowBottom=rowTop+rowHeight,region=j=>({left:x[j],right:x[j+1],top:rowTop,bottom:rowBottom});
+    results.push({id:`sheet-${Date.now()}-${index}-${Math.random().toString(36).slice(2,7)}`,sheetRow:String(index+1),member_no:'',memberConfidence:0,pigeon_ring:'',ringConfidence:0,remarks_text:'',remarksConfidence:0,memberRegion:region(1),ringRegion:region(2),remarksRegion:region(3),stickerTextRegion:{...region(4),top:rowTop+rowHeight*.62},barcode:'',printedBarcode:'',barcodeDetected:false,barcodeScanError:'',barcodeRegion:region(4),errors:[],member:null,saved:false});
+  }
+  return results;
+}

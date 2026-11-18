@@ -325,7 +325,10 @@ On Race entries → **Scan race sheet**, upload a photo or PDF of the loading fo
 press **Take photo with guide** to use the camera with a frame to line the form up.
 The preview shows the table the reader found: coloured boxes on the **Member ID**
 (Loft name), **Ring** (Pigeon I.D.), **Remarks** (P1/P2/P3) and **Sticker** columns of
-each row. If they do not line up, rotate the photo or take a new one straight on.
+each row. If they do not line up, press **Align on guide**: drag the four corner
+handles onto the corners of the table (the guide's columns and rows follow), set the
+number of rows, and press **Use this alignment**. The table is straightened before it
+is read, and if its lines are still not found the guide's rows and columns are used.
 Sticker barcodes are decoded (or their printed reference number read); handwriting
 is read as well as a browser can, and the review table shows a picture of each cell
 next to what was read, so misread values can be corrected before saving.
