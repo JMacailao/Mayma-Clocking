@@ -393,6 +393,34 @@ CREATE TRIGGER race_entries_require_registered_barcode
   BEFORE INSERT OR UPDATE OF barcode, race_id, member_id ON public.race_entries
   FOR EACH ROW EXECUTE FUNCTION public.require_registered_race_barcode();
 
+-- Details shown to the member after clocking: the race, its release point and
+-- release time, the pigeon's distance, and the flying time and speed, worked
+-- out the same way as the public results (metres per minute). Internal only.
+CREATE OR REPLACE FUNCTION public._clock_receipt_details(p_entry_id bigint, p_clock_id bigint)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT jsonb_build_object(
+    'race', r.name,
+    'release_location', r.release_location,
+    'release_at_utc', r.release_at_utc,
+    'distance_m', e.distance_m,
+    'pigeon_ring', COALESCE(e.pigeon_ring, c.pigeon_ring),
+    'received_at_utc', c.received_at_utc,
+    'flight_seconds', CASE WHEN c.received_at_utc > r.release_at_utc
+      THEN round(EXTRACT(EPOCH FROM (c.received_at_utc - r.release_at_utc))) END,
+    'speed_m_per_min', CASE WHEN c.received_at_utc > r.release_at_utc
+      THEN round(e.distance_m * 60 / NULLIF(EXTRACT(EPOCH FROM (c.received_at_utc - r.release_at_utc)), 0), 3) END)
+  FROM public.race_entries AS e
+  JOIN public.races AS r ON r.id = e.race_id
+  JOIN public.clock_events AS c ON c.id = p_clock_id AND c.race_entry_id = e.id
+  WHERE e.id = p_entry_id;
+$function$;
+REVOKE ALL ON FUNCTION public._clock_receipt_details(bigint, bigint) FROM PUBLIC, anon, authenticated;
+
 -- Members clock with the secret code (by scanning the sticker's barcode). It is
 -- matched only against the member's own entries in this race and mapped to the
 -- entry's sticker number. Stickers registered without a secret code still clock
@@ -469,11 +497,13 @@ BEGIN
 
   SELECT c.* INTO v_clock FROM public.clock_events AS c WHERE c.race_entry_id = v_entry.id;
   IF FOUND THEN
-    RETURN jsonb_build_object('status','duplicate','message','This pigeon already has a receipt.','receipt_id',v_clock.id,'received_at_utc',v_clock.received_at_utc,'pigeon_ring',v_entry.pigeon_ring,'barcode',v_entry.barcode);
+    RETURN jsonb_build_object('status','duplicate','message','This pigeon already has a receipt.','receipt_id',v_clock.id,'received_at_utc',v_clock.received_at_utc,'pigeon_ring',v_entry.pigeon_ring,'barcode',v_entry.barcode)
+      || COALESCE(public._clock_receipt_details(v_entry.id, v_clock.id), '{}'::jsonb);
   END IF;
   INSERT INTO public.clock_events(race_entry_id,pigeon_ring,received_at_utc,source,verification)
     VALUES (v_entry.id,v_entry.pigeon_ring,v_now,'barcode','provisional') RETURNING * INTO v_clock;
-  RETURN jsonb_build_object('status','accepted','message','Clocking received for sticker '||v_entry.barcode||' and marked provisional.','receipt_id',v_clock.id,'received_at_utc',v_clock.received_at_utc,'pigeon_ring',v_entry.pigeon_ring,'barcode',v_entry.barcode);
+  RETURN jsonb_build_object('status','accepted','message','Clocking received for sticker '||v_entry.barcode||' and marked provisional.','receipt_id',v_clock.id,'received_at_utc',v_clock.received_at_utc,'pigeon_ring',v_entry.pigeon_ring,'barcode',v_entry.barcode)
+    || COALESCE(public._clock_receipt_details(v_entry.id, v_clock.id), '{}'::jsonb);
 END;
 $function$;
 REVOKE ALL ON FUNCTION public.submit_member_clock(bigint,text) FROM PUBLIC, anon;

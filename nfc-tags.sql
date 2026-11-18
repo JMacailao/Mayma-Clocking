@@ -11,7 +11,8 @@ DO $$
 BEGIN
   IF to_regclass('public.race_entries') IS NULL
      OR to_regclass('public.barcode_stickers') IS NULL
-     OR to_regprocedure('public.current_member_id()') IS NULL THEN
+     OR to_regprocedure('public.current_member_id()') IS NULL
+     OR to_regprocedure('public._clock_receipt_details(bigint,bigint)') IS NULL THEN
     RAISE EXCEPTION 'Run schema.sql, supabase-auth.sql, multi-club.sql and sticker-barcodes.sql before nfc-tags.sql.';
   END IF;
 END;
@@ -128,7 +129,8 @@ BEGIN
   SELECT c.* INTO v_clock FROM public.clock_events AS c WHERE c.race_entry_id = v_entry.id;
   IF FOUND THEN
     RETURN jsonb_build_object('status', 'duplicate', 'message', 'Ring ' || v_entry.pigeon_ring || ' already has a receipt.',
-      'receipt_id', v_clock.id, 'received_at_utc', v_clock.received_at_utc, 'pigeon_ring', v_entry.pigeon_ring, 'race', v_race.name);
+      'receipt_id', v_clock.id, 'received_at_utc', v_clock.received_at_utc, 'pigeon_ring', v_entry.pigeon_ring, 'race', v_race.name)
+      || COALESCE(public._clock_receipt_details(v_entry.id, v_clock.id), '{}'::jsonb);
   END IF;
 
   INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, source, verification)
@@ -136,7 +138,8 @@ BEGIN
   RETURNING * INTO v_clock;
 
   RETURN jsonb_build_object('status', 'accepted', 'message', 'Ring ' || v_entry.pigeon_ring || ' clocked for ' || v_race.name || '. Marked provisional.',
-    'receipt_id', v_clock.id, 'received_at_utc', v_clock.received_at_utc, 'pigeon_ring', v_entry.pigeon_ring, 'race', v_race.name);
+    'receipt_id', v_clock.id, 'received_at_utc', v_clock.received_at_utc, 'pigeon_ring', v_entry.pigeon_ring, 'race', v_race.name)
+    || COALESCE(public._clock_receipt_details(v_entry.id, v_clock.id), '{}'::jsonb);
 END;
 $function$;
 

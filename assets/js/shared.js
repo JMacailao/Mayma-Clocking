@@ -20,12 +20,15 @@ export const dbError = (error) => { const missing=missingSchemaMessage(error); i
 // ("2026-11-15 05:00:00") and times that already carry one ("...Z" or
 // "...+00:00"). Shows "—" for a blank or unreadable value instead of throwing.
 const DATE_FORMAT=new Intl.DateTimeFormat('en-PH',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Manila'});
-export const formatDate = (value) => {
+const DATE_SECONDS_FORMAT=new Intl.DateTimeFormat('en-PH',{dateStyle:'medium',timeStyle:'medium',timeZone:'Asia/Manila'});
+// The same, to the second (for clocking times).
+export const formatDateSeconds = (value) => formatDate(value,DATE_SECONDS_FORMAT);
+export const formatDate = (value,format=DATE_FORMAT) => {
   if(value===null||value===undefined||value==='')return '—';
   let date;
   if(value instanceof Date||typeof value==='number')date=new Date(value);
   else{const text=String(value).trim().replace(' ','T').replace(/([+-]\d\d)$/,'$1:00');date=new Date(/([zZ]|[+-]\d\d:?\d\d)$/.test(text)?text:`${text}Z`);}
-  return Number.isNaN(date.valueOf())?'—':DATE_FORMAT.format(date);
+  return Number.isNaN(date.valueOf())?'—':format.format(date);
 };
 export const phDateTimeLocalToUtc = (value) => {
   if(!value)return null;

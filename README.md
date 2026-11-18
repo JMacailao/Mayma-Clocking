@@ -100,7 +100,8 @@ Create a club account with exactly that name to hand the old data to that club.
 - `pages/member/dashboard/`: a member's open races.
 - `pages/member/clocking/`: member clocking by tapping the pigeon's NFC tag (Android
   phone or USB NFC reader), or with the sticker's scratch code, typed or scanned with
-  the camera.
+  the camera. After each clocking a pop-up shows the race, release point,
+  release date and time, arrival time, flying time, distance and speed (m/min).
 - `pages/member/history/`: that member's receipts.
 - `pages/member/results/`: public club and date-filtered race results.
 - `pages/member/settings/`: member profile and password settings.
