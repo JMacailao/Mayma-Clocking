@@ -18,11 +18,12 @@
               (taps sent late, after being offline, are not filled in).
     Clocking  each tap clocks that tag's pigeon in an open race.
 
-  Tap times come from a DS3231 clock module (with its coin-cell battery), so
-  they stay accurate even when the ESP8266 is switched off or has no internet.
-  Whenever the reader is online it corrects the DS3231 from internet time.
-  Set it once: power the reader on with internet (the page shows "DS3231").
-  Without a DS3231 the sketch still works, using internet time kept while the
+  Tap times come from a DS1302 clock module (CLK/DAT/RST pins, with its
+  coin-cell battery), so they stay accurate even when the ESP8266 is switched
+  off or has no internet. Whenever the reader is online it corrects the DS1302
+  from internet time (a DS1302 drifts a few seconds a day on its own).
+  Set it once: power the reader on with internet (the page shows "DS1302").
+  Without a DS1302 the sketch still works, using internet time kept while the
   board stays powered; a tap made before the clock was ever set is clocked at
   the time AvilonX receives it.
 
@@ -35,13 +36,13 @@
     4. On http://192.168.4.1 enter the device key, then pick your 2.4 GHz Wi-Fi
        and press Save & Connect. Tap a tag: the page shows AvilonX's reply.
 
-  Wiring (RC522 and DS3231 run on 3.3 V)
-    RC522:  SDA->D2(GPIO4), SCK->D5(GPIO14), MISO->D6(GPIO12), MOSI->D7(GPIO13),
-            RST->3.3V (not D1 any more: the RC522 is reset in software),
-            3.3V->3V3, GND->GND.
-    DS3231: SDA->D1(GPIO5), SCL->D3(GPIO0), VCC->3V3, GND->GND, with a CR2032
-            coin cell in the module. (D3 must be high while the board starts;
-            the module's pull-up keeps it high.)
+  Wiring (RC522 and DS1302 run on 3.3 V)
+    RC522:  SDA->D3(GPIO0), SCK->D5(GPIO14), MISO->D6(GPIO12), MOSI->D7(GPIO13),
+            RST->3.3V (the RC522 is reset in software), 3.3V->3V3, GND->GND.
+    DS1302: CLK->D1(GPIO5), DAT->D2(GPIO4), RST->D8(GPIO15), VCC->3V3, GND->GND,
+            with a CR2032 coin cell in the module.
+    (D8 must be low and D3 high while the board starts; the DS1302's RST and
+    the RC522's SDA keep them that way.)
     Hotspot reset button: D0(GPIO16) -> button -> GND, with a 10k resistor from
     D0 to 3.3V. Holding it 10 seconds restores ONLY the reader's own hotspot
     name/password to RFID-READER / RFID12345, blinks the LED three times and
@@ -60,14 +61,14 @@
 #include <time.h>
 #include <sys/time.h>
 #include <coredecls.h>   // settimeofday_cb: told when internet time arrives
-#include <Wire.h>
 #include <SPI.h>
 #include <MFRC522.h>
 
-#define RFID_SS_PIN  4
+#define RFID_SS_PIN  0     // D3 -> RC522 SDA
 #define RFID_RST_PIN UINT8_MAX  // RC522 RST is tied to 3.3V; reset in software
-#define RTC_SDA_PIN 5   // D1 -> DS3231 SDA
-#define RTC_SCL_PIN 0   // D3 -> DS3231 SCL
+#define RTC_CLK_PIN 5   // D1 -> DS1302 CLK
+#define RTC_DAT_PIN 4   // D2 -> DS1302 DAT
+#define RTC_RST_PIN 15  // D8 -> DS1302 RST (CE)
 #define RESET_BUTTON_PIN 16
 #define RESET_HOLD_MS 10000UL
 #define STATUS_LED_PIN 2   // built-in LED, lit when LOW
@@ -169,7 +170,7 @@ const char PAGE[] PROGMEM = R"HTML(
 const $=id=>document.getElementById(id);let previousUID='',updating=false,scanning=false;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 function statusBadge(el,label,good){el.textContent=label;el.className='status '+(good?'good':'bad');}
-async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=(s.clock_synced?'clock is set from '+(s.clock_source==='ds3231'?'the DS3231 battery clock':'internet time')+', Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)')+(s.clock_source==='ds3231_unset'?'. The DS3231 needs internet once to set its time':'')+(s.clock_source==='internet'?'. No DS3231 found: the time is lost if the reader is switched off':'');statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=s.ap_ssid||'RFID-READER';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
+async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=(s.clock_synced?'clock is set from '+(s.clock_source==='ds1302'?'the DS1302 battery clock':'internet time')+', Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)')+(s.clock_source==='ds1302_unset'?'. The DS1302 needs internet once to set its time':'')+(s.clock_source==='internet'?'. No DS1302 found: the time is lost if the reader is switched off':'');statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=s.ap_ssid||'RFID-READER';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
 async function scanNetworks(){if(scanning)return;scanning=true;const btn=$('scanBtn'),select=$('network');btn.disabled=true;select.replaceChildren(new Option('Scanning networks...',''));try{let items=null;for(let i=0;i<15&&!items;i++){const r=await fetch('/api/networks',{cache:'no-store'});if(r.status===202){await wait(1000);continue;}if(!r.ok)throw Error('scan failed');items=await r.json();}if(!items)throw Error('scan timed out');select.replaceChildren(new Option('Choose a Wi-Fi network',''));items.forEach(n=>select.add(new Option(n.ssid+' ('+n.rssi+' dBm)'+(n.open?' - Open':''),n.ssid)));$('message').textContent=items.length?'':'No Wi-Fi networks found. Try again.';}catch(e){select.replaceChildren(new Option('Could not scan',''));$('message').textContent='Wi-Fi scan failed. Try again.';}finally{scanning=false;btn.disabled=false;}}
 async function post(url,form,output){output.textContent='Saving...';try{const r=await fetch(url,{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok)update();}catch(e){output.textContent='Could not save. Check that you are connected to the reader hotspot.';}}
 $('scanBtn').addEventListener('click',scanNetworks);$('copySerial').addEventListener('click',()=>{const text=$('serial').textContent;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>{$('copySerial').textContent='Copied';});else window.prompt('Copy device serial',text);});$('wifiForm').addEventListener('submit',e=>{e.preventDefault();post('/wifi/save',e.target,$('message')).then(()=>$('password').value='');});$('keyForm').addEventListener('submit',e=>{e.preventDefault();post('/device/save',e.target,$('keyMessage')).then(()=>$('key').value='');});$('apForm').addEventListener('submit',async e=>{e.preventDefault();const form=e.target,output=$('apMessage'),pw=$('apPasswordInput').value;if(pw!==$('apConfirmInput').value){output.textContent='Passwords do not match.';return;}output.textContent='Saving hotspot credentials...';try{const r=await fetch('/ap/save',{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok){$('apPasswordInput').value='';$('apConfirmInput').value='';}}catch(err){output.textContent='Could not save; check your connection.';}});update();setInterval(update,1000);scanNetworks();
@@ -254,12 +255,12 @@ String manilaTime(uint32_t utcSeconds) {
   return String(label);
 }
 
-// ---- DS3231 battery-backed clock (I2C address 0x68), kept in UTC ----------
-const uint8_t DS3231_ADDR = 0x68;
-bool rtcPresent = false;     // a DS3231 answered on the I2C bus
-bool rtcValid = false;       // its time can be trusted (set and never stopped)
+// ---- DS1302 battery-backed clock (3-wire CLK/DAT/RST), kept in UTC --------
+bool rtcPresent = false;     // a DS1302 answered
+bool rtcValid = false;       // its time can be trusted (set by this sketch, still running)
 bool settingClockFromRtc = false;
 volatile bool internetTimeArrived = false;
+const uint8_t RTC_RAM_MARK = 0xA5;  // stored in DS1302 RAM once its time is set
 
 uint8_t bcdToDec(uint8_t v) { return (v >> 4) * 10 + (v & 0x0F); }
 uint8_t decToBcd(uint8_t v) { return ((v / 10) << 4) | (v % 10); }
@@ -285,55 +286,81 @@ void civilFromDays(int32_t z, int &y, unsigned &m, unsigned &d) {
   y = (int)yoe + era * 400 + (m <= 2);
 }
 
-bool rtcReadRegister(uint8_t reg, uint8_t &value) {
-  Wire.beginTransmission(DS3231_ADDR); Wire.write(reg);
-  if (Wire.endTransmission() != 0 || Wire.requestFrom(DS3231_ADDR, (uint8_t)1) != 1) return false;
-  value = Wire.read();
-  return true;
-}
-
-// Reads the DS3231 as seconds since 1970 (UTC). False when it cannot be read.
-bool rtcRead(uint32_t &unixUtc) {
-  Wire.beginTransmission(DS3231_ADDR); Wire.write(0x00);
-  if (Wire.endTransmission() != 0 || Wire.requestFrom(DS3231_ADDR, (uint8_t)7) != 7) return false;
-  uint8_t sec = bcdToDec(Wire.read() & 0x7F), min = bcdToDec(Wire.read() & 0x7F), hourReg = Wire.read();
-  Wire.read();  // day of week
-  uint8_t day = bcdToDec(Wire.read() & 0x3F), monthReg = Wire.read(), year = bcdToDec(Wire.read());
-  uint8_t hour;
-  if (hourReg & 0x40) {  // 12-hour mode (this sketch always writes 24-hour)
-    hour = bcdToDec(hourReg & 0x1F) % 12 + ((hourReg & 0x20) ? 12 : 0);
-  } else {
-    hour = bcdToDec(hourReg & 0x3F);
+// DS1302 3-wire bus: bytes go least-significant bit first, written on the
+// rising clock edge; when reading, the chip puts each bit out on the falling edge.
+void ds1302Begin() { digitalWrite(RTC_CLK_PIN, LOW); digitalWrite(RTC_RST_PIN, HIGH); delayMicroseconds(4); }
+void ds1302End() { digitalWrite(RTC_RST_PIN, LOW); delayMicroseconds(4); }
+void ds1302WriteByte(uint8_t value) {
+  pinMode(RTC_DAT_PIN, OUTPUT);
+  for (uint8_t i = 0; i < 8; i++) {
+    digitalWrite(RTC_DAT_PIN, value & 1); value >>= 1;
+    delayMicroseconds(1); digitalWrite(RTC_CLK_PIN, HIGH);
+    delayMicroseconds(1); digitalWrite(RTC_CLK_PIN, LOW);
   }
-  uint8_t month = bcdToDec(monthReg & 0x1F);
-  int fullYear = 2000 + year + ((monthReg & 0x80) ? 100 : 0);
+}
+uint8_t ds1302ReadByte() {
+  pinMode(RTC_DAT_PIN, INPUT);
+  uint8_t value = 0;
+  for (uint8_t i = 0; i < 8; i++) {
+    delayMicroseconds(1);
+    if (digitalRead(RTC_DAT_PIN)) value |= (1 << i);
+    digitalWrite(RTC_CLK_PIN, HIGH); delayMicroseconds(1);
+    digitalWrite(RTC_CLK_PIN, LOW);
+  }
+  return value;
+}
+void ds1302WriteRegister(uint8_t command, uint8_t value) { ds1302Begin(); ds1302WriteByte(command); ds1302WriteByte(value); ds1302End(); }
+uint8_t ds1302ReadRegister(uint8_t command) { ds1302Begin(); ds1302WriteByte(command); uint8_t v = ds1302ReadByte(); ds1302End(); return v; }
+
+// Reads the DS1302 as seconds since 1970 (UTC). False when it cannot be read.
+bool rtcRead(uint32_t &unixUtc) {
+  uint8_t r[7];
+  ds1302Begin(); ds1302WriteByte(0xBF);      // clock burst read
+  for (uint8_t i = 0; i < 7; i++) r[i] = ds1302ReadByte();
+  ds1302End();
+  if (r[0] & 0x80) return false;             // clock halted
+  uint8_t sec = bcdToDec(r[0] & 0x7F), min = bcdToDec(r[1] & 0x7F), hour;
+  if (r[2] & 0x80) hour = bcdToDec(r[2] & 0x1F) % 12 + ((r[2] & 0x20) ? 12 : 0);  // 12-hour mode
+  else hour = bcdToDec(r[2] & 0x3F);
+  uint8_t day = bcdToDec(r[3] & 0x3F), month = bcdToDec(r[4] & 0x1F);
+  int fullYear = 2000 + bcdToDec(r[6]);
   if (sec > 59 || min > 59 || hour > 23 || day < 1 || day > 31 || month < 1 || month > 12 || fullYear < 2024) return false;
   unixUtc = (uint32_t)(daysFromCivil(fullYear, month, day) * 86400L + hour * 3600L + min * 60L + sec);
   return true;
 }
 
-// Sets the DS3231 (UTC) and clears its "oscillator stopped" flag.
+// Sets the DS1302 (UTC, 24-hour, clock running) and marks it as set.
 void rtcWrite(uint32_t unixUtc) {
   int32_t days = (int32_t)(unixUtc / 86400UL);
   uint32_t rest = unixUtc % 86400UL;
   int y; unsigned m, d;
   civilFromDays(days, y, m, d);
   if (y < 2000 || y > 2099) return;
-  Wire.beginTransmission(DS3231_ADDR);
-  Wire.write(0x00);
-  Wire.write(decToBcd(rest % 60));
-  Wire.write(decToBcd((rest / 60) % 60));
-  Wire.write(decToBcd(rest / 3600));            // 24-hour mode
-  Wire.write(decToBcd(((days + 4) % 7) + 1));   // 1970-01-01 was a Thursday
-  Wire.write(decToBcd(d));
-  Wire.write(decToBcd(m));
-  Wire.write(decToBcd(y - 2000));
-  if (Wire.endTransmission() != 0) return;
-  uint8_t status;
-  if (rtcReadRegister(0x0F, status)) {
-    Wire.beginTransmission(DS3231_ADDR); Wire.write(0x0F); Wire.write(status & 0x7F); Wire.endTransmission();
-  }
-  rtcValid = true;
+  ds1302WriteRegister(0x8E, 0x00);           // allow writes
+  ds1302WriteRegister(0x90, 0x00);           // trickle charger off (never charge a CR2032)
+  ds1302Begin(); ds1302WriteByte(0xBE);      // clock burst write: 7 time registers + control
+  ds1302WriteByte(decToBcd(rest % 60));      // seconds, clock-halt bit 0 = running
+  ds1302WriteByte(decToBcd((rest / 60) % 60));
+  ds1302WriteByte(decToBcd(rest / 3600));
+  ds1302WriteByte(decToBcd(d));
+  ds1302WriteByte(decToBcd(m));
+  ds1302WriteByte(decToBcd(((days + 4) % 7) + 1));  // 1970-01-01 was a Thursday
+  ds1302WriteByte(decToBcd(y - 2000));
+  ds1302WriteByte(0x00);                     // control: writes stay allowed
+  ds1302End();
+  ds1302WriteRegister(0xC0, RTC_RAM_MARK);   // RAM byte 0
+  uint32_t check = 0;
+  rtcValid = rtcRead(check) && (check + 2 >= unixUtc) && (check <= unixUtc + 2);
+}
+
+// The DS1302 has no address to ask, so check it is there by writing a test
+// value to one of its RAM bytes and reading it back.
+bool ds1302Detect() {
+  ds1302WriteRegister(0x8E, 0x00);
+  ds1302WriteRegister(0xC2, 0x5A);
+  if (ds1302ReadRegister(0xC3) != 0x5A) return false;
+  ds1302WriteRegister(0xC2, 0xC3);
+  return ds1302ReadRegister(0xC3) == 0xC3;
 }
 
 // Called by the ESP8266 core whenever the clock is set, including by NTP.
@@ -342,35 +369,35 @@ void onClockSet() {
 }
 
 void beginRtc() {
-  Wire.begin(RTC_SDA_PIN, RTC_SCL_PIN);
-  Wire.beginTransmission(DS3231_ADDR);
-  rtcPresent = Wire.endTransmission() == 0;
-  if (!rtcPresent) { Serial.println(F("No DS3231 found: using internet time only.")); return; }
-  uint8_t status = 0x80;
+  pinMode(RTC_RST_PIN, OUTPUT); digitalWrite(RTC_RST_PIN, LOW);
+  pinMode(RTC_CLK_PIN, OUTPUT); digitalWrite(RTC_CLK_PIN, LOW);
+  pinMode(RTC_DAT_PIN, INPUT);
+  rtcPresent = ds1302Detect();
+  if (!rtcPresent) { Serial.println(F("No DS1302 found: using internet time only.")); return; }
   uint32_t now = 0;
-  // Bit 7 of the status register means the clock stopped (battery flat or removed).
-  rtcValid = rtcReadRegister(0x0F, status) && !(status & 0x80) && rtcRead(now);
+  // The RAM mark is lost, and the clock halts, when the battery is flat or removed.
+  rtcValid = ds1302ReadRegister(0xC1) == RTC_RAM_MARK && rtcRead(now);
   if (rtcValid) {
     timeval tv = { (time_t)now, 0 };
     settingClockFromRtc = true; settimeofday(&tv, nullptr); settingClockFromRtc = false;
-    Serial.print(F("Clock set from DS3231: ")); Serial.println(manilaTime(now));
+    Serial.print(F("Clock set from DS1302: ")); Serial.println(manilaTime(now));
   } else {
-    Serial.println(F("DS3231 has no valid time yet: connect to the internet once to set it."));
+    Serial.println(F("DS1302 has no valid time yet: connect to the internet once to set it."));
   }
 }
 
-// Copies internet time into the DS3231 after each NTP sync (about hourly).
+// Copies internet time into the DS1302 after each NTP sync (about hourly).
 void keepRtcInStep() {
   if (!internetTimeArrived) return;
   internetTimeArrived = false;
   time_t t = time(nullptr);
   if (rtcPresent && t >= 1700000000) {
     rtcWrite((uint32_t)t);
-    Serial.println(F("DS3231 set from internet time."));
+    Serial.println(F("DS1302 set from internet time."));
   }
 }
 
-// Tap time in seconds since 1970 (UTC): from the DS3231 when it is valid,
+// Tap time in seconds since 1970 (UTC): from the DS1302 when it is valid,
 // otherwise from internet time kept since power-up. 0 = time unknown.
 uint32_t readScanTime() {
   uint32_t t = 0;
@@ -380,8 +407,8 @@ uint32_t readScanTime() {
 }
 
 const char* clockSource() {
-  if (rtcPresent && rtcValid) return "ds3231";
-  if (rtcPresent) return "ds3231_unset";
+  if (rtcPresent && rtcValid) return "ds1302";
+  if (rtcPresent) return "ds1302_unset";
   return time(nullptr) >= 1700000000 ? "internet" : "none";
 }
 
@@ -838,7 +865,7 @@ void setup() {
   Serial.println(F("Reader page: http://192.168.4.1"));
   beginRouterConnection();
   // The clock runs in UTC (what AvilonX expects) and the page shows Philippine
-  // time. The DS3231 sets it at power-up; internet time corrects both.
+  // time. The DS1302 sets it at power-up; internet time corrects both.
   settimeofday_cb(onClockSet);
   beginRtc();
   configTime(0, 0, "pool.ntp.org", "time.google.com");

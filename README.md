@@ -162,11 +162,12 @@ Create a club account with exactly that name to hand the old data to that club.
   race and keep it powered. Taps more than 3 days old, or from a reader clock that
   is ahead of the server, are not trusted. Receipts timed this way say
   **Reader tap time**.
-  Add a **DS3231** clock module (with a CR2032 coin cell) so tap times stay
-  accurate even after the reader is switched off: DS3231 SDA → D1, SCL → D3,
-  VCC → 3V3, GND → GND, and move the RC522's RST wire from D1 to 3.3V. Power the
-  reader on with internet once to set the DS3231; after that it keeps the time on
-  its own and is corrected whenever the reader is online.
+  Add a **DS1302** clock module (CLK/DAT/RST pins, with a CR2032 coin cell) so
+  tap times stay accurate even after the reader is switched off: DS1302 CLK → D1,
+  DAT → D2, RST → D8, VCC → 3V3, GND → GND; move the RC522's SDA wire from D2 to
+  D3 and its RST wire from D1 to 3.3V. Power the reader on with internet once to
+  set the DS1302; after that it keeps the time on its own and is corrected
+  whenever the reader is online.
 - Each sticker has a visible number (for example `12345`) and a hidden scratch code
   (for example `4567`). Each code prints as two pieces: on the left a number piece (logo, label text and the sticker number) for registering the race entry, and on the right, after a solid divider line, a barcode piece (barcode of the secret code with the decoded secret code underneath) for clocking. Keep the barcode piece hidden until clocking. Cover that box
   with scratch-off foil before handing stickers out. Race entries use the visible
