@@ -163,10 +163,10 @@ Create a club account with exactly that name to hand the old data to that club.
   is ahead of the server, are not trusted. Receipts timed this way say
   **Reader tap time**.
   Add a **DS1302** clock module (CLK/DAT/RST pins, with a CR2032 coin cell) so
-  tap times stay accurate even after the reader is switched off: DS1302 RST → D8,
-  DAT → D0, CLK → RX, VCC → 3V3, GND → GND (the RC522 stays on D1/D2). The
-  hotspot reset moves to the board's own FLASH button, so remove the external
-  button from D0. Power the reader on with internet once to
+  tap times stay accurate even after the reader is switched off: DS1302 CLK → D3,
+  DAT → D4, RST → D8, VCC → 3V3, GND → GND (the RC522 stays on D1/D2 and the
+  reset button on D0). If the board sometimes fails to start, add 4.7 kΩ
+  pull-ups from D3 and D4 to 3.3V. Power the reader on with internet once to
   set the DS1302; after that it keeps the time on its own and is corrected
   whenever the reader is online.
 - Each sticker has a visible number (for example `12345`) and a hidden scratch code
