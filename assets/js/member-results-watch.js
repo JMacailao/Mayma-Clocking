@@ -9,6 +9,17 @@ const asUtc=value=>value?new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(String(value))?Str
 const flightText=seconds=>{if(!(seconds>0))return '—';const s=Math.round(seconds),h=Math.floor(s/3600),m=Math.floor(s%3600/60);return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;};
 const howText=clock=>clock.source==='barcode'?'Sticker':clock.source==='admin_manual'?'Club':clock.time_source==='reader'?'Loft RFID reader':'NFC tag';
 
+const notifyPermission=()=>typeof Notification==='undefined'?'unsupported':Notification.permission;
+// A phone/desktop notification as well as the pop-up (when the member allowed it).
+export function notify(title,body){
+  if(notifyPermission()!=='granted')return;
+  try{const options={body,icon:new URL('../images/clocking-logo.png',import.meta.url).href,tag:`avilonx-${title}`};
+    navigator.serviceWorker?.getRegistration?.().then(reg=>reg?reg.showNotification(title,options):new Notification(title,options)).catch(()=>{try{new Notification(title,options);}catch{/* not allowed */}});
+  }catch{/* not allowed */}
+}
+export const notificationsState=notifyPermission;
+export async function enableNotifications(){if(notifyPermission()==='unsupported')return 'unsupported';try{return await Notification.requestPermission();}catch{return notifyPermission();}}
+
 export function watchMemberReceipts(memberId){
   if(!memberId||window.__avilonxReceiptWatch)return;
   window.__avilonxReceiptWatch=true;
@@ -27,11 +38,13 @@ export function watchMemberReceipts(memberId){
     const rows=[['Race',item.race?.name],['Ring',ringLabel(item.entry.pigeon_ring,item.entry.remarks)],['Bird',item.bird?`${item.bird.bird_name} · ${item.bird.color}`:null],['Clocked at',formatDateSeconds(item.clock.received_at_utc)],['Release',item.race?.release_at_utc?`${item.race.release_location||''}${item.race.release_location?' · ':''}${formatDateSeconds(item.race.release_at_utc)}`:null],['Flight time',flightText(item.seconds)],['Distance',item.entry.distance_m?`${number(item.entry.distance_m/1000)} km`:null],['Speed',item.speed?`${number(item.speed)} m/min`:'—'],['Clocked with',howText(item.clock)],['Show up',item.clock.verification==='verified'?'Verified':item.race?.status==='closed'?'Race closed':'Bring the pigeon to the club before the race is closed']].filter(([,value])=>value);
     dialog.innerHTML=`<div class="result-popup-head"><span class="result-popup-icon" aria-hidden="true">✓</span><div><h2>Your pigeon was clocked</h2><p>${escapeHTML(ringLabel(item.entry.pigeon_ring,item.entry.remarks))}${item.race?` · ${escapeHTML(item.race.name)}`:''}</p></div></div><dl>${rows.map(([label,value])=>`<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join('')}</dl><p class="small">Results are provisional until the club verifies them.</p><form method="dialog"><button class="button primary">OK</button></form>`;
     try{dialog.showModal();}catch{dialog.setAttribute('open','');}
+    notify(`Your pigeon ${item.entry.pigeon_ring} was clocked`,`${item.race?.name||'Race'}${item.speed?` · ${number(item.speed)} m/min`:''}`);
     message(`${item.entry.pigeon_ring} clocked for ${item.race?.name||'the race'}${item.speed?` · ${number(item.speed)} m/min`:''}.`,'success');
   };
 
   const check=async()=>{
-    if(busy||document.hidden)return;busy=true;
+    // Hidden tab: keep checking only when the phone can show a notification.
+    if(busy||(document.hidden&&notifyPermission()!=='granted'))return;busy=true;
     try{
       const {data:entries,error}=await supabase.from('race_entries').select('*').eq('member_id',memberId);
       if(error||!entries?.length)return;
@@ -56,5 +69,7 @@ export function watchMemberReceipts(memberId){
     finally{busy=false;}
   };
   setInterval(check,CHECK_MS);check();
+  // Live: Supabase Realtime sends each new clock at once (race-day.sql turns it on).
+  try{supabase.channel?.(`member-clocks-${memberId}`).on('postgres_changes',{event:'INSERT',schema:'public',table:'clock_events'},()=>setTimeout(check,400)).subscribe();}catch{/* realtime unavailable */}
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)check();});
 }

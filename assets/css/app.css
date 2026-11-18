@@ -817,3 +817,14 @@ body.raceday-tv-on{overflow:hidden}
 .history-diff ins{color:#11653a;text-decoration:none;font-weight:600}
 .history-more{display:flex;justify-content:center;margin-top:12px}
 @media (max-width:720px){.history-filters{grid-template-columns:1fr}}
+
+/* Member reminders and notifications */
+.member-reminders ul{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.member-reminders li{display:grid;grid-template-columns:26px minmax(0,1fr);gap:10px;align-items:start;padding:10px 12px;border-radius:10px;background:#f4f7fa;font-size:14px}
+.member-reminders li>span:first-child{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#dbe7f3;color:#00345f;font-weight:800}
+.member-reminders li.is-showup{background:#fff4dc}
+.member-reminders li.is-showup>span:first-child{background:#f59e0b;color:#fff}
+.notify-box{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0 0 18px;padding:14px 16px;border:1px solid #bfdbfe;border-radius:12px;background:#eff6ff}
+.notify-box[hidden]{display:none}
+.notify-box div{display:grid;gap:2px}
+.notify-box span{color:var(--muted);font-size:13px}
