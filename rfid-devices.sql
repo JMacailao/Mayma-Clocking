@@ -249,6 +249,17 @@ BEGIN
 END;
 $$;
 
+-- Member: their own loft clock reader(s), for the Clocking page.
+CREATE OR REPLACE FUNCTION public.member_list_rfid_devices()
+RETURNS TABLE (name text, serial text, last_seen_at timestamptz)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT d.name, d.serial::text, d.last_seen_at FROM public.rfid_devices AS d
+  WHERE public.current_member_id() IS NOT NULL AND d.member_id = public.current_member_id()
+  ORDER BY d.name
+$$;
+REVOKE ALL ON FUNCTION public.member_list_rfid_devices() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.member_list_rfid_devices() TO authenticated;
+
 -- Tags read by Register-mode readers since p_after_id, for the pages that fill
 -- in an NFC tag field. Club admins and staff see their club's readers; the
 -- Super Admin (who registers tags for every club) sees all readers.
@@ -364,7 +375,15 @@ BEGIN
   ELSE
     SELECT c.* INTO v_clock FROM public.clock_events AS c WHERE c.race_entry_id = v_entry.id;
     IF FOUND THEN
-      v_result := jsonb_build_object('status', 'duplicate', 'message', 'Ring ' || v_entry.pigeon_ring || ' already has a receipt.');
+      -- Another way (sticker, phone NFC or the Clocking page) reached AvilonX first:
+      -- that receipt stays, and this tap is not used.
+      v_result := jsonb_build_object('status', 'duplicate', 'message', 'Ring ' || v_entry.pigeon_ring || ' was already clocked at '
+        || to_char(v_clock.received_at_utc + interval '8 hours', 'Mon DD, HH12:MI:SS AM')
+        || CASE WHEN v_clock.source = 'barcode' THEN ' with its sticker'
+                WHEN v_clock.source = 'admin_manual' THEN ' by the club'
+                WHEN v_clock.time_source = 'reader' THEN ' by a reader'
+                ELSE ' with its NFC tag' END
+        || '. This tap was not used.');
     ELSE
       INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, server_received_at_utc, time_source, source, verification)
       VALUES (v_entry.id, v_entry.pigeon_ring, v_tap, v_server, v_source, 'nfc', 'provisional')

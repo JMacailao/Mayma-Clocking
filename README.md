@@ -156,9 +156,15 @@ Create a club account with exactly that name to hand the old data to that club.
     never clocks.
   - **A member**: the reader is that member's loft clock and only **clocks**, and
     only that member's own pigeons' RFID tags. It never registers.
-  On Race entries, members with a loft clock are marked **RFID reader**; their
-  pigeons must have an RFID tag. Club admins see their readers on **Admin → RFID
-  readers**.
+  On Race entries, members with a loft clock are marked **RFID reader**; add
+  their pigeons' RFID tag so the reader can clock them. Club admins see their
+  readers on **Admin → RFID readers**.
+- **Three ways to clock one pigeon**: the member's loft RFID reader (uses the tap
+  time, also offline), an Android phone (**Start phone NFC** on Clocking) and the
+  sticker scratch code. The phone and sticker use the time they reach AvilonX.
+  Whichever reaches AvilonX first is the pigeon's receipt; a later one is not
+  used (a reader that was offline then shows "already clocked … with its
+  sticker"). Race entries shows each pigeon's ways in **Clock with**.
   Without Wi-Fi or internet the reader saves taps in its flash (up to 150, kept
   through a power cut) and sends them when the internet is back. AvilonX then clocks
   each pigeon at the time its tag was tapped, using the reader's clock, which is set
