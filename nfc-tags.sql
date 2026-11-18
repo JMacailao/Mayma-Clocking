@@ -49,6 +49,17 @@ ALTER TABLE public.race_entries ADD CONSTRAINT race_entries_nfc_tag_valid
 CREATE UNIQUE INDEX IF NOT EXISTS race_entries_race_nfc_tag_key
   ON public.race_entries (race_id, nfc_tag) WHERE nfc_tag IS NOT NULL;
 
+-- Optional expiry of a pigeon's RFID/NFC tag (set on Race entries, e.g. 3 or 5
+-- days after registering). After it, the tag no longer clocks that pigeon by
+-- phone or loft reader; the sticker still works. NULL = no expiry.
+ALTER TABLE public.race_entries ADD COLUMN IF NOT EXISTS nfc_expires_at timestamptz;
+
+-- Which reader the tag was read with when the pigeon was registered.
+ALTER TABLE public.race_entries ADD COLUMN IF NOT EXISTS nfc_read_with text;
+ALTER TABLE public.race_entries DROP CONSTRAINT IF EXISTS race_entries_nfc_read_with_check;
+ALTER TABLE public.race_entries ADD CONSTRAINT race_entries_nfc_read_with_check
+  CHECK (nfc_read_with IS NULL OR nfc_read_with IN ('wireless', 'wired', 'phone'));
+
 CREATE OR REPLACE FUNCTION public.normalize_race_entry_nfc_tag()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -124,6 +135,10 @@ BEGIN
   v_now := clock_timestamp() AT TIME ZONE 'UTC';
   IF v_race.release_at_utc IS NULL OR v_now <= v_race.release_at_utc THEN
     RAISE EXCEPTION 'This race has not started yet.' USING ERRCODE = '22023';
+  END IF;
+  IF v_entry.nfc_expires_at IS NOT NULL AND now() > v_entry.nfc_expires_at THEN
+    RAISE EXCEPTION 'The RFID tag on ring % expired on %. Clock this pigeon with its sticker.', v_entry.pigeon_ring,
+      to_char(v_entry.nfc_expires_at AT TIME ZONE 'Asia/Manila', 'Mon DD, YYYY HH12:MI AM') USING ERRCODE = '22023';
   END IF;
 
   SELECT c.* INTO v_clock FROM public.clock_events AS c WHERE c.race_entry_id = v_entry.id;

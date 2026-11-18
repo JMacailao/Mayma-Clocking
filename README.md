@@ -165,6 +165,13 @@ Create a club account with exactly that name to hand the old data to that club.
   Whichever reaches AvilonX first is the pigeon's receipt; a later one is not
   used (a reader that was offline then shows "already clocked … with its
   sticker"). Race entries shows each pigeon's ways in **Clock with**.
+- **Registering a pigeon's RFID tag** (Race entries) asks which reader is used:
+  **Wireless** (ESP8266 Wi-Fi reader in register mode), **Wired** (USB reader) or
+  **Android phone**; only that reader fills the tag field. The tag can **expire**
+  after 1, 2, 3, 5, 7 or 14 days, or a custom number of days. After that it no
+  longer clocks the pigeon by reader or phone (a reader tap saved offline before
+  the expiry still counts); the sticker still works. Run the latest
+  `nfc-tags.sql`, then `rfid-devices.sql`, for these.
   Without Wi-Fi or internet the reader saves taps in its flash (up to 150, kept
   through a power cut) and sends them when the internet is back. AvilonX then clocks
   each pigeon at the time its tag was tapped, using the reader's clock, which is set

@@ -23,6 +23,9 @@ BEGIN
      OR to_regprocedure('public._clock_receipt_details(bigint,bigint)') IS NULL THEN
     RAISE EXCEPTION 'Run nfc-tags.sql (and sticker-barcodes.sql) before rfid-devices.sql.';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'race_entries' AND column_name = 'nfc_expires_at') THEN
+    RAISE EXCEPTION 'Run the latest nfc-tags.sql first (it adds the RFID tag expiry), then rfid-devices.sql.';
+  END IF;
 END $$;
 
 CREATE TABLE IF NOT EXISTS public.rfid_devices (
@@ -372,6 +375,11 @@ BEGIN
     v_result := jsonb_build_object('status', 'error', 'mode', 'clock', 'tag', v_uid, 'message',
       CASE WHEN v_source = 'reader' AND v_server > v_race.release_at_utc THEN 'Tag ' || v_uid || ' was tapped before ' || v_race.name || ' was released.'
            ELSE v_race.name || ' has not started yet.' END);
+  ELSIF v_entry.nfc_expires_at IS NOT NULL AND (v_tap AT TIME ZONE 'UTC') > v_entry.nfc_expires_at THEN
+    -- Compared with the tap time, so a tap saved offline before the expiry still counts.
+    v_result := jsonb_build_object('status', 'error', 'mode', 'clock', 'tag', v_uid, 'message',
+      'The RFID tag on ring ' || v_entry.pigeon_ring || ' expired on '
+      || to_char(v_entry.nfc_expires_at AT TIME ZONE 'Asia/Manila', 'Mon DD, HH12:MI AM') || '. Clock this pigeon with its sticker.');
   ELSE
     SELECT c.* INTO v_clock FROM public.clock_events AS c WHERE c.race_entry_id = v_entry.id;
     IF FOUND THEN

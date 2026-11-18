@@ -556,3 +556,18 @@ video#camera[hidden]{display:none}
 #reader-form>.field{align-content:start}
 .member-reader-note{color:var(--muted);font-weight:500}
 .member-reader-note.has-reader{color:#006c73;font-weight:700}
+.nfc-expiry{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px}
+.nfc-expiry>span{color:var(--ink);font-size:12px;font-weight:600}
+.entry-form-grid .nfc-expiry select{width:auto;min-height:38px;font-size:13px}
+.entry-form-grid .nfc-expiry input{width:90px;min-height:38px;font-size:13px}
+.tag-expired{color:var(--red);font-weight:700}
+.entry-form-grid .span-6{grid-column:1/-1}
+.reader-choice>span{color:var(--ink);font-size:13px}
+.reader-choice-options{display:flex;gap:10px;flex-wrap:wrap}
+.reader-choice-options label{display:flex;align-items:center;gap:9px;min-height:46px;padding:0 14px;border:1px solid #dce5ed;border-radius:9px;background:#fff;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer}
+.reader-choice-options label strong{color:var(--ink)}
+.reader-choice-options input{width:16px;height:16px;margin:0;accent-color:var(--green)}
+.reader-choice-options label:has(input:checked){border-color:var(--green);background:#eaf2f8}
+@media(max-width:720px){.reader-choice-options{display:grid}.entry-form-grid .span-6{grid-column:1/-1}}
+.input-with-button button[hidden]{display:none}
+.input-with-button:has(button[hidden]) input{border-radius:7px!important}
