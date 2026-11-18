@@ -48,7 +48,9 @@ requests in the browser.
       RFID reader**; unregistered readers are refused. Run it after `nfc-tags.sql`; it is safe to re-run.
   11. `entry-remarks.sql` — lets the club administrator build a list of remarks
       (**Entry remarks**) that appear as tick boxes when registering a pigeon on
-      Race entries. Safe to re-run.
+      Race entries. The ticked remarks are shown after the ring number, for
+      example `12345 P1/P2/P3`, on entries, clocking, results and public results.
+      Safe to re-run; run it again after re-running `public-results.sql`.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.

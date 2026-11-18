@@ -44,6 +44,9 @@ export const utcToPhDateTimeLocal = (value) => {
 };
 export const peso = (value) => Number(value||0).toLocaleString('en-PH',{maximumFractionDigits:2});
 export const number = (value) => value==null?'—':Number(value).toLocaleString('en-PH',{maximumFractionDigits:3});
+// A ring number with the entry's ticked remarks after it, e.g. "12345 P1/P2/P3".
+// Only for showing: the saved ring number stays plain for clocking and matching.
+export const ringLabel = (ring, remarks) => { const list=(Array.isArray(remarks)?remarks:[]).filter(Boolean); return `${ring??''}${list.length?` ${list.join('/')}`:''}`.trim(); };
 export const titleCase = (value) => String(value||'').replaceAll('_',' ').replace(/\b\w/g,m=>m.toUpperCase());
 export const stateTag = (value) => `<span class="tag ${escapeHTML(value)}">${escapeHTML(titleCase(value))}</span>`;
 export function tableRows(items, columns, empty='Nothing here yet.',withActions=true) {

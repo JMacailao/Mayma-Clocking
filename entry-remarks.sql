@@ -39,4 +39,52 @@ ALTER TABLE public.race_entries ADD COLUMN IF NOT EXISTS remarks text[] NOT NULL
 ALTER TABLE public.race_entries DROP CONSTRAINT IF EXISTS race_entries_remarks_limit;
 ALTER TABLE public.race_entries ADD CONSTRAINT race_entries_remarks_limit CHECK (cardinality(remarks) <= 30);
 
+-- Public results show each ring with its remarks, e.g. "12345 P1/P2/P3".
+-- This replaces the version in public-results.sql (same name and columns), so
+-- run this file again after re-running public-results.sql.
+CREATE OR REPLACE FUNCTION public.public_race_results(p_club_id bigint, p_race_date date)
+RETURNS TABLE(
+  race_name text,
+  loft_name text,
+  distance_m numeric,
+  pigeon_ring text,
+  barcode text,
+  arrival_at_utc timestamp without time zone,
+  flight_seconds numeric,
+  speed_m_per_min numeric
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT
+    r.name::text,
+    m.loft_name::text,
+    e.distance_m::numeric,
+    (COALESCE(e.pigeon_ring, c.pigeon_ring)
+      || CASE WHEN cardinality(e.remarks) > 0 THEN ' ' || array_to_string(e.remarks, '/') ELSE '' END)::text,
+    COALESCE(e.barcode, '')::text,
+    c.received_at_utc,
+    CASE
+      WHEN c.received_at_utc > r.release_at_utc
+        THEN EXTRACT(EPOCH FROM (c.received_at_utc - r.release_at_utc))
+      ELSE NULL::numeric
+    END,
+    CASE
+      WHEN c.received_at_utc > r.release_at_utc
+        THEN e.distance_m * 60 / NULLIF(EXTRACT(EPOCH FROM (c.received_at_utc - r.release_at_utc)), 0)
+      ELSE NULL::numeric
+    END
+  FROM public.clubs AS club
+  JOIN public.races AS r ON r.club_id = club.id
+  JOIN public.race_entries AS e ON e.race_id = r.id
+  JOIN public.members AS m ON m.id = e.member_id AND m.club_id = club.id
+  JOIN public.clock_events AS c ON c.race_entry_id = e.id
+  WHERE club.id = p_club_id
+    AND ((r.release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date = p_race_date
+    AND c.verification <> 'rejected'
+  ORDER BY r.name, m.loft_name, e.pigeon_ring;
+$function$;
+
 NOTIFY pgrst, 'reload schema';

@@ -1,4 +1,4 @@
-import { supabase, escapeHTML, formatDate, stateTag, tableRows, message, pageUrl as url } from '../../../assets/js/shared.js';
+import { supabase, escapeHTML, formatDate, stateTag, tableRows, message, ringLabel, pageUrl as url } from '../../../assets/js/shared.js';
 import { normalizeNfcUid, formatNfcUid, phoneNfcSupported, startPhoneNfc, nfcSetupGuideHtml, listenForReaderKeys, NFC_HELP } from '../../../assets/js/nfc.js';
 import { bindStickerScanner, stickerScannerDialogHtml } from '../../superadmin/stickers/shared.js';
 
@@ -14,7 +14,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   const openIds=new Set(races.map(race=>race.id)),openEntries=entries.filter(entry=>openIds.has(entry.race_id));
   const raceOptions=races.map(race=>`<option value="${race.id}">${escapeHTML(race.name)}${race.release_location?` · ${escapeHTML(race.release_location)}`:''}</option>`).join('');
   const memberName=entry=>members?.find(member=>member.id===entry.member_id)?.full_name||'';
-  const entryLabel=entry=>`${entry.pigeon_ring}${memberName(entry)?` (${memberName(entry)})`:''}`;
+  const entryLabel=entry=>`${ringLabel(entry.pigeon_ring,entry.remarks)}${memberName(entry)?` (${memberName(entry)})`:''}`;
 
   view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">CLUB CLOCKING</span><h2>Record an arrival</h2><p>Tap the pigeon's NFC tag, or enter its sticker reference number or ring number.</p></div></div>
   ${races.length?'':'<div class="notice error">No race is open right now. Open a race on Race schedules before clocking.</div>'}
@@ -67,6 +67,6 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     try{const result=await clockEntry(entry);message(result.text,result.ok?(result.duplicate?'info':'success'):'error');if(result.ok&&!result.duplicate){form.elements.code.value='';form.elements.code.focus();}}finally{button.disabled=false;}
   };
 
-  async function loadClocks(){const {data,error}=await supabase.from('clock_events').select('*').order('received_at_utc',{ascending:false}).limit(20);if(error){view.querySelector('[data-receipts]').textContent='Could not load receipts.';return;}const mapped=(data||[]).map(c=>{const entry=entries.find(e=>e.id===c.race_entry_id);return {...c,entry,member:memberName(entry||{}),race:(allRaces||races).find(r=>r.id===entry?.race_id)};});view.querySelector('[data-receipts]').innerHTML=tableRows(mapped,[{key:'received_at_utc',label:'Received',render:r=>`${escapeHTML(formatDate(r.received_at_utc))}${r.time_source==='reader'?'<br><span class="small" title="Tapped on an RFID reader and sent later; this is the time the tag was tapped.">Reader tap time</span>':''}`},{key:'race',label:'Race',render:r=>escapeHTML(r.race?.name||'—')},{key:'member',label:'Member',render:r=>escapeHTML(r.member||'—')},{key:'entry',label:'Ring',render:r=>escapeHTML(r.entry?.pigeon_ring||r.pigeon_ring||'—')},{key:'verification',label:'Status',render:r=>stateTag(r.verification)}],'No arrivals have been recorded.',false);}
+  async function loadClocks(){const {data,error}=await supabase.from('clock_events').select('*').order('received_at_utc',{ascending:false}).limit(20);if(error){view.querySelector('[data-receipts]').textContent='Could not load receipts.';return;}const mapped=(data||[]).map(c=>{const entry=entries.find(e=>e.id===c.race_entry_id);return {...c,entry,member:memberName(entry||{}),race:(allRaces||races).find(r=>r.id===entry?.race_id)};});view.querySelector('[data-receipts]').innerHTML=tableRows(mapped,[{key:'received_at_utc',label:'Received',render:r=>`${escapeHTML(formatDate(r.received_at_utc))}${r.time_source==='reader'?'<br><span class="small" title="Tapped on an RFID reader and sent later; this is the time the tag was tapped.">Reader tap time</span>':''}`},{key:'race',label:'Race',render:r=>escapeHTML(r.race?.name||'—')},{key:'member',label:'Member',render:r=>escapeHTML(r.member||'—')},{key:'entry',label:'Ring',render:r=>escapeHTML(r.entry?ringLabel(r.entry.pigeon_ring,r.entry.remarks):(r.pigeon_ring||'—'))},{key:'verification',label:'Status',render:r=>stateTag(r.verification)}],'No arrivals have been recorded.',false);}
   await loadClocks();
 }
