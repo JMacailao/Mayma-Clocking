@@ -800,3 +800,20 @@ body.raceday-tv-on{overflow:hidden}
 .schedule-practice strong{color:var(--ink)}
 .results-actions{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
 .results-actions .field{margin:0}
+
+/* Change history */
+.history-filters{display:grid;grid-template-columns:220px minmax(0,1fr);gap:12px;margin-bottom:12px}
+.history-filters .field{margin:0}
+.history-list{display:grid;gap:0;margin:0;padding:0;list-style:none}
+.history-item{padding:12px 4px;border-bottom:1px solid var(--line)}
+.history-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.history-action{padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;background:#eef2f6;color:#334155}
+.is-insert .history-action{background:#e7f6ee;color:#11653a}
+.is-delete .history-action{background:#fdecec;color:#a11d1d}
+.is-update .history-action{background:#fff4dc;color:#8a5a00}
+.history-diff{display:grid;gap:3px;margin:8px 0 0;padding-left:18px;font-size:13px}
+.history-diff span{display:inline-block;min-width:96px;color:var(--muted)}
+.history-diff del{color:#a11d1d}
+.history-diff ins{color:#11653a;text-decoration:none;font-weight:600}
+.history-more{display:flex;justify-content:center;margin-top:12px}
+@media (max-width:720px){.history-filters{grid-template-columns:1fr}}
