@@ -901,3 +901,54 @@ body.login-page{min-height:100vh;background:#f3f6f9}
 .password-eye svg{width:24px;height:24px;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .password-eye[aria-pressed="true"]{color:#f05a00}
 @media (max-width:520px){.login-header .brand{font-size:20px}.login-header .brand-logo{width:58px}.login-header .brand-sub{font-size:10px}}
+
+/* Race entries (new layout) */
+.entries-head{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin:0 0 16px}
+.entries-head h2{margin:0;font:800 clamp(26px,2.6vw,36px) Manrope;letter-spacing:-.03em;color:#0f2a44}
+.entries-head-sep{width:1px;height:30px;background:var(--line)}
+.entries-head label{color:var(--muted);font-weight:600;font-size:15px}
+.entries-head select{width:min(100%,440px);min-height:48px;padding:0 14px;border:1px solid #cfd9e2;border-radius:10px;background:#fff;color:var(--ink);font-size:16px;font-weight:600}
+.entries-shell{padding:0;border:0;background:none;box-shadow:none;overflow:visible}
+.entries-tab-bar{margin:0 0 16px;padding:0 18px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.entries-pane{padding:0}
+.entries-form{display:grid;gap:16px}
+.entries-cards{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;align-items:stretch}
+.entries-card{display:grid;align-content:start;gap:14px;padding:clamp(16px,1.8vw,24px);border:1px solid var(--line);border-radius:14px;background:#fff}
+.entries-card>h3{margin:0;font:800 20px Manrope;color:#0f2a44}
+.entries-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px 22px}
+.entries-card .field{margin:0}
+.entries-card .field>span{color:var(--ink);font-size:14px}
+.entries-card .field input,.entries-card .field select{min-height:46px;font-size:15px}
+.entries-reader .entries-row{grid-template-columns:1fr 1fr}
+.entries-reader-choice .reader-choice-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.entries-reader-choice .reader-choice-options label{justify-content:center;min-height:46px;padding:0 10px;font-size:14px}
+.entries-tag-status{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:9px;font-weight:600;font-size:14px}
+.entries-tag-status[hidden]{display:none}
+.entries-tag-status span{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;color:#fff;font-size:13px;font-weight:800}
+.entries-tag-status.is-ok{background:#e7f6ee;color:#11653a}.entries-tag-status.is-ok span{background:#16a34a}
+.entries-tag-status.is-bad{background:#fdecec;color:#a11d1d}.entries-tag-status.is-bad span{background:#dc2626}
+.entries-expiry{display:flex;align-items:center;min-height:46px;padding:0 14px;border:1px solid var(--line);border-radius:9px;background:#f6f8fa;color:var(--ink);font-size:15px;cursor:help}
+.entries-reader-setup{border-radius:9px;background:#f1f4f7}
+.entries-reader-setup>summary{padding:11px 14px;font-weight:700;cursor:pointer}
+.entries-reader-setup>small{display:block;padding:0 14px 10px}
+.entries-bird .entry-bird-preview{padding:12px;border-radius:12px}
+.entries-bird .entry-bird-preview img{width:84px;height:78px;border-radius:10px}
+.entry-bird-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.entry-bird-line strong{font:800 20px Manrope}
+.entry-bird-chip{padding:3px 10px;border-radius:7px;background:#e6f0fb;color:#1d5f9e!important;font-size:12px!important;font-weight:600!important}
+.entry-bird-chip.is-bonded{background:#e7f6ee;color:#11653a!important}
+.entry-bird-change{min-height:42px;padding:0 20px}
+.entries-options-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:16px 28px;align-items:start}
+.entries-options .entry-remarks{padding-left:24px;border-left:1px solid var(--line)}
+.entries-options .form-actions{margin:0}
+.entries-options .button.primary{min-width:170px}
+.entries-registered>h3{font-size:22px}
+@media (max-width:1100px){.entries-cards{grid-template-columns:1fr}}
+@media (max-width:720px){
+  .entries-head{gap:10px}.entries-head-sep{display:none}.entries-head select{width:100%}
+  .entries-row,.entries-reader .entries-row,.entries-options-row{grid-template-columns:1fr}
+  .entries-options .entry-remarks{padding:0;border:0}
+  .entries-reader-choice .reader-choice-options{grid-template-columns:1fr}
+  .entries-tab-bar{padding:0 4px}
+  .entries-options .button.primary{width:100%}
+}
