@@ -682,3 +682,4 @@ video#camera[hidden]{display:none}
 .result-popup>.small{margin:0;padding:0 20px;color:var(--muted)}
 .result-popup form{padding:14px 20px 18px}
 .result-popup form .button{width:100%}
+#entry-form[data-mode="rfid"] .sticker-only,#entry-form[data-mode="sticker"] .rfid-only,[data-entry-pane="register"]:has(#entry-form[data-mode="rfid"]) > .sticker-only,[data-entry-pane="register"]:has(#entry-form[data-mode="sticker"]) > .rfid-only{display:none!important}
