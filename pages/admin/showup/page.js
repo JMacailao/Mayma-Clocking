@@ -72,7 +72,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     }finally{busy=false;}
   };
   input.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();const uid=normalizeNfcUid(input.value);input.value='';if(uid)tap(uid,'');else if(uid===null)message(NFC_HELP,'error');});
-  const stopKeys=listenForReaderKeys(uid=>{if(readerChoice()==='wired')tap(uid,'the USB reader');});
+  const stopKeys=listenForReaderKeys(uid=>{if(readerChoice()!=='wired')return false;tap(uid,'the USB reader');},{takeFromTextFields:true});
   const stopScans=listenForDeviceScans((uid,reader)=>{if(readerChoice()==='wireless')tap(uid,reader);});
   let stopPhone=()=>{};
   phoneButton.onclick=async()=>{try{message('Hold the pigeon\'s RFID tag to the back of the phone…','info');stopPhone();stopPhone=await startPhoneNfc(uid=>{stopPhone();tap(uid,'the phone');},error=>message(error.message,'error'));}catch(error){message(error.message,'error');}};

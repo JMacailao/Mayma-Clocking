@@ -100,21 +100,39 @@ export function listenForDeviceScans(onTag,{intervalMs=1500}={}){
   return stop;
 }
 
-export function listenForReaderKeys(onTag,{maxGapMs=60}={}){
-  let buffer='',last=0;
-  const editable=el=>el&&(el.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+// Radio buttons, dropdowns, checkboxes, buttons and read-only fields with focus
+// do not block the reader. With takeFromTextFields, a reader burst that lands
+// in a text field is taken back out of it and used as the tag. onTag can
+// return false to leave the keys alone (for example when another reader is
+// chosen).
+export function listenForReaderKeys(onTag,{maxGapMs=60,takeFromTextFields=false}={}){
+  let buffer='',last=0,start=null;
+  const TEXT_TYPES=/^(text|search|number|email|tel|url|password)$/i;
+  const isTextField=el=>Boolean(el)&&(el.isContentEditable||el.tagName==='TEXTAREA'||(el.tagName==='INPUT'&&TEXT_TYPES.test(el.type||'text')&&!el.readOnly));
   const onKey=event=>{
-    if(event.ctrlKey||event.metaKey||event.altKey||editable(document.activeElement))return;
+    if(event.ctrlKey||event.metaKey||event.altKey)return;
+    const active=document.activeElement;
+    if(isTextField(active)&&!takeFromTextFields)return;
     const now=performance.now();
-    if(now-last>maxGapMs)buffer='';
+    if(now-last>maxGapMs){buffer='';start=null;}
     last=now;
     if(event.key==='Enter'){
-      const uid=normalizeNfcUid(buffer);buffer='';
-      if(uid){event.preventDefault();onTag(uid);}
+      const uid=normalizeNfcUid(buffer),from=start;buffer='';start=null;
+      if(!uid)return;
+      // A dropdown the reader typed into jumped to other options: put it back.
+      if(from?.el?.tagName==='SELECT'&&from.el.value!==from.value)from.el.value=from.value;
+      // Take the reader's characters out of the text field first, so onTag can
+      // fill that field itself; put them back if onTag leaves the tag alone.
+      const field=from&&isTextField(from.el)?from.el:null,typed=field?field.value:null;
+      if(field&&typed!==from.value)field.value=from.value;
+      if(onTag(uid)===false){if(field)field.value=typed;return;}
+      event.preventDefault();event.stopPropagation();
       return;
     }
-    if(event.key.length===1&&/[0-9a-fA-F:\- ]/.test(event.key))buffer+=event.key;
-    else buffer='';
+    if(event.key.length===1&&/[0-9a-fA-F:\- ]/.test(event.key)){
+      if(!buffer)start={el:active,value:active&&'value' in active?active.value:null};
+      buffer+=event.key;
+    }else{buffer='';start=null;}
   };
   document.addEventListener('keydown',onKey,true);
   return()=>document.removeEventListener('keydown',onKey,true);

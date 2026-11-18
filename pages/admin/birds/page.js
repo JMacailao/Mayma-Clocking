@@ -96,7 +96,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   form.querySelectorAll('[name=nfc_read_with]').forEach(radio=>radio.addEventListener('change',applyReaderChoice));applyReaderChoice();
   const fillTag=(uid,from)=>{form.elements.nfc_tag.value=formatNfcUid(uid);message(`RFID tag ${formatNfcUid(uid)} read${from?` by ${from}`:''}.`,'success');};
   form.elements.nfc_tag.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();const uid=normalizeNfcUid(form.elements.nfc_tag.value);if(uid)fillTag(uid,'');else if(uid===null)message(NFC_HELP,'error');});
-  const stopReaderKeys=listenForReaderKeys(uid=>{if(readerChoice()==='wired')fillTag(uid,'the USB reader');});
+  const stopReaderKeys=listenForReaderKeys(uid=>{if(readerChoice()!=='wired')return false;fillTag(uid,'the USB reader');},{takeFromTextFields:true});
   const stopDeviceScans=listenForDeviceScans((uid,reader)=>{if(readerChoice()==='wireless')fillTag(uid,reader);});
   let stopPhone=()=>{};
   tapButton.onclick=async()=>{try{message('Hold the bird\'s RFID tag to the back of the phone…','info');stopPhone();stopPhone=await startPhoneNfc(uid=>{stopPhone();fillTag(uid,'the phone');},error=>message(error.message,'error'));}catch(error){message(error.message,'error');}};
