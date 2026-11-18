@@ -37,14 +37,17 @@
        and press Save & Connect. Tap a tag: the page shows AvilonX's reply.
 
   Wiring (RC522 and DS1302 run on 3.3 V)
-    RC522:  SDA->D3(GPIO0), SCK->D5(GPIO14), MISO->D6(GPIO12), MOSI->D7(GPIO13),
-            RST->3.3V (the RC522 is reset in software), 3.3V->3V3, GND->GND.
-    DS1302: CLK->D1(GPIO5), DAT->D2(GPIO4), RST->D8(GPIO15), VCC->3V3, GND->GND,
-            with a CR2032 coin cell in the module.
-    (D8 must be low and D3 high while the board starts; the DS1302's RST and
-    the RC522's SDA keep them that way.)
-    Hotspot reset button: D0(GPIO16) -> button -> GND, with a 10k resistor from
-    D0 to 3.3V. Holding it 10 seconds restores ONLY the reader's own hotspot
+    RC522:  SDA->D2(GPIO4), RST->D1(GPIO5), SCK->D5(GPIO14), MISO->D6(GPIO12),
+            MOSI->D7(GPIO13), 3.3V->3V3, GND->GND.
+    DS1302: RST->D8(GPIO15), DAT->D0(GPIO16), CLK->RX(GPIO3), VCC->3V3,
+            GND->GND, with a CR2032 coin cell in the module.
+    (The DS1302 inputs pull down, so they must not go on D3 or D4, which have to
+    be high while the board starts. D8 has to be low, which suits RST. Serial
+    input is switched off so RX can be the clock line; Serial Monitor output
+    and uploading still work.)
+    Hotspot reset: the board's own FLASH button (D3/GPIO0). Hold it for 10
+    seconds once the reader is running (holding it while plugging in starts the
+    board's upload mode instead). This restores ONLY the reader's own hotspot
     name/password to RFID-READER / RFID12345, blinks the LED three times and
     restarts. The saved router Wi-Fi, device key and saved taps are kept.
     The board's blue LED (D4) blinks once for a good tap and three times for a
@@ -64,12 +67,12 @@
 #include <SPI.h>
 #include <MFRC522.h>
 
-#define RFID_SS_PIN  0     // D3 -> RC522 SDA
-#define RFID_RST_PIN UINT8_MAX  // RC522 RST is tied to 3.3V; reset in software
-#define RTC_CLK_PIN 5   // D1 -> DS1302 CLK
-#define RTC_DAT_PIN 4   // D2 -> DS1302 DAT
-#define RTC_RST_PIN 15  // D8 -> DS1302 RST (CE)
-#define RESET_BUTTON_PIN 16
+#define RFID_SS_PIN  4     // D2 -> RC522 SDA
+#define RFID_RST_PIN 5     // D1 -> RC522 RST
+#define RTC_RST_PIN 15     // D8 -> DS1302 RST (CE)
+#define RTC_DAT_PIN 16     // D0 -> DS1302 DAT
+#define RTC_CLK_PIN 3      // RX -> DS1302 CLK (Serial input is not used)
+#define RESET_BUTTON_PIN 0 // the board's FLASH button (D3)
 #define RESET_HOLD_MS 10000UL
 #define STATUS_LED_PIN 2   // built-in LED, lit when LOW
 
@@ -164,7 +167,7 @@ const char PAGE[] PROGMEM = R"HTML(
 </div><div>
 <section class="card"><div class="cardbody"><div class="taginfo"><div><span class="smalllabel">LAST TAG (UID)</span><div class="uid" id="uid">Waiting for card</div></div><div><span class="smalllabel">AVILONX REPLY</span><div class="reply" id="reply">No tags sent yet</div></div></div><div class="stats"><div class="stat"><span class="smalllabel">MODE</span><strong class="orange" id="mode">—</strong></div><div class="stat"><span class="smalllabel">TOTAL SCANS</span><strong id="count">0</strong></div><div class="stat"><span class="smalllabel">WAITING TO SEND</span><strong id="pending">0</strong></div></div></div></section>
 <section class="card" id="registration"><div class="cardhead">◇ &nbsp; Device Registration</div><div class="cardbody"><div class="panelrow"><span class="smalllabel">DEVICE SERIAL</span><button class="btn alt" type="button" id="copySerial">Copy serial</button></div><div class="deviceid" id="serial">—</div><div class="divider"></div><div class="panelrow"><b style="font-size:13px">Device Key</b><span class="status" id="keyStatus">Checking...</span></div><form id="keyForm"><div class="field"><label for="key">Device key from the AvilonX Super Admin</label><input id="key" name="key" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Paste 32-character device key" required></div><div class="buttons"><button class="btn" type="submit">Save Device Key</button></div></form><div id="keyMessage" class="message" role="status"></div><p class="notice">Send this device serial to the AvilonX Super Admin first. They register it for your club and give you the device key, which is saved inside the ESP8266.</p></div></section>
-<section class="card" id="wifi"><div class="cardhead"><span>◉ &nbsp; Wi-Fi Connection</span><span class="status" id="wifiStatus">Checking...</span></div><div class="cardbody"><div class="info"><b>Current network:</b> <span id="ssid">—</span><br><b>Router IP:</b> <span id="ip">—</span><br><b>Device AP:</b> <span id="apName">RFID-READER</span> · 192.168.4.1</div><form id="wifiForm"><div class="field"><label for="network">Select a 2.4 GHz Wi-Fi network</label><select id="network" name="ssid" required><option value="">Scanning networks...</option></select></div><div class="field"><label for="password">Wi-Fi password</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="Password (blank for open Wi-Fi)"></div><div class="buttons"><button class="btn alt" type="button" id="scanBtn">↻ Scan Networks</button><button class="btn" type="submit">Save &amp; Connect</button></div></form><div class="message" id="message" role="status"></div><div class="divider"></div><h3 style="margin:12px 0 4px;font-size:16px">Reader hotspot settings</h3><p class="notice">Change the ESP8266's own Wi-Fi name and password. This does not change the internet router connection or AvilonX registration.</p><form id="apForm"><div class="field"><label for="apSsidInput">Reader Wi-Fi name (SSID)</label><input id="apSsidInput" name="ap_ssid" maxlength="32" required placeholder="RFID-READER"></div><div class="field"><label for="apPasswordInput">New reader Wi-Fi password</label><input id="apPasswordInput" name="ap_password" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="8–63 characters"></div><div class="field"><label for="apConfirmInput">Confirm new password</label><input id="apConfirmInput" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="Repeat new password"></div><div class="buttons"><button class="btn" type="submit">Update Reader Hotspot</button></div></form><div class="message" id="apMessage" role="status"></div><p class="notice">After saving, the reader will restart. Reconnect your phone to the new hotspot name; the website address stays 192.168.4.1.</p><p class="notice">Forgot the reader hotspot name or password? Hold the separate D0 button for 10 seconds. The blue LED blinks three times, then the hotspot returns to RFID-READER / RFID12345. The saved router connection, AvilonX key and saved taps are kept.</p></div></section>
+<section class="card" id="wifi"><div class="cardhead"><span>◉ &nbsp; Wi-Fi Connection</span><span class="status" id="wifiStatus">Checking...</span></div><div class="cardbody"><div class="info"><b>Current network:</b> <span id="ssid">—</span><br><b>Router IP:</b> <span id="ip">—</span><br><b>Device AP:</b> <span id="apName">RFID-READER</span> · 192.168.4.1</div><form id="wifiForm"><div class="field"><label for="network">Select a 2.4 GHz Wi-Fi network</label><select id="network" name="ssid" required><option value="">Scanning networks...</option></select></div><div class="field"><label for="password">Wi-Fi password</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="Password (blank for open Wi-Fi)"></div><div class="buttons"><button class="btn alt" type="button" id="scanBtn">↻ Scan Networks</button><button class="btn" type="submit">Save &amp; Connect</button></div></form><div class="message" id="message" role="status"></div><div class="divider"></div><h3 style="margin:12px 0 4px;font-size:16px">Reader hotspot settings</h3><p class="notice">Change the ESP8266's own Wi-Fi name and password. This does not change the internet router connection or AvilonX registration.</p><form id="apForm"><div class="field"><label for="apSsidInput">Reader Wi-Fi name (SSID)</label><input id="apSsidInput" name="ap_ssid" maxlength="32" required placeholder="RFID-READER"></div><div class="field"><label for="apPasswordInput">New reader Wi-Fi password</label><input id="apPasswordInput" name="ap_password" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="8–63 characters"></div><div class="field"><label for="apConfirmInput">Confirm new password</label><input id="apConfirmInput" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="Repeat new password"></div><div class="buttons"><button class="btn" type="submit">Update Reader Hotspot</button></div></form><div class="message" id="apMessage" role="status"></div><p class="notice">After saving, the reader will restart. Reconnect your phone to the new hotspot name; the website address stays 192.168.4.1.</p><p class="notice">Forgot the reader hotspot name or password? Hold the board's FLASH button for 10 seconds. The blue LED blinks three times, then the hotspot returns to RFID-READER / RFID12345. The saved router connection, AvilonX key and saved taps are kept.</p></div></section>
 </div></div></main></div></div>
 <script>
 const $=id=>document.getElementById(id);let previousUID='',updating=false,scanning=false;
@@ -844,8 +847,9 @@ void checkResetButton() {
 }
 
 void setup() {
-  Serial.begin(115200);
-  pinMode(RESET_BUTTON_PIN, INPUT); // needs the external 10k pull-up to 3.3V
+  // Transmit only, so the RX pin is free for the DS1302 clock line.
+  Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);
+  pinMode(RESET_BUTTON_PIN, INPUT_PULLUP); // FLASH button, pressed = LOW
   pinMode(STATUS_LED_PIN, OUTPUT);
   digitalWrite(STATUS_LED_PIN, HIGH);
   EEPROM.begin(EEPROM_BYTES);
