@@ -500,11 +500,19 @@ String jsonEscape(const String &source) {
 }
 
 // Reads a string field from a small JSON reply without a JSON library.
+// AvilonX replies like {"status": "accepted", "message": "..."}: spaces may
+// follow the colon, so they are skipped.
 String jsonField(const String &body, const char *name) {
-  String marker = String("\"") + name + "\":\"";
+  String marker = String("\"") + name + "\"";
   int start = body.indexOf(marker);
   if (start < 0) return "";
   start += marker.length();
+  while (start < (int)body.length() && (body[start] == ' ' || body[start] == '\t' || body[start] == '\n' || body[start] == '\r')) start++;
+  if (start >= (int)body.length() || body[start] != ':') return "";
+  start++;
+  while (start < (int)body.length() && (body[start] == ' ' || body[start] == '\t' || body[start] == '\n' || body[start] == '\r')) start++;
+  if (start >= (int)body.length() || body[start] != '"') return "";
+  start++;
   String out;
   for (int i = start; i < (int)body.length(); i++) {
     char c = body[i];
@@ -799,7 +807,7 @@ SendResult sendTag(const StoredScan &scan) {
     return SEND_RETRY;
   }
   String text = jsonField(reply, "message");
-  if (text.isEmpty()) text = "AvilonX replied with code " + String(code) + ".";
+  if (text.isEmpty()) text = "AvilonX replied with code " + String(code) + ": " + reply.substring(0, 160);
   String status = jsonField(reply, "status");
   String mode = jsonField(reply, "mode");
   if (mode.length()) lastMode = mode;
