@@ -1,0 +1,76 @@
+-- Rules of the database, checked after schema.sql, supabase-auth.sql and
+-- avilonx-update.sql (run twice). Each failure stops with an error.
+\set ON_ERROR_STOP on
+
+-- Every setup part reports done.
+DO $$ DECLARE v jsonb := public.setup_status(); k text; BEGIN
+  FOR k IN SELECT jsonb_object_keys(v) LOOP ASSERT (v->>k)::boolean, 'setup part not done: ' || k; END LOOP;
+END $$;
+
+-- Test data: a club, a member, two registered tags and stickers.
+INSERT INTO public.clubs (name) VALUES ('Test club');
+INSERT INTO public.members (member_no, full_name, loft_name, latitude, longitude, club_id) SELECT '161', 'Test member', 'Loft', 13, 121, id FROM public.clubs;
+INSERT INTO public.nfc_tags (tag_uid, source) VALUES ('843519DB', 'legacy'), ('6C811F4A', 'legacy');
+INSERT INTO public.barcode_stickers (barcode_number, source) VALUES ('111', 'manual'), ('222', 'manual'), ('333', 'manual'), ('444', 'manual');
+INSERT INTO public.races (name, release_location, release_latitude, release_longitude, club_id, open_date, end_date, nfc_expiry_days)
+  SELECT r, 'Point', 13, 121, (SELECT id FROM public.clubs), current_date, current_date + 2, 3 FROM unnest(ARRAY['Race A', 'Race B']) AS r;
+INSERT INTO public.pigeons (club_id, member_id, ring_number, bird_name, color, loft_name, nfc_tag, photo_path, bond_type)
+  SELECT c.id, m.id, x.ring, x.name, 'Blue', 'Loft', x.tag, 'x/y.jpg', x.bond FROM public.clubs c, public.members m,
+  (VALUES ('PH-1', 'One', '843519DB', 'rfid'), ('PH-2', 'Two', NULL, 'ring'), ('PH-3', 'Three', '6C811F4A', 'rfid')) AS x(ring, name, tag, bond);
+
+-- RFID tag expiry comes from the race.
+INSERT INTO public.race_entries (race_id, member_id, pigeon_id, distance_m, barcode)
+  SELECT r.id, p.member_id, p.id, 1000, '111' FROM public.races r, public.pigeons p WHERE r.name = 'Race A' AND p.ring_number = 'PH-1';
+DO $$ DECLARE e record; BEGIN
+  SELECT * INTO e FROM public.race_entries WHERE barcode = '111';
+  ASSERT e.nfc_tag = '843519DB', 'the bonded tag is copied to the entry';
+  ASSERT abs(extract(epoch FROM e.nfc_expires_at - e.created_at) - 3 * 86400) < 5, 'expiry = saved + 3 days while the release is not set';
+END $$;
+UPDATE public.races SET release_at_utc = (now() AT TIME ZONE 'UTC') + interval '1 day' WHERE name = 'Race A';
+DO $$ BEGIN
+  ASSERT (SELECT e.nfc_expires_at = (r.release_at_utc AT TIME ZONE 'UTC') + interval '3 days' FROM public.race_entries e JOIN public.races r ON r.id = e.race_id WHERE e.barcode = '111'), 'expiry = release + 3 days';
+END $$;
+
+-- An RFID tag is used once per race, and not while active in another race.
+DO $$ BEGIN
+  BEGIN
+    INSERT INTO public.race_entries (race_id, member_id, pigeon_id, distance_m, barcode)
+      SELECT r.id, p.member_id, p.id, 1000, '222' FROM public.races r, public.pigeons p WHERE r.name = 'Race B' AND p.ring_number = 'PH-1';
+    RAISE EXCEPTION 'expected: tag still active in Race A';
+  EXCEPTION WHEN check_violation THEN ASSERT SQLERRM LIKE '%still active in race "Race A"%', SQLERRM; END;
+END $$;
+UPDATE public.races SET status = 'closed' WHERE name = 'Race A';
+INSERT INTO public.race_entries (race_id, member_id, pigeon_id, distance_m, barcode)
+  SELECT r.id, p.member_id, p.id, 1000, '222' FROM public.races r, public.pigeons p WHERE r.name = 'Race B' AND p.ring_number = 'PH-1';
+
+-- Ring-number-only birds: sticker required, never an RFID tag.
+DO $$ BEGIN
+  BEGIN
+    INSERT INTO public.race_entries (race_id, member_id, pigeon_id, distance_m)
+      SELECT r.id, p.member_id, p.id, 1000 FROM public.races r, public.pigeons p WHERE r.name = 'Race B' AND p.ring_number = 'PH-2';
+    RAISE EXCEPTION 'expected: sticker required';
+  EXCEPTION WHEN invalid_parameter_value THEN ASSERT SQLERRM LIKE '%scan or type its sticker%', SQLERRM; END;
+END $$;
+INSERT INTO public.race_entries (race_id, member_id, pigeon_id, distance_m, barcode, nfc_tag)
+  SELECT r.id, p.member_id, p.id, 1000, '333', 'DEADBEEF' FROM public.races r, public.pigeons p WHERE r.name = 'Race B' AND p.ring_number = 'PH-2';
+DO $$ BEGIN ASSERT (SELECT nfc_tag IS NULL FROM public.race_entries WHERE barcode = '333'), 'ring-only entries never keep a tag'; END $$;
+DO $$ BEGIN
+  BEGIN UPDATE public.pigeons SET nfc_tag = '6C811F4A' WHERE ring_number = 'PH-2'; RAISE EXCEPTION 'expected: ring-only bird cannot get a tag';
+  EXCEPTION WHEN check_violation OR unique_violation THEN NULL; END;
+END $$;
+
+-- Change history records changes, and skips saves that change nothing.
+DO $$ DECLARE before bigint := (SELECT count(*) FROM public.audit_log); BEGIN
+  UPDATE public.races SET name = 'Race B2' WHERE name = 'Race B';
+  UPDATE public.races SET name = 'Race B2' WHERE name = 'Race B2';
+  ASSERT (SELECT count(*) FROM public.audit_log) = before + 1, 'one history row for one real change';
+  ASSERT (SELECT changed_by_name FROM public.audit_log ORDER BY id DESC LIMIT 1) = 'RFID reader / system', 'records who changed it';
+END $$;
+
+-- Practice races never appear in the public results.
+DO $$ BEGIN
+  UPDATE public.races SET is_practice = true WHERE name = 'Race B2';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.public_race_results((SELECT id FROM public.clubs), current_date) WHERE race_name = 'Race B2'), 'practice race hidden';
+END $$;
+
+SELECT 'All database checks passed.' AS result;

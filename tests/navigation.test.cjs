@@ -16,11 +16,13 @@ function setup(role = 'admin') {
   for (const key of ['.page-view', '.sidebar', '.member-bottom-nav', '.topbar h1', '[data-message]']) nodes[key] = element();
   const location = { href: `https://example.com/Mayma-Clocking/pages/${role}/dashboard/index.html`, origin: 'https://example.com' };
   const context = { URL, console, setTimeout, clearTimeout, body, location, supabase: {}, escapeHTML: String, fail: () => {},
+    // Helpers app.js imports from i18n.js and update-check.js.
+    startTranslation: () => {}, languageSwitchHtml: () => '', bindLanguageSwitch: () => {}, startUpdateCheck: () => {},
     history: { pushState(_, __, href) { location.href = href; } },
     document: { body, createElement: element, querySelector: key => nodes[key], querySelectorAll: () => [], addEventListener: (key, fn) => listeners[key] = fn },
     window: { scrollTo() {}, addEventListener: (key, fn) => listeners[key] = fn } };
   vm.createContext(context);
-  const source = fs.readFileSync('assets/js/app.js', 'utf8').replace(/^import .*\n/, '').replace(/main\(\);\s*$/, '');
+  const source = fs.readFileSync('assets/js/app.js', 'utf8').replace(/^import .*\n/gm, '').replace(/main\(\);\s*$/, '');
   vm.runInContext(source, context);
   context.renderPage = async view => { view.innerHTML = 'Loaded'; };
   const identity = { profile: { role, is_active: true } };

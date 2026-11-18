@@ -1,6 +1,6 @@
 import { supabase, escapeHTML, number, formatDate } from '../../../assets/js/shared.js';
 import { formatNfcUid } from '../../../assets/js/nfc.js';
-import { birdPhotoUrls } from '../../admin/birds/page.js';
+import { birdPhotoUrls } from '../../admin/birds/photos.js';
 import { raceRows } from '../../../assets/js/race-export.js';
 import { t } from '../../../assets/js/i18n.js';
 

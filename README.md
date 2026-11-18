@@ -329,3 +329,9 @@ each row. If they do not line up, rotate the photo or take a new one straight on
 Sticker barcodes are decoded (or their printed reference number read); handwriting
 is read as well as a browser can, and the review table shows a picture of each cell
 next to what was read, so misread values can be corrected before saving.
+
+## Documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): folders, shared code, pages and how to add one.
+- [docs/DATABASE.md](docs/DATABASE.md): the database setup files.
+- [docs/TESTING.md](docs/TESTING.md): the automatic tests and how to run them (`npm test`, `npm run test:browser`, `npm run test:sql`).

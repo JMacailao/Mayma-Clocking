@@ -1,0 +1,14 @@
+{
+  "name": "avilonx-clocking",
+  "private": true,
+  "description": "AvilonX pigeon race clocking (static site + Supabase).",
+  "scripts": {
+    "test": "node --test \"tests/*.test.cjs\" \"tests/unit/*.test.mjs\"",
+    "test:browser": "node tests/browser/run-all.cjs",
+    "test:sql": "bash tests/sql/run.sh",
+    "test:all": "npm test && npm run test:browser"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}
