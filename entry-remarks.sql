@@ -39,7 +39,8 @@ ALTER TABLE public.race_entries ADD COLUMN IF NOT EXISTS remarks text[] NOT NULL
 ALTER TABLE public.race_entries DROP CONSTRAINT IF EXISTS race_entries_remarks_limit;
 ALTER TABLE public.race_entries ADD CONSTRAINT race_entries_remarks_limit CHECK (cardinality(remarks) <= 30);
 
--- Public results show each ring with its remarks, e.g. "12345 P1/P2/P3".
+-- Public results show each ring with its remarks, e.g. "12345 P1/P2/P3", and
+-- leave out disqualified results (not verified on Show up before the tag expiry).
 -- This replaces the version in public-results.sql (same name and columns), so
 -- run this file again after re-running public-results.sql.
 CREATE OR REPLACE FUNCTION public.public_race_results(p_club_id bigint, p_race_date date)
@@ -84,6 +85,8 @@ AS $function$
   WHERE club.id = p_club_id
     AND ((r.release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date = p_race_date
     AND c.verification <> 'rejected'
+    -- Disqualified: never verified (Show up) before the pigeon's RFID tag expired.
+    AND NOT (c.verification = 'provisional' AND e.nfc_expires_at IS NOT NULL AND now() > e.nfc_expires_at)
   ORDER BY r.name, m.loft_name, e.pigeon_ring;
 $function$;
 

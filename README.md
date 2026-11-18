@@ -58,6 +58,12 @@ requests in the browser.
       the member's bonded birds by tapping the bird's bonded RFID tag (every
       bonded bird needs one); the ring and RFID come from the bond. Run it after
       `nfc-tags.sql`; safe to re-run.
+  13. `show-up.sql` — **Show up**: after a pigeon is clocked, its owner brings it
+      to the club and the admin or staff taps its RFID tag on the Show up page
+      to verify the result. A result not verified before the pigeon's RFID tag
+      expires (the expiry set on Race entries) is disqualified and left out of
+      the results. Run it after `nfc-tags.sql`, and run `entry-remarks.sql`
+      again so public results leave out disqualified pigeons.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.
