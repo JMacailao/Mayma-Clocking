@@ -128,6 +128,9 @@ Create a club account with exactly that name to hand the old data to that club.
   (after sign-in if needed) and clocks the pigeon. Keyboard-type USB NFC readers also
   work on iPhone and iPad through a USB-C or Lightning camera adapter. Every NFC page
   has a **Reader setup help** section with these steps.
+- **Phones with an external reader.** Keyboard-type NFC readers (USB with an OTG,
+  USB-C or Lightning camera adapter, or Bluetooth paired as a keyboard) work on
+  Android and iPhone; the NFC pages listen for them anywhere on the page.
 - **ACS ACR122U and other PC/SC readers** do not type like a keyboard, so browsers
   cannot see them. On Windows, run `tools/nfc-reader/acr122u-keyboard.ps1`
   (right-click → **Run with PowerShell**, nothing to install) and keep its window

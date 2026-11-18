@@ -68,6 +68,32 @@ export const nfcSetupGuideHtml=()=>`<details class="nfc-setup"><summary>Reader s
 <h4>Android phone</h4><ol><li>Turn on NFC in the phone settings.</li><li>Open this site in <strong>Chrome</strong> (https address).</li><li>Press <strong>Start phone NFC</strong> and hold the tag against the back of the phone.</li></ol>
 <h4>iPhone (XS or newer)</h4><ol><li>The tag must carry its clocking link, or nothing happens when you tap it. The Super Admin writes it when registering the tag on an Android phone, or with an iPhone as below.</li><li>Unlock the iPhone and hold its <strong>top edge</strong> near the tag.</li><li>Tap the notification. The Clocking page opens and clocks the pigeon. Sign in first if asked.</li></ol><p class="small">iPhone browsers cannot read tags directly, so the Start phone NFC button does not appear on iPhone.</p>
 <h4>Write a tag's link with an iPhone</h4><ol><li>Install the free <strong>NFC Tools</strong> app from the App Store.</li><li>In Safari open <strong>Register NFC</strong>, find the tag and tap <strong>Copy link</strong>.</li><li>In NFC Tools: <strong>Write → Add a record → URL / URI</strong>, paste the link, then <strong>Write</strong> and hold the iPhone's top edge to the tag.</li></ol><p class="small">Use NTAG213, NTAG215 or NTAG216 tags. iPhones cannot use MIFARE Classic tags (common key fobs): in NFC Tools tap <strong>Read</strong> to see a tag's type. Close the camera and Wallet before tapping.</p>
-<h4>USB NFC reader that types like a keyboard</h4><ol><li>Plug it in. On iPhone or iPad use a USB-C adapter, or a Lightning to USB camera adapter.</li><li>Tap in the <strong>USB NFC reader</strong> field, then tap the tag on the reader. The ID is sent automatically.</li><li>The reader must type the ID in <strong>hex</strong> (letters and numbers). If it types only digits, switch it to hex as its manual describes.</li></ol>
-<h4>ACS ACR122U (Windows only)</h4><ol><li>${readerHelperLink()}</li><li>Keep its window open, tap in the USB NFC reader field, then tap tags on the reader.</li></ol><p class="small">The ACR122U does not work on iPhone, iPad or Mac.</p>
+<h4>Phone or computer with an external NFC reader (Android, iPhone, Windows, Mac)</h4><ol><li>Use a reader that works as a <strong>keyboard</strong> (often sold as "keyboard emulation" or "HID" mode).</li><li>Connect it: <strong>Android</strong> with a USB-OTG adapter; <strong>iPhone or iPad</strong> with a USB-C adapter or a Lightning to USB camera adapter; or pair a <strong>Bluetooth</strong> reader as a keyboard in the phone's Bluetooth settings.</li><li>Open the NFC page and tap the tag on the reader. There is no need to tap the reader field first; the ID is sent automatically.</li><li>The reader must type the ID in <strong>hex</strong> (letters and numbers). If it types only digits, switch it to hex as its manual describes. To check a reader, open the Notes app and tap a tag: letters and numbers should appear.</li></ol>
+<h4>ACS ACR122U (Windows only)</h4><ol><li>${readerHelperLink()}</li><li>Keep its window open, tap in the USB NFC reader field, then tap tags on the reader.</li></ol><p class="small">The ACR122U does not work on Android phones, iPhone, iPad or Mac: phone browsers cannot use this kind of reader. Use a keyboard-type reader on phones.</p>
 </div></details>`;
+
+// Keyboard-type NFC readers (USB, or Bluetooth paired as a keyboard) type the
+// tag ID and press Enter, on computers and on Android and iPhone alike. This
+// listens on the whole page so the reader works without tapping the reader field
+// first, which on phones would also open the on-screen keyboard. Readers type far
+// faster than a person, so only quick bursts ending in Enter count as a tag; when
+// a text field has focus it is left to that field. Returns a stop function.
+export function listenForReaderKeys(onTag,{maxGapMs=60}={}){
+  let buffer='',last=0;
+  const editable=el=>el&&(el.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+  const onKey=event=>{
+    if(event.ctrlKey||event.metaKey||event.altKey||editable(document.activeElement))return;
+    const now=performance.now();
+    if(now-last>maxGapMs)buffer='';
+    last=now;
+    if(event.key==='Enter'){
+      const uid=normalizeNfcUid(buffer);buffer='';
+      if(uid){event.preventDefault();onTag(uid);}
+      return;
+    }
+    if(event.key.length===1&&/[0-9a-fA-F:\- ]/.test(event.key))buffer+=event.key;
+    else buffer='';
+  };
+  document.addEventListener('keydown',onKey,true);
+  return()=>document.removeEventListener('keydown',onKey,true);
+}

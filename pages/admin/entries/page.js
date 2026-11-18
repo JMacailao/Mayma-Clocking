@@ -1,6 +1,6 @@
 import { supabase, escapeHTML, message, dbError, number, tableRows, loadSpreadsheetParser, normalizeImportHeader } from '../../../assets/js/shared.js';
 import { bindStickerScanner, stickerScannerDialogHtml } from '../../superadmin/stickers/shared.js';
-import { normalizeNfcUid, formatNfcUid, phoneNfcSupported, startPhoneNfc, NFC_HELP, readerHelperLink } from '../../../assets/js/nfc.js';
+import { normalizeNfcUid, formatNfcUid, phoneNfcSupported, startPhoneNfc, NFC_HELP, readerHelperLink, listenForReaderKeys } from '../../../assets/js/nfc.js';
 
 let spreadsheetZipReaderPromise=null;
 function loadSpreadsheetZipReader(){
@@ -355,7 +355,8 @@ export async function entriesPage(view,setPageCleanup=()=>{}) {
   entryForm.elements.nfc_tag.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();const uid=normalizeNfcUid(entryForm.elements.nfc_tag.value);if(uid){entryForm.elements.nfc_tag.value=formatNfcUid(uid);message(`NFC tag ${formatNfcUid(uid)} read.`,'info');}else if(uid===null)message(NFC_HELP,'error');}});
   let stopEntryNfc=()=>{},nfcTimer=null,disposed=false;
   view.insertAdjacentHTML('beforeend',stickerScannerDialogHtml());const stopStickerScanner=bindStickerScanner(view,entryForm);
-  setPageCleanup(()=>{disposed=true;stopEntryNfc();clearTimeout(nfcTimer);stopStickerScanner();});
+  const stopReaderKeys=listenForReaderKeys(uid=>{entryForm.elements.nfc_tag.value=formatNfcUid(uid);message(`NFC tag ${formatNfcUid(uid)} read.`,'success');});
+  setPageCleanup(()=>{disposed=true;stopEntryNfc();clearTimeout(nfcTimer);stopStickerScanner();stopReaderKeys();});
   if(tapButton)tapButton.onclick=async()=>{tapButton.disabled=true;message('Hold the pigeon\'s NFC tag against the back of the phone…','info');let stop=()=>{};try{stop=await startPhoneNfc(uid=>{stop();tapButton.disabled=false;entryForm.elements.nfc_tag.value=formatNfcUid(uid);message(`NFC tag ${formatNfcUid(uid)} read.`,'success');},error=>message(error.message,'error'));stopEntryNfc=stop;if(disposed){stop();return;}nfcTimer=setTimeout(()=>{if(tapButton.disabled){stop();tapButton.disabled=false;}},30000);}catch(error){tapButton.disabled=false;message(error.message,'error');}};
   mountEntrySheetImport(view,races,members,entries);
 }
