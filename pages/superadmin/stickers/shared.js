@@ -32,27 +32,28 @@ export async function barcodePngDataUrl(code,options){
   }finally{URL.revokeObjectURL(objectUrl);}
 }
 
-// Each sticker set is 101.8 x 8 mm: a 36.8 mm reference stub and the 65 x 8 mm
-// clocking label. Two sets plus an 8 mm cutting gap fit across an A4 landscape
-// sheet, 23 rows down (46 per page). At 8 mm the barcodes are 3.5 mm (reference)
-// and 4.6 mm (clocking) tall, tested to still scan on blurred, lower-resolution
-// images.
-// The code barcode keeps a quiet zone on both sides, and its divider is dashed
-// so it does not interfere with scans. The page margins centre the grid.
-export const CODES_PER_ROW=2,STICKER_ROWS=23,STICKERS_PER_PAGE=CODES_PER_ROW*STICKER_ROWS;
-export const STICKER_HEIGHT_MM=8,STICKER_CLOCK_LABEL_WIDTH_MM=65,STICKER_REFERENCE_WIDTH_MM=36.8;
-const STICKER_NUMBER_PART_WIDTH_MM=21,STICKER_BARCODE_PART_WIDTH_MM=STICKER_CLOCK_LABEL_WIDTH_MM-STICKER_NUMBER_PART_WIDTH_MM;
+// Smallest readable and scannable size: each sticker set is 63 x 6 mm, a 27 mm
+// reference stub and a 36 x 6 mm clocking label (12 mm number + 24 mm barcode).
+// Four sets with 5 mm cutting gaps fit across an A4 landscape sheet, 31 rows
+// down (124 per page). The 8-digit reference barcode is 22 mm and the 6-digit
+// clocking barcode 19 mm wide (bars about 0.28 mm, the narrowest that read
+// reliably in tests), each with about 2.5 mm of white on both sides; text is 5 pt.
+// The code barcode's divider is dashed so it does not interfere with scans.
+export const CODES_PER_ROW=4,STICKER_ROWS=31,STICKERS_PER_PAGE=CODES_PER_ROW*STICKER_ROWS;
+export const STICKER_HEIGHT_MM=6,STICKER_CLOCK_LABEL_WIDTH_MM=36,STICKER_REFERENCE_WIDTH_MM=27;
+const STICKER_NUMBER_PART_WIDTH_MM=12,STICKER_BARCODE_PART_WIDTH_MM=STICKER_CLOCK_LABEL_WIDTH_MM-STICKER_NUMBER_PART_WIDTH_MM;
 export const STICKER_SET_WIDTH_MM=STICKER_REFERENCE_WIDTH_MM+STICKER_CLOCK_LABEL_WIDTH_MM;
-const SHEET_WIDTH_MM=CODES_PER_ROW*STICKER_SET_WIDTH_MM+(CODES_PER_ROW-1)*8;
+const COLUMN_GAP_MM=5;
+const SHEET_WIDTH_MM=CODES_PER_ROW*STICKER_SET_WIDTH_MM+(CODES_PER_ROW-1)*COLUMN_GAP_MM;
 // The cut lines add about 0.3 mm to each printed row, so cells are drawn that
-// much shorter to keep each sticker 8 mm tall and 23 rows on one page.
+// much shorter to keep each sticker 6 mm tall and 31 rows on one page.
 const STICKER_CELL_HEIGHT_MM=STICKER_HEIGHT_MM-.3;
 // The same applies across: each cut line adds about half its width to the cells
 // on both sides, so widths are drawn that much narrower to print at their real
 // size and keep the grid centred.
 const CUT_LINE_ALLOWANCE_MM=.18;
 const cellWidth=mm=>Math.round((mm-CUT_LINE_ALLOWANCE_MM)*100)/100;
-const PAGE_MARGIN='13mm 42.7mm';
+const PAGE_MARGIN=`${(210-STICKER_ROWS*STICKER_HEIGHT_MM)/2}mm ${(297-SHEET_WIDTH_MM)/2}mm`;
 // Blank space between the two columns, for cutting.
 const COLUMN_GAP_CELL='<td class="sticker-gap" aria-hidden="true"></td>';
 // Barcode drawn without its own margin: the barcode piece keeps about 2.9 mm
@@ -60,7 +61,7 @@ const COLUMN_GAP_CELL='<td class="sticker-gap" aria-hidden="true"></td>';
 export const STICKER_BARCODE={height:28,width:1.2,margin:0};
 export const DEFAULT_STICKER_LABEL='AvilonX';
 // Layout shared by the screen preview and the printed/Word sheet, in real units.
-const STICKER_CSS=`.sticker-sheet{width:${SHEET_WIDTH_MM}mm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{height:${STICKER_CELL_HEIGHT_MM}mm;max-height:${STICKER_CELL_HEIGHT_MM}mm;padding:0;border:.5pt solid #e1e6e2;overflow:hidden;vertical-align:middle;text-align:center}.sticker-sheet>tbody>tr>td.sticker-gap{width:${cellWidth(8)}mm;border:none;background:#fff}.sticker-sheet>tbody>tr>td.sticker-ref-part{width:${cellWidth(STICKER_REFERENCE_WIDTH_MM)}mm}.sticker-sheet>tbody>tr>td.sticker-number-part{width:${cellWidth(STICKER_NUMBER_PART_WIDTH_MM)}mm}.sticker-sheet>tbody>tr>td.sticker-ref-part+td.sticker-number-part{border-left:.5pt dashed #999}.sticker-ref-part .sticker-brand-line{margin-bottom:.1mm}.sticker-ref-part img.sticker-ref-code,.sticker-ref-part svg{display:block;width:31mm;height:3.5mm;margin:0 auto .1mm}.sticker-sheet>tbody>tr>td.sticker-code-part{width:${cellWidth(STICKER_BARCODE_PART_WIDTH_MM)}mm;border-left-style:hidden}.sticker-brand-line{display:block;height:1.4mm;line-height:1.4mm;margin-bottom:.1mm;white-space:nowrap;text-align:center}.sticker-logo{display:inline;height:1.3mm;width:auto;vertical-align:middle;margin-right:.4mm}.sticker-brand-text{display:inline;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:3.8pt;font-weight:700;color:#555}.sticker-number{display:block;font-family:Arial,Helvetica,sans-serif;font-size:6.5pt;font-weight:700;line-height:1;color:#111;white-space:nowrap;text-align:center}.sticker-code-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:5.5pt;font-weight:700;line-height:1;color:#111;white-space:nowrap;text-align:center}.sticker-code-part img,.sticker-code-part svg{display:block;width:38mm;height:4.6mm;margin:0 auto .1mm}.sticker-ref-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:6pt;font-weight:700;line-height:1;color:#111;white-space:nowrap;text-align:center}`;
+const STICKER_CSS=`.sticker-sheet{width:${SHEET_WIDTH_MM}mm;table-layout:fixed;border-collapse:collapse;background:#fff}.sticker-sheet>tbody>tr>td{height:${STICKER_CELL_HEIGHT_MM}mm;max-height:${STICKER_CELL_HEIGHT_MM}mm;padding:0;border:.5pt solid #e1e6e2;overflow:hidden;vertical-align:middle;text-align:center}.sticker-sheet>tbody>tr>td.sticker-gap{width:${cellWidth(COLUMN_GAP_MM)}mm;border:none;background:#fff}.sticker-sheet>tbody>tr>td.sticker-ref-part{width:${cellWidth(STICKER_REFERENCE_WIDTH_MM)}mm}.sticker-sheet>tbody>tr>td.sticker-number-part{width:${cellWidth(STICKER_NUMBER_PART_WIDTH_MM)}mm}.sticker-sheet>tbody>tr>td.sticker-ref-part+td.sticker-number-part{border-left:.5pt dashed #999}.sticker-ref-part .sticker-brand-line{display:none}.sticker-ref-part img.sticker-ref-code,.sticker-ref-part svg{display:block;width:22mm;height:3.4mm;margin:0 auto .1mm}.sticker-sheet>tbody>tr>td.sticker-code-part{width:${cellWidth(STICKER_BARCODE_PART_WIDTH_MM)}mm;border-left-style:hidden}.sticker-brand-line{display:block;height:1.3mm;line-height:1.3mm;margin-bottom:.2mm;white-space:nowrap;text-align:center}.sticker-logo{display:inline;height:1.2mm;width:auto;vertical-align:middle;margin-right:.4mm}.sticker-brand-text{display:inline;vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:3.5pt;font-weight:700;color:#555}.sticker-number{display:block;font-family:Arial,Helvetica,sans-serif;font-size:5.5pt;font-weight:700;line-height:1;color:#111;white-space:nowrap;text-align:center}.sticker-code-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:5pt;font-weight:700;line-height:1;color:#111;white-space:nowrap;text-align:center}.sticker-code-part img,.sticker-code-part svg{display:block;width:19mm;height:3.8mm;margin:0 auto .1mm}.sticker-ref-line{display:block;font-family:Arial,Helvetica,sans-serif;font-size:6pt;font-weight:700;line-height:1;color:#111;white-space:nowrap;text-align:center}`;
 
 // The barcode printed on a sticker: the secret scratch code when there is one.
 export const stickerBarcodeValue=code=>code.scratch||code.number;
