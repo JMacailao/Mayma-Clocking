@@ -220,6 +220,43 @@ CREATE TRIGGER race_entries_b_require_registered_nfc_tag
   BEFORE INSERT OR UPDATE OF nfc_tag ON public.race_entries
   FOR EACH ROW EXECUTE FUNCTION public.require_registered_nfc_tag();
 
+-- Removes a tag from the registry. Refused while the tag is on a pigeon in a
+-- draft or open race, so a running race keeps its tags.
+CREATE OR REPLACE FUNCTION public.superadmin_delete_nfc_tag(p_tag text)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  v_uid text;
+  v_races integer;
+BEGIN
+  IF NOT public.is_superadmin() THEN
+    RAISE EXCEPTION 'Superadmin account required.' USING ERRCODE = '42501';
+  END IF;
+  v_uid := public.normalize_nfc_uid(p_tag);
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'Choose an NFC tag to delete.' USING ERRCODE = '22023';
+  END IF;
+  SELECT count(DISTINCT r.id) INTO v_races
+  FROM public.race_entries AS e
+  JOIN public.races AS r ON r.id = e.race_id
+  WHERE e.nfc_tag = v_uid AND r.status <> 'closed';
+  IF v_races > 0 THEN
+    RAISE EXCEPTION 'This tag is on a pigeon in % draft or open race(s). Remove it from those race entries, or close the races, before deleting it.', v_races USING ERRCODE = '55000';
+  END IF;
+  DELETE FROM public.nfc_tags WHERE tag_uid = v_uid;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'That NFC tag is not registered.' USING ERRCODE = '22023';
+  END IF;
+  RETURN v_uid;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.superadmin_delete_nfc_tag(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.superadmin_delete_nfc_tag(text) TO authenticated;
+
 COMMENT ON TABLE public.nfc_tags IS
   'Global NFC tag registry. Tags are not assigned to a club or member.';
 

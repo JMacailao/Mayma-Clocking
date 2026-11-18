@@ -10,7 +10,7 @@ export async function render(view,setPageCleanup){
     const {data,error,count:total}=await supabase.from('nfc_tags').select('tag_uid,source,created_at',{count:'exact'}).order('created_at',{ascending:false}).limit(100);
     if(error){table.innerHTML=`<p class="notice error">${escapeHTML(error.message)}. Run nfc-tags.sql in your Supabase SQL Editor.</p>`;count.textContent='—';return;}
     count.textContent=`${(total||0).toLocaleString()} registered`;
-    table.innerHTML=tableRows(data||[],[{key:'tag_uid',label:'Tag ID',render:r=>`<strong>${escapeHTML(formatNfcUid(r.tag_uid))}</strong>`},{key:'link',label:'iPhone link',render:r=>`<button class="text-button" type="button" data-copy-link="${escapeHTML(r.tag_uid)}">Copy link</button>`},{key:'source',label:'Registered via',render:r=>escapeHTML(r.source==='legacy'?'Existing race entry':'Reader or typed')},{key:'created_at',label:'Registered',render:r=>escapeHTML(formatDate(r.created_at))}],'No NFC tags have been registered yet.',false);
+    table.innerHTML=tableRows(data||[],[{key:'tag_uid',label:'Tag ID',render:r=>`<strong>${escapeHTML(formatNfcUid(r.tag_uid))}</strong>`},{key:'link',label:'iPhone link',render:r=>`<button class="text-button" type="button" data-copy-link="${escapeHTML(r.tag_uid)}">Copy link</button>`},{key:'source',label:'Registered via',render:r=>escapeHTML(r.source==='legacy'?'Existing race entry':'Reader or typed')},{key:'created_at',label:'Registered',render:r=>escapeHTML(formatDate(r.created_at))},{key:'delete',label:'Actions',render:r=>`<button class="text-button danger-text" type="button" data-delete-tag="${escapeHTML(r.tag_uid)}">Delete</button>`}],'No NFC tags have been registered yet.',false);
   };
   const pending=new Set();let reloadTimer=null;
   const writeLinkBox=view.querySelector('[data-nfc-write-link]');
@@ -33,6 +33,15 @@ export async function render(view,setPageCleanup){
     finally{pending.delete(uid);}
   };
   table.addEventListener('click',async event=>{
+    const deleteButton=event.target.closest('[data-delete-tag]');
+    if(deleteButton){
+      const uid=deleteButton.dataset.deleteTag;
+      if(!window.confirm(`Delete NFC tag ${formatNfcUid(uid)} from the registry? Clubs will no longer be able to put it on race entries.`))return;
+      deleteButton.disabled=true;deleteButton.textContent='Deleting…';
+      const {error}=await supabase.rpc('superadmin_delete_nfc_tag',{p_tag:uid});
+      if(error){deleteButton.disabled=false;deleteButton.textContent='Delete';message(error.code==='PGRST202'?'Run the updated nfc-tags.sql in the Supabase SQL Editor first.':error.message,'error');return;}
+      message(`NFC tag ${formatNfcUid(uid)} deleted.`,'success');addLog(`${formatNfcUid(uid)} · Deleted`,'info');await load();return;
+    }
     const button=event.target.closest('[data-copy-link]');if(!button)return;
     const link=nfcClockingLink(button.dataset.copyLink);
     try{await navigator.clipboard.writeText(link);message(`Copied the iPhone link for ${formatNfcUid(button.dataset.copyLink)}. Write it to the tag as a URL (web link) record with an NFC writer app.`,'success');}
