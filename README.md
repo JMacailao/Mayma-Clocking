@@ -155,6 +155,13 @@ Create a club account with exactly that name to hand the old data to that club.
   **Clocking** clocks the tag's pigeon in an open race at Supabase server time. Tie a
   reader to a member to make it that member's loft clock (it then clocks only their
   pigeons).
+  Without Wi-Fi or internet the reader saves taps in its flash (up to 150, kept
+  through a power cut) and sends them when the internet is back. AvilonX then clocks
+  each pigeon at the time its tag was tapped, using the reader's clock, which is set
+  from the internet after power-up; power the reader on with internet before the
+  race and keep it powered. Taps more than 3 days old, or from a reader clock that
+  is ahead of the server, are not trusted. Receipts timed this way say
+  **Reader tap time**.
 - Each sticker has a visible number (for example `12345`) and a hidden scratch code
   (for example `4567`). Each code prints as two pieces: on the left a number piece (logo, label text and the sticker number) for registering the race entry, and on the right, after a solid divider line, a barcode piece (barcode of the secret code with the decoded secret code underneath) for clocking. Keep the barcode piece hidden until clocking. Cover that box
   with scratch-off foil before handing stickers out. Race entries use the visible

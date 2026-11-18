@@ -218,14 +218,27 @@ BEGIN
     WHERE s.mode = 'register'
       AND (v_super OR d.club_id = public.current_club_id())
       AND (p_after_id IS NULL OR s.id > p_after_id)
-      AND s.scanned_at > now() - interval '10 minutes'
+      AND s.scanned_at > now() - interval '2 minutes'
     ORDER BY s.id DESC
     LIMIT 20;
 END;
 $$;
 
+-- Readers keep taps in flash while offline and send them later with the time
+-- the tag was tapped (p_scanned_at, from the reader's internet-synced clock).
+-- clock_events.received_at_utc is then the tap time; the server's own receipt
+-- time is kept in server_received_at_utc, and time_source says which was used.
+ALTER TABLE public.clock_events ADD COLUMN IF NOT EXISTS server_received_at_utc timestamp without time zone;
+ALTER TABLE public.clock_events ADD COLUMN IF NOT EXISTS time_source varchar(10) NOT NULL DEFAULT 'server';
+ALTER TABLE public.clock_events DROP CONSTRAINT IF EXISTS clock_events_time_source_check;
+ALTER TABLE public.clock_events ADD CONSTRAINT clock_events_time_source_check CHECK (time_source IN ('server', 'reader'));
+
+-- The first version took no tap time. One function with an optional time
+-- serves old and new reader sketches (two versions would confuse the API).
+DROP FUNCTION IF EXISTS public.device_rfid_scan(text, text, text);
+
 -- Called by the reader itself (no sign-in) for every tag it reads.
-CREATE OR REPLACE FUNCTION public.device_rfid_scan(p_serial text, p_key text, p_tag text)
+CREATE OR REPLACE FUNCTION public.device_rfid_scan(p_serial text, p_key text, p_tag text, p_scanned_at timestamptz DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
   v_device public.rfid_devices%ROWTYPE;
@@ -233,7 +246,10 @@ DECLARE
   v_matches integer;
   v_entry public.race_entries%ROWTYPE;
   v_race public.races%ROWTYPE;
-  v_now timestamp without time zone;
+  v_server timestamp without time zone := clock_timestamp() AT TIME ZONE 'UTC';
+  v_tap timestamp without time zone := v_server;
+  v_source text := 'server';
+  v_note text := '';
   v_clock public.clock_events%ROWTYPE;
   v_result jsonb;
 BEGIN
@@ -247,13 +263,30 @@ BEGIN
   END IF;
   IF v_uid IS NULL THEN RAISE EXCEPTION 'The tag ID could not be read. Tap the tag again.' USING ERRCODE = '22023'; END IF;
 
+  -- Use the reader's tap time when it is believable.
+  IF p_scanned_at IS NOT NULL THEN
+    IF (p_scanned_at AT TIME ZONE 'UTC') > v_server + interval '2 minutes' THEN
+      v_note := ' Reader clock is ahead, so the server time was used.';
+    ELSIF (p_scanned_at AT TIME ZONE 'UTC') < v_server - interval '3 days' THEN
+      v_result := jsonb_build_object('status', 'error', 'mode', v_device.mode, 'tag', v_uid,
+        'message', 'Tap ' || v_uid || ' is more than 3 days old and was not used. Clock it on the Clocking page if needed.');
+      INSERT INTO public.rfid_device_scans (device_id, tag_uid, mode, result, scanned_at) VALUES (v_device.id, v_uid, v_device.mode, v_result->>'message', p_scanned_at);
+      RETURN v_result;
+    ELSE
+      v_tap := least(p_scanned_at AT TIME ZONE 'UTC', v_server);
+      v_source := 'reader';
+    END IF;
+  END IF;
+
   UPDATE public.rfid_devices AS d SET last_seen_at = now(), last_tag = v_uid WHERE d.id = v_device.id;
-  DELETE FROM public.rfid_device_scans AS s WHERE s.scanned_at < now() - interval '2 days';
+  DELETE FROM public.rfid_device_scans AS s WHERE s.scanned_at < now() - interval '4 days';
 
   IF v_device.mode = 'register' THEN
-    INSERT INTO public.rfid_device_scans (device_id, tag_uid, mode, result) VALUES (v_device.id, v_uid, 'register', 'sent');
-    RETURN jsonb_build_object('status', 'sent', 'mode', 'register', 'tag', v_uid,
-      'message', 'Tag ' || v_uid || ' sent to the open Race entries or Register NFC page.');
+    INSERT INTO public.rfid_device_scans (device_id, tag_uid, mode, result, scanned_at) VALUES (v_device.id, v_uid, 'register', 'sent', v_tap AT TIME ZONE 'UTC');
+    RETURN jsonb_build_object('status', 'sent', 'mode', 'register', 'tag', v_uid, 'message',
+      CASE WHEN v_tap < v_server - interval '2 minutes'
+        THEN 'Tag ' || v_uid || ' arrived late (tapped while offline), so it was not filled into any page.'
+        ELSE 'Tag ' || v_uid || ' sent to the open Race entries or Register NFC page.' END);
   END IF;
 
   SELECT count(*) INTO v_matches
@@ -264,7 +297,7 @@ BEGIN
     v_result := jsonb_build_object('status', 'error', 'mode', 'clock', 'tag', v_uid, 'message',
       CASE WHEN v_matches = 0 THEN 'Tag ' || v_uid || ' is not on a pigeon in an open race' || CASE WHEN v_device.member_id IS NULL THEN '.' ELSE ' for this loft.' END
            ELSE 'Tag ' || v_uid || ' is entered in more than one open race. Clock it on the Clocking page.' END);
-    INSERT INTO public.rfid_device_scans (device_id, tag_uid, mode, result) VALUES (v_device.id, v_uid, 'clock', v_result->>'message');
+    INSERT INTO public.rfid_device_scans (device_id, tag_uid, mode, result, scanned_at) VALUES (v_device.id, v_uid, 'clock', v_result->>'message', v_tap AT TIME ZONE 'UTC');
     RETURN v_result;
   END IF;
 
@@ -274,24 +307,26 @@ BEGIN
     AND (v_device.member_id IS NULL OR e.member_id = v_device.member_id)
   FOR UPDATE OF e;
   SELECT r.* INTO v_race FROM public.races AS r WHERE r.id = v_entry.race_id;
-  v_now := clock_timestamp() AT TIME ZONE 'UTC';
 
-  IF v_race.release_at_utc IS NULL OR v_now <= v_race.release_at_utc THEN
-    v_result := jsonb_build_object('status', 'error', 'mode', 'clock', 'tag', v_uid, 'message', v_race.name || ' has not started yet.');
+  IF v_race.release_at_utc IS NULL OR v_tap <= v_race.release_at_utc THEN
+    v_result := jsonb_build_object('status', 'error', 'mode', 'clock', 'tag', v_uid, 'message',
+      CASE WHEN v_source = 'reader' AND v_server > v_race.release_at_utc THEN 'Tag ' || v_uid || ' was tapped before ' || v_race.name || ' was released.'
+           ELSE v_race.name || ' has not started yet.' END);
   ELSE
     SELECT c.* INTO v_clock FROM public.clock_events AS c WHERE c.race_entry_id = v_entry.id;
     IF FOUND THEN
       v_result := jsonb_build_object('status', 'duplicate', 'message', 'Ring ' || v_entry.pigeon_ring || ' already has a receipt.');
     ELSE
-      INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, source, verification)
-      VALUES (v_entry.id, v_entry.pigeon_ring, v_now, 'nfc', 'provisional')
+      INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, server_received_at_utc, time_source, source, verification)
+      VALUES (v_entry.id, v_entry.pigeon_ring, v_tap, v_server, v_source, 'nfc', 'provisional')
       RETURNING * INTO v_clock;
-      v_result := jsonb_build_object('status', 'accepted', 'message', 'Ring ' || v_entry.pigeon_ring || ' clocked for ' || v_race.name || '.');
+      v_result := jsonb_build_object('status', 'accepted', 'message', 'Ring ' || v_entry.pigeon_ring || ' clocked for ' || v_race.name
+        || CASE WHEN v_source = 'reader' AND v_tap < v_server - interval '1 minute' THEN ' at the time it was tapped (sent late).' ELSE '.' END || v_note);
     END IF;
     v_result := v_result || jsonb_build_object('mode', 'clock', 'tag', v_uid, 'pigeon_ring', v_entry.pigeon_ring, 'race', v_race.name,
-      'received_at_utc', v_clock.received_at_utc) || COALESCE(public._clock_receipt_details(v_entry.id, v_clock.id), '{}'::jsonb);
+      'received_at_utc', v_clock.received_at_utc, 'time_source', v_clock.time_source) || COALESCE(public._clock_receipt_details(v_entry.id, v_clock.id), '{}'::jsonb);
   END IF;
-  INSERT INTO public.rfid_device_scans (device_id, tag_uid, mode, result) VALUES (v_device.id, v_uid, 'clock', v_result->>'message');
+  INSERT INTO public.rfid_device_scans (device_id, tag_uid, mode, result, scanned_at) VALUES (v_device.id, v_uid, 'clock', v_result->>'message', v_tap AT TIME ZONE 'UTC');
   RETURN v_result;
 END;
 $$;
@@ -307,7 +342,7 @@ GRANT EXECUTE ON FUNCTION public.admin_list_rfid_devices(), public.admin_update_
   public.superadmin_register_rfid_device(text, text, bigint, text), public.superadmin_update_rfid_device(bigint, text, bigint),
   public.superadmin_reset_rfid_device_key(bigint), public.superadmin_delete_rfid_device(bigint) TO authenticated;
 -- The reader signs in with its serial and key, not a user account.
-REVOKE ALL ON FUNCTION public.device_rfid_scan(text, text, text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.device_rfid_scan(text, text, text) TO anon, authenticated;
+REVOKE ALL ON FUNCTION public.device_rfid_scan(text, text, text, timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.device_rfid_scan(text, text, text, timestamptz) TO anon, authenticated;
 
 NOTIFY pgrst, 'reload schema';
