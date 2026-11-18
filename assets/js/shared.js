@@ -5,7 +5,59 @@ export const USERNAME_HELP='Username must be 3–32 characters and use letters, 
 export const authError = (error) => error?.message || 'Something went wrong. Please try again.';
 
 export const escapeHTML = (value='') => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-export const message = (text, kind='info') => { const el=document.querySelector('[data-message]'); if(el){el.textContent=text;el.className=`notice ${kind}`;el.hidden=!text;if(text&&el.scrollIntoView)el.scrollIntoView({behavior:'smooth',block:'nearest'});} };
+// Messages pop up on the right of the screen. Errors (for example an NFC tag
+// that is not registered) shake, buzz and vibrate; successes chime. The sound
+// can be switched off on any message and stays off on that device.
+const SOUND_KEY='avilonx.sound';
+let audioContext=null;
+const soundOn=()=>{try{return localStorage.getItem(SOUND_KEY)!=='off';}catch{return true;}};
+const audio=()=>{
+  try{const Context=window.AudioContext||window.webkitAudioContext;if(!Context)return null;audioContext=audioContext||new Context();if(audioContext.state==='suspended')audioContext.resume();return audioContext;}catch{return null;}
+};
+// Browsers only allow sound after the person has touched the page once.
+if(typeof document!=='undefined'&&document.addEventListener)document.addEventListener('pointerdown',()=>{if(soundOn())audio();},{once:true,capture:true});
+const tone=(context,{frequency,start,length,type='sine',volume=0.08})=>{
+  const oscillator=context.createOscillator(),gain=context.createGain();
+  oscillator.type=type;oscillator.frequency.value=frequency;
+  gain.gain.setValueAtTime(0.0001,context.currentTime+start);
+  gain.gain.exponentialRampToValueAtTime(volume,context.currentTime+start+0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001,context.currentTime+start+length);
+  oscillator.connect(gain).connect(context.destination);
+  oscillator.start(context.currentTime+start);oscillator.stop(context.currentTime+start+length+0.02);
+};
+export const playFeedback=kind=>{
+  if(!soundOn())return;
+  const context=audio();if(!context)return;
+  try{
+    if(kind==='success'){tone(context,{frequency:880,start:0,length:0.12});tone(context,{frequency:1320,start:0.11,length:0.18});}
+    else if(kind==='error'){tone(context,{frequency:196,start:0,length:0.16,type:'square',volume:0.05});tone(context,{frequency:131,start:0.17,length:0.26,type:'square',volume:0.05});}
+  }catch{/* sound is optional */}
+};
+const toastStack=()=>{
+  let stack=document.querySelector('[data-toast-stack]');
+  if(!stack&&document.body){stack=document.createElement('div');stack.className='toast-stack';stack.dataset.toastStack='';stack.setAttribute('aria-live','polite');document.body.append(stack);}
+  return stack;
+};
+export const message = (text, kind='info') => {
+  const legacy=document.querySelector('[data-message]');if(legacy){legacy.hidden=true;legacy.textContent='';}
+  const stack=toastStack();if(!stack)return;
+  if(!text){stack.querySelectorAll('.toast').forEach(toast=>toast.remove());return;}
+  const latest=stack.lastElementChild;
+  if(latest&&latest.dataset.text===text&&latest.dataset.kind===kind){latest.classList.remove('is-shaking');void latest.offsetWidth;if(kind==='error')latest.classList.add('is-shaking');clearTimeout(Number(latest.dataset.timer));latest.dataset.timer=String(setTimeout(()=>latest.remove(),kind==='error'?8000:4500));playFeedback(kind);return;}
+  const toast=document.createElement('div');
+  toast.className=`toast ${kind}${kind==='error'?' is-shaking':''}`;toast.dataset.text=text;toast.dataset.kind=kind;
+  if(kind==='error')toast.setAttribute('role','alert');
+  const icon=kind==='error'?'✕':kind==='success'?'✓':'i';
+  toast.innerHTML=`<span class="toast-icon" aria-hidden="true">${icon}</span><span class="toast-text"></span><button class="toast-sound" type="button" aria-label="${soundOn()?'Turn sounds off':'Turn sounds on'}" title="${soundOn()?'Sounds on':'Sounds off'}">${soundOn()?'🔊':'🔇'}</button><button class="toast-close" type="button" aria-label="Close message">×</button>`;
+  toast.querySelector('.toast-text').textContent=text;
+  toast.querySelector('.toast-close').onclick=()=>toast.remove();
+  toast.querySelector('.toast-sound').onclick=()=>{const on=!soundOn();try{localStorage.setItem(SOUND_KEY,on?'on':'off');}catch{/* storage unavailable */}stack.querySelectorAll('.toast-sound').forEach(button=>{button.textContent=on?'🔊':'🔇';button.title=on?'Sounds on':'Sounds off';button.setAttribute('aria-label',on?'Turn sounds off':'Turn sounds on');});if(on)playFeedback('success');};
+  stack.append(toast);
+  while(stack.children.length>3)stack.firstElementChild.remove();
+  toast.dataset.timer=String(setTimeout(()=>toast.remove(),kind==='error'?8000:4500));
+  if(kind==='error'&&navigator.vibrate)try{navigator.vibrate([90,50,90]);}catch{/* not supported */}
+  playFeedback(kind);
+};
 // A column or function the app needs is missing from the database: name the SQL
 // file that adds it, so the club can run it in the Supabase SQL Editor.
 const MISSING_SQL=[[/open_date|end_date/,'race-schedule-dates.sql'],[/release_at_utc/,'race-release-time.sql'],[/rfid_device|rfid_recent_scans/,'rfid-devices.sql'],[/nfc_tag|nfc_tags|submit_member_nfc_clock|superadmin_register_nfc_tag/,'nfc-tags.sql'],[/barcode_sticker|scratch_code|is_registered|sticker_season|superadmin_register_sticker|superadmin_generate_sticker_batch/,'sticker-barcodes.sql'],[/public_race_results|public_result_clubs/,'public-results.sql']];
