@@ -1,5 +1,5 @@
 import { supabase, escapeHTML, formatDate, message, number, ringLabel } from '../../../assets/js/shared.js';
-import { normalizeNfcUid, formatNfcUid, phoneNfcSupported, startPhoneNfc, NFC_HELP, listenForReaderKeys, listenForDeviceScans } from '../../../assets/js/nfc.js';
+import { normalizeNfcUid, formatNfcUid, phoneNfcSupported, startPhoneNfc, NFC_HELP, listenForReaderKeys, listenForDeviceScans, usbReaderStatus } from '../../../assets/js/nfc.js';
 import { birdPhotoUrls } from '../birds/page.js';
 
 const READER_KEY='avilonx.showup.reader';
@@ -36,7 +36,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
 
   view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">AFTER CLOCKING</span><h2>Show up</h2><p>When a member brings a clocked pigeon to the club, tap its RFID tag here to verify the result. When the race is closed, a clocked pigeon that has not shown up is disqualified.</p></div></div>
   <section class="panel"><div class="showup-controls"><label class="field"><span>Race</span><select data-showup-race><option value="">Any race</option>${state.races.map(race=>`<option value="${race.id}" ${race.id===firstRace?'selected':''}>${escapeHTML(race.name)}</option>`).join('')}</select></label></div>
-  <div class="field reader-choice" role="radiogroup" aria-labelledby="showup-reader-label"><span id="showup-reader-label">Which RFID reader are you using?</span><div class="reader-choice-options"><label><input type="radio" name="showup_reader" value="wireless"><span><strong>Wireless</strong> ESP8266 Wi-Fi reader</span></label><label><input type="radio" name="showup_reader" value="wired"><span><strong>Wired</strong> USB reader</span></label><label><input type="radio" name="showup_reader" value="phone"><span><strong>Android phone</strong> NFC</span></label></div></div>
+  <div class="field reader-choice" role="radiogroup" aria-labelledby="showup-reader-label"><span id="showup-reader-label">Which RFID reader are you using?</span><div class="reader-choice-options"><label><input type="radio" name="showup_reader" value="wireless"><span><strong>Wireless</strong> ESP8266 Wi-Fi reader</span></label><label><input type="radio" name="showup_reader" value="wired"><span><strong>Wired</strong> USB reader</span></label><label><input type="radio" name="showup_reader" value="phone"><span><strong>Android phone</strong> NFC</span></label></div><small class="small usb-reader-status" data-usb-status hidden></small></div>
   <div class="showup-tap"><div class="entry-bird-tap" data-showup-prompt><strong>Tap the pigeon's RFID tag</strong><span>on the reader chosen above to verify its show-up.</span></div><div class="showup-result" data-showup-result hidden></div>
   <div class="showup-manual"><div class="input-with-button"><input data-showup-input maxlength="40" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Or type the tag ID and press Enter"><button type="button" data-showup-phone aria-label="Read the tag with this phone" title="Read with this phone" hidden><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 9.5a4 4 0 0 1 0 5M11.5 7a8 8 0 0 1 0 10M15 4.5a12 12 0 0 1 0 15"/><circle cx="4.5" cy="12" r="1"/></svg></button></div></div></div></section>
   <section class="panel"><div class="panel-heading"><h3>Clocked pigeons</h3><span class="count-pill" data-showup-counts></span></div><div data-showup-table></div>
@@ -44,7 +44,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
 
   const raceSelect=view.querySelector('[data-showup-race]'),input=view.querySelector('[data-showup-input]'),phoneButton=view.querySelector('[data-showup-phone]'),resultBox=view.querySelector('[data-showup-result]'),prompt=view.querySelector('[data-showup-prompt]');
   const readerChoice=()=>view.querySelector('[name=showup_reader]:checked')?.value||'';
-  const applyReader=()=>{phoneButton.hidden=readerChoice()!=='phone'||!phoneNfcSupported();try{if(readerChoice())localStorage.setItem(READER_KEY,readerChoice());}catch{/* storage unavailable */}};
+  const applyReader=()=>{phoneButton.hidden=readerChoice()!=='phone'||!phoneNfcSupported();const usbLine=view.querySelector('[data-usb-status]');if(usbLine){usbLine.hidden=readerChoice()!=='wired';if(readerChoice()==='wired'&&!usbLine.textContent)usbLine.textContent='USB reader: waiting for a tap. What it types will show here.';}try{if(readerChoice())localStorage.setItem(READER_KEY,readerChoice());}catch{/* storage unavailable */}};
   try{const saved=localStorage.getItem(READER_KEY);const radio=saved&&view.querySelector(`[name=showup_reader][value="${saved}"]`);if(radio)radio.checked=true;}catch{/* storage unavailable */}
   view.querySelectorAll('[name=showup_reader]').forEach(radio=>radio.addEventListener('change',applyReader));applyReader();
 
@@ -58,9 +58,11 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   raceSelect.onchange=drawTable;drawTable();
 
   let busy=false;
-  const tap=async(uid,from)=>{
+  const tap=async(uid,from,candidates=[uid])=>{
     if(busy)return;busy=true;
     try{
+      // A USB reader may type the ID in another form: prefer the one entered in a race.
+      uid=candidates.find(item=>state.entries.some(entry=>entry.nfc_tag===item))||uid;
       const {data,error}=await supabase.rpc('admin_show_up_tap',{p_tag:uid,p_race_id:Number(raceSelect.value)||null,p_reader:readerChoice()||null});
       if(error){message(/admin_show_up_tap|function/i.test(error.message||'')?'Show up is not set up yet. Run show-up.sql in the Supabase SQL Editor.':error.message,'error');return;}
       const kind=data.status==='verified'?'success':data.status==='duplicate'?'info':'error';
@@ -72,7 +74,8 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     }finally{busy=false;}
   };
   input.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();const uid=normalizeNfcUid(input.value);input.value='';if(uid)tap(uid,'');else if(uid===null)message(NFC_HELP,'error');});
-  const stopKeys=listenForReaderKeys(uid=>{if(readerChoice()!=='wired')return false;tap(uid,'the USB reader');},{takeFromTextFields:true});
+  const usbStatus=view.querySelector('[data-usb-status]');
+  const stopKeys=listenForReaderKeys((uid,info)=>{if(readerChoice()!=='wired')return false;tap(uid,'the USB reader',info.candidates);},{takeFromTextFields:true,onBurst:burst=>{if(readerChoice()==='wired'){usbStatus.hidden=false;usbReaderStatus(usbStatus)(burst);}}});
   const stopScans=listenForDeviceScans((uid,reader)=>{if(readerChoice()==='wireless')tap(uid,reader);});
   let stopPhone=()=>{};
   phoneButton.onclick=async()=>{try{message('Hold the pigeon\'s RFID tag to the back of the phone…','info');stopPhone();stopPhone=await startPhoneNfc(uid=>{stopPhone();tap(uid,'the phone');},error=>message(error.message,'error'));}catch(error){message(error.message,'error');}};

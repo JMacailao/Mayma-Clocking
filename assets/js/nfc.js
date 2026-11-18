@@ -100,40 +100,76 @@ export function listenForDeviceScans(onTag,{intervalMs=1500}={}){
   return stop;
 }
 
+// Tag IDs a USB reader may mean by what it typed. Readers differ: most type
+// the ID in hex (sometimes with the bytes reversed), some type it as a decimal
+// number (8 to 10 digits for a 4-byte tag). The first candidate is the usual
+// form (the one phones and the ESP8266 reader send).
+const reverseBytes=hex=>hex.match(/../g).reverse().join('');
+export function uidCandidates(text){
+  const raw=String(text??'').replace(/[\s:-]/g,'');
+  const out=[];
+  const add=hex=>{const uid=normalizeNfcUid(hex);if(uid&&!out.includes(uid))out.push(uid);};
+  if(/^\d{8,10}$/.test(raw)&&Number(raw)<=0xFFFFFFFF){const hex=Number(raw).toString(16).toUpperCase().padStart(8,'0');add(hex);add(reverseBytes(hex));}
+  const hex=normalizeNfcUid(raw);if(hex){add(hex);add(reverseBytes(hex));}
+  return out;
+}
+
+// Listens for keyboard-type (USB or Bluetooth) RFID readers. A reader types the
+// tag ID much faster than a person and ends with Enter or Tab, or just stops.
 // Radio buttons, dropdowns, checkboxes, buttons and read-only fields with focus
-// do not block the reader. With takeFromTextFields, a reader burst that lands
-// in a text field is taken back out of it and used as the tag. onTag can
-// return false to leave the keys alone (for example when another reader is
-// chosen).
-export function listenForReaderKeys(onTag,{maxGapMs=60,takeFromTextFields=false}={}){
-  let buffer='',last=0,start=null;
+// do not block it. With takeFromTextFields, a reader burst that lands in a text
+// field is taken back out and used as the tag. onTag(uid, {candidates, raw})
+// can return false to leave the keys alone (another reader chosen). onBurst
+// ({raw, uid, ended}) reports every fast burst, valid or not, for a status line.
+export function listenForReaderKeys(onTag,{maxGapMs=100,takeFromTextFields=false,onBurst=null}={}){
+  let buffer='',last=0,start=null,idleTimer=null;
   const TEXT_TYPES=/^(text|search|number|email|tel|url|password)$/i;
   const isTextField=el=>Boolean(el)&&(el.isContentEditable||el.tagName==='TEXTAREA'||(el.tagName==='INPUT'&&TEXT_TYPES.test(el.type||'text')&&!el.readOnly));
+  const finish=(event,ended)=>{
+    clearTimeout(idleTimer);
+    const raw=buffer,from=start;buffer='';start=null;
+    // A burst of only digits typed into a text field is a number for that field
+    // (for example a sticker from a USB barcode scanner), not an RFID tag.
+    if(from&&isTextField(from.el)&&/^\d+$/.test(raw.replace(/[\s:-]/g,'')))return;
+    const candidates=uidCandidates(raw),uid=candidates[0]||null;
+    if(raw.length>=4)onBurst?.({raw,uid,ended});
+    if(!uid)return;
+    // A dropdown the reader typed into jumped to other options: put it back.
+    if(from?.el?.tagName==='SELECT'&&from.el.value!==from.value)from.el.value=from.value;
+    // Take the reader's characters out of the text field first, so onTag can
+    // fill that field itself; put them back if onTag leaves the tag alone.
+    const field=from&&isTextField(from.el)?from.el:null,typed=field?field.value:null;
+    if(field&&typed!==from.value)field.value=from.value;
+    if(onTag(uid,{candidates,raw})===false){if(field)field.value=typed;return;}
+    if(event){event.preventDefault();event.stopPropagation();}
+  };
   const onKey=event=>{
     if(event.ctrlKey||event.metaKey||event.altKey)return;
     const active=document.activeElement;
     if(isTextField(active)&&!takeFromTextFields)return;
     const now=performance.now();
-    if(now-last>maxGapMs){buffer='';start=null;}
+    if(now-last>maxGapMs){buffer='';start=null;clearTimeout(idleTimer);}
     last=now;
-    if(event.key==='Enter'){
-      const uid=normalizeNfcUid(buffer),from=start;buffer='';start=null;
-      if(!uid)return;
-      // A dropdown the reader typed into jumped to other options: put it back.
-      if(from?.el?.tagName==='SELECT'&&from.el.value!==from.value)from.el.value=from.value;
-      // Take the reader's characters out of the text field first, so onTag can
-      // fill that field itself; put them back if onTag leaves the tag alone.
-      const field=from&&isTextField(from.el)?from.el:null,typed=field?field.value:null;
-      if(field&&typed!==from.value)field.value=from.value;
-      if(onTag(uid)===false){if(field)field.value=typed;return;}
-      event.preventDefault();event.stopPropagation();
-      return;
-    }
+    if(event.key==='Enter'||event.key==='Tab'){if(buffer)finish(event,event.key);return;}
     if(event.key.length===1&&/[0-9a-fA-F:\- ]/.test(event.key)){
       if(!buffer)start={el:active,value:active&&'value' in active?active.value:null};
       buffer+=event.key;
-    }else{buffer='';start=null;}
+      // Some readers send no Enter: a burst that simply stops counts too.
+      clearTimeout(idleTimer);
+      if(buffer.replace(/[\s:-]/g,'').length>=8)idleTimer=setTimeout(()=>{if(buffer)finish(null,'');},350);
+    }else{buffer='';start=null;clearTimeout(idleTimer);}
   };
   document.addEventListener('keydown',onKey,true);
-  return()=>document.removeEventListener('keydown',onKey,true);
+  return()=>{clearTimeout(idleTimer);document.removeEventListener('keydown',onKey,true);};
+}
+
+// A status line under the reader choice: what the USB reader last typed.
+export function usbReaderStatus(element){
+  return({raw,uid,ended})=>{
+    if(!element)return;
+    const end=ended==='Enter'?' + Enter':ended==='Tab'?' + Tab':'';
+    element.className=`small usb-reader-status ${uid?'is-ok':'is-bad'}`;
+    element.textContent=uid?`USB reader typed "${raw}"${end}: read as tag ${formatNfcUid(uid)}.`
+      :`USB reader typed "${raw}"${end}: that is not a tag ID (expected 8, 14 or 20 hex letters/numbers, or a 10-digit number). Set the reader to output the UID in hex.`;
+  };
 }

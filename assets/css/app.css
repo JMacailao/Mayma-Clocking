@@ -683,3 +683,7 @@ video#camera[hidden]{display:none}
 .result-popup form{padding:14px 20px 18px}
 .result-popup form .button{width:100%}
 #entry-form[data-mode="rfid"] .sticker-only,#entry-form[data-mode="sticker"] .rfid-only,[data-entry-pane="register"]:has(#entry-form[data-mode="rfid"]) > .sticker-only,[data-entry-pane="register"]:has(#entry-form[data-mode="sticker"]) > .rfid-only{display:none!important}
+.usb-reader-status{display:block;margin-top:6px;padding:7px 10px;border-radius:8px;background:#f1f5f9;color:var(--muted);font-weight:600}
+.usb-reader-status[hidden]{display:none}
+.usb-reader-status.is-ok{background:#e9f7ef;color:#0f8758}
+.usb-reader-status.is-bad{background:#fff1ee;color:#a2302a}
