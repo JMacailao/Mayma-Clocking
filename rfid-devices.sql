@@ -127,21 +127,46 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public._require_superadmin() FROM PUBLIC, anon, authenticated;
 
--- Super Admin: every reader with its club.
+-- Super Admin: every reader with its club and member. (The column list grew,
+-- so an older copy is dropped first.)
+DROP FUNCTION IF EXISTS public.superadmin_list_rfid_devices();
 CREATE OR REPLACE FUNCTION public.superadmin_list_rfid_devices()
-RETURNS TABLE (id bigint, serial text, name text, club_id bigint, club_name text, member_name text, mode text, last_seen_at timestamptz, last_tag text, created_at timestamptz)
+RETURNS TABLE (id bigint, serial text, name text, club_id bigint, club_name text, member_id bigint, member_name text, mode text, last_seen_at timestamptz, last_tag text, created_at timestamptz)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
   PERFORM public._require_superadmin();
   RETURN QUERY
-    SELECT d.id, d.serial::text, d.name, d.club_id, c.name::text, m.full_name::text, d.mode, d.last_seen_at, d.last_tag::text, d.created_at
+    SELECT d.id, d.serial::text, d.name, d.club_id, c.name::text, d.member_id, m.full_name::text, d.mode, d.last_seen_at, d.last_tag::text, d.created_at
     FROM public.rfid_devices AS d JOIN public.clubs AS c ON c.id = d.club_id LEFT JOIN public.members AS m ON m.id = d.member_id
     ORDER BY d.created_at DESC;
 END;
 $$;
 
--- Super Admin: register a reader for a club. Returns its key, shown only once.
-CREATE OR REPLACE FUNCTION public.superadmin_register_rfid_device(p_serial text, p_name text, p_club_id bigint, p_mode text DEFAULT 'register')
+-- Super Admin: the members of one club, to choose a reader's loft-clock member.
+CREATE OR REPLACE FUNCTION public.superadmin_list_club_members(p_club_id bigint)
+RETURNS TABLE (id bigint, member_no text, full_name text)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  PERFORM public._require_superadmin();
+  RETURN QUERY SELECT m.id, m.member_no::text, m.full_name::text FROM public.members AS m WHERE m.club_id = p_club_id ORDER BY m.member_no;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public._check_club_member(p_club_id bigint, p_member_id bigint)
+RETURNS void LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  IF p_member_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.members AS m WHERE m.id = p_member_id AND m.club_id = p_club_id) THEN
+    RAISE EXCEPTION 'That member is not in the reader''s club.' USING ERRCODE = '22023';
+  END IF;
+END;
+$$;
+REVOKE ALL ON FUNCTION public._check_club_member(bigint, bigint) FROM PUBLIC, anon, authenticated;
+
+-- Super Admin: register a reader for a club, optionally as one member's loft
+-- clock. Returns its key, shown only once. (The older copy without a member is
+-- dropped so the API has one version.)
+DROP FUNCTION IF EXISTS public.superadmin_register_rfid_device(text, text, bigint, text);
+CREATE OR REPLACE FUNCTION public.superadmin_register_rfid_device(p_serial text, p_name text, p_club_id bigint, p_mode text DEFAULT 'register', p_member_id bigint DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
   v_serial text := public.normalize_device_serial(p_serial);
@@ -153,11 +178,12 @@ BEGIN
   IF coalesce(btrim(p_name), '') = '' THEN RAISE EXCEPTION 'Give the reader a name.' USING ERRCODE = '22023'; END IF;
   IF p_mode NOT IN ('register', 'clock') THEN RAISE EXCEPTION 'Choose Register or Clocking mode.' USING ERRCODE = '22023'; END IF;
   IF NOT EXISTS (SELECT 1 FROM public.clubs AS c WHERE c.id = p_club_id) THEN RAISE EXCEPTION 'Choose the club that will use this reader.' USING ERRCODE = '22023'; END IF;
+  PERFORM public._check_club_member(p_club_id, p_member_id);
   IF EXISTS (SELECT 1 FROM public.rfid_devices AS d WHERE d.serial = v_serial) THEN
     RAISE EXCEPTION 'Reader % is already registered.', v_serial USING ERRCODE = '23505';
   END IF;
-  INSERT INTO public.rfid_devices (club_id, serial, name, mode, key_hash, created_by)
-  VALUES (p_club_id, v_serial, btrim(p_name), p_mode, public._rfid_device_key_hash(v_key), (SELECT auth.uid()))
+  INSERT INTO public.rfid_devices (club_id, serial, name, member_id, mode, key_hash, created_by)
+  VALUES (p_club_id, v_serial, btrim(p_name), p_member_id, p_mode, public._rfid_device_key_hash(v_key), (SELECT auth.uid()))
   RETURNING id INTO v_id;
   RETURN jsonb_build_object('id', v_id, 'serial', v_serial, 'device_key', v_key);
 END;
@@ -174,6 +200,20 @@ BEGIN
   SET name = btrim(p_name), member_id = CASE WHEN d.club_id = p_club_id THEN d.member_id END, club_id = p_club_id
   WHERE d.id = p_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Reader not found.' USING ERRCODE = '22023'; END IF;
+END;
+$$;
+
+-- Super Admin: set or clear the member a reader belongs to (a loft clock).
+CREATE OR REPLACE FUNCTION public.superadmin_set_rfid_device_member(p_id bigint, p_member_id bigint)
+RETURNS void LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = '' AS $$
+DECLARE
+  v_club bigint;
+BEGIN
+  PERFORM public._require_superadmin();
+  SELECT d.club_id INTO v_club FROM public.rfid_devices AS d WHERE d.id = p_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Reader not found.' USING ERRCODE = '22023'; END IF;
+  PERFORM public._check_club_member(v_club, p_member_id);
+  UPDATE public.rfid_devices AS d SET member_id = p_member_id WHERE d.id = p_id;
 END;
 $$;
 
@@ -335,11 +375,13 @@ REVOKE ALL ON FUNCTION public.normalize_device_serial(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.normalize_device_serial(text) TO anon, authenticated;
 REVOKE ALL ON FUNCTION public.admin_list_rfid_devices(), public.admin_update_rfid_device(bigint, text, bigint, text),
   public.rfid_recent_scans(bigint), public.superadmin_list_rfid_devices(),
-  public.superadmin_register_rfid_device(text, text, bigint, text), public.superadmin_update_rfid_device(bigint, text, bigint),
+  public.superadmin_register_rfid_device(text, text, bigint, text, bigint), public.superadmin_update_rfid_device(bigint, text, bigint),
+  public.superadmin_list_club_members(bigint), public.superadmin_set_rfid_device_member(bigint, bigint),
   public.superadmin_reset_rfid_device_key(bigint), public.superadmin_delete_rfid_device(bigint) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.admin_list_rfid_devices(), public.admin_update_rfid_device(bigint, text, bigint, text),
   public.rfid_recent_scans(bigint), public.superadmin_list_rfid_devices(),
-  public.superadmin_register_rfid_device(text, text, bigint, text), public.superadmin_update_rfid_device(bigint, text, bigint),
+  public.superadmin_register_rfid_device(text, text, bigint, text, bigint), public.superadmin_update_rfid_device(bigint, text, bigint),
+  public.superadmin_list_club_members(bigint), public.superadmin_set_rfid_device_member(bigint, bigint),
   public.superadmin_reset_rfid_device_key(bigint), public.superadmin_delete_rfid_device(bigint) TO authenticated;
 -- The reader signs in with its serial and key, not a user account.
 REVOKE ALL ON FUNCTION public.device_rfid_scan(text, text, text, timestamptz) FROM PUBLIC;
