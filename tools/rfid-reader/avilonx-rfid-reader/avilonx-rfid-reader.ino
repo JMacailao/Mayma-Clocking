@@ -153,7 +153,7 @@ const char PAGE[] PROGMEM = R"HTML(
 const $=id=>document.getElementById(id);let previousUID='',updating=false,scanning=false;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 function statusBadge(el,label,good){el.textContent=label;el.className='status '+(good?'good':'bad');}
-async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=s.clock_synced?'clock is set':'clock NOT set yet (connect to the internet once)';statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=s.ap_ssid||'RFID-READER';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
+async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=s.clock_synced?'clock is set, Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)';statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=s.ap_ssid||'RFID-READER';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
 async function scanNetworks(){if(scanning)return;scanning=true;const btn=$('scanBtn'),select=$('network');btn.disabled=true;select.replaceChildren(new Option('Scanning networks...',''));try{let items=null;for(let i=0;i<15&&!items;i++){const r=await fetch('/api/networks',{cache:'no-store'});if(r.status===202){await wait(1000);continue;}if(!r.ok)throw Error('scan failed');items=await r.json();}if(!items)throw Error('scan timed out');select.replaceChildren(new Option('Choose a Wi-Fi network',''));items.forEach(n=>select.add(new Option(n.ssid+' ('+n.rssi+' dBm)'+(n.open?' - Open':''),n.ssid)));$('message').textContent=items.length?'':'No Wi-Fi networks found. Try again.';}catch(e){select.replaceChildren(new Option('Could not scan',''));$('message').textContent='Wi-Fi scan failed. Try again.';}finally{scanning=false;btn.disabled=false;}}
 async function post(url,form,output){output.textContent='Saving...';try{const r=await fetch(url,{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok)update();}catch(e){output.textContent='Could not save. Check that you are connected to the reader hotspot.';}}
 $('scanBtn').addEventListener('click',scanNetworks);$('copySerial').addEventListener('click',()=>{const text=$('serial').textContent;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>{$('copySerial').textContent='Copied';});else window.prompt('Copy device serial',text);});$('wifiForm').addEventListener('submit',e=>{e.preventDefault();post('/wifi/save',e.target,$('message')).then(()=>$('password').value='');});$('keyForm').addEventListener('submit',e=>{e.preventDefault();post('/device/save',e.target,$('keyMessage')).then(()=>$('key').value='');});$('apForm').addEventListener('submit',async e=>{e.preventDefault();const form=e.target,output=$('apMessage'),pw=$('apPasswordInput').value;if(pw!==$('apConfirmInput').value){output.textContent='Passwords do not match.';return;}output.textContent='Saving hotspot credentials...';try{const r=await fetch('/ap/save',{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok){$('apPasswordInput').value='';$('apConfirmInput').value='';}}catch(err){output.textContent='Could not save; check your connection.';}});update();setInterval(update,1000);scanNetworks();
@@ -226,6 +226,18 @@ void initializeQueue() {
   Serial.printf("Saved taps waiting to send: %u\n", pendingCount);
 }
 
+// Philippine time (Asia/Manila, UTC+8, no daylight saving) for the reader's
+// page, e.g. "Nov 18, 2026 11:05:03 AM PHT". Times sent to AvilonX stay in UTC.
+const long MANILA_OFFSET_SECONDS = 8L * 3600L;
+String manilaTime(uint32_t utcSeconds) {
+  time_t t = (time_t)utcSeconds + MANILA_OFFSET_SECONDS;
+  struct tm *local = gmtime(&t);
+  if (!local) return "";
+  char label[32];
+  strftime(label, sizeof(label), "%b %d, %Y %I:%M:%S %p PHT", local);
+  return String(label);
+}
+
 // Returns 0 when the clock has not been set from the internet since power-up.
 uint32_t readScanTime() {
   time_t t = time(nullptr);
@@ -256,13 +268,7 @@ bool saveScan(const String &uid) {
   File seq = LittleFS.open("/nextid", "w");
   if (seq) { seq.println(nextScanId); seq.close(); }
   if (item.scannedAtUtc) {
-    time_t t = item.scannedAtUtc;
-    struct tm *utc = gmtime(&t);
-    char label[25];
-    if (utc) {
-      strftime(label, sizeof(label), "%Y-%m-%d %H:%M:%S UTC", utc);
-      addHistory(uid + " - saved " + String(label));
-    }
+    addHistory(uid + " - saved " + manilaTime(item.scannedAtUtc));
   } else {
     addHistory(uid + " - saved (clock not set)");
   }
@@ -409,7 +415,9 @@ void handleStatus() {
   result += String(pendingCount);
   result += F(",\"clock_synced\":");
   result += readScanTime() ? F("true") : F("false");
-  result += F(",\"storage_ready\":");
+  result += F(",\"reader_time\":\"");
+  if (readScanTime()) result += manilaTime(readScanTime());
+  result += F("\",\"storage_ready\":");
   result += storageReady ? F("true") : F("false");
   result += F(",\"serial\":\"");
   result += deviceSerial;
@@ -671,7 +679,8 @@ void setup() {
   Serial.print(F("Device serial: ")); Serial.println(deviceSerial);
   Serial.println(F("Reader page: http://192.168.4.1"));
   beginRouterConnection();
-  // UTC. The clock is set from the internet once the router connects, and keeps
+  // The clock runs in UTC (what AvilonX expects) and the page shows Philippine
+  // time. It is set from the internet once the router connects, and keeps
   // running while powered, also through an internet outage.
   configTime(0, 0, "pool.ntp.org", "time.google.com");
 
