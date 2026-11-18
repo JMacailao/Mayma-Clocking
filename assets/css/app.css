@@ -554,3 +554,5 @@ video#camera[hidden]{display:none}
 .reader-key-value code{padding:10px 12px;border:1px solid var(--line);border-radius:7px;background:#fff;font-size:16px;letter-spacing:.06em;user-select:all;overflow-wrap:anywhere}
 [data-reader] select{min-height:38px;max-width:230px;border:1px solid #dce5ed;border-radius:7px;background:#fff;color:var(--ink);padding:0 8px;font-size:12px}
 #reader-form>.field{align-content:start}
+.member-reader-note{color:var(--muted);font-weight:500}
+.member-reader-note.has-reader{color:#006c73;font-weight:700}

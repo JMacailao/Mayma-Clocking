@@ -149,12 +149,16 @@ Create a club account with exactly that name to hand the old data to that club.
   (password `RFID12345`; change it in the sketch), open `http://192.168.4.1` and copy
   its **Device serial**. The Super Admin registers that serial for the club on
   **Register RFID reader**, which gives a one-time device key; enter the key and the
-  internet Wi-Fi on the reader's page. The club then picks each reader's mode on
-  **Admin → RFID readers**: **Register** fills the NFC tag field
-  on the open Race entries page (and offers the tag on Register NFC), and
-  **Clocking** clocks the tag's pigeon in an open race at Supabase server time. Tie a
-  reader to a member to make it that member's loft clock (it then clocks only their
-  pigeons).
+  internet Wi-Fi on the reader's page. The Super Admin chooses the club first,
+  then who uses the reader, and that decides what it does:
+  - **Club admin**: the reader only **registers** pigeons. Each tap fills the RFID
+    tag field on the open Race entries page (and is offered on Register NFC). It
+    never clocks.
+  - **A member**: the reader is that member's loft clock and only **clocks**, and
+    only that member's own pigeons' RFID tags. It never registers.
+  On Race entries, members with a loft clock are marked **RFID reader**; their
+  pigeons must have an RFID tag. Club admins see their readers on **Admin → RFID
+  readers**.
   Without Wi-Fi or internet the reader saves taps in its flash (up to 150, kept
   through a power cut) and sends them when the internet is back. AvilonX then clocks
   each pigeon at the time its tag was tapped, using the reader's clock, which is set
