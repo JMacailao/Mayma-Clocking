@@ -848,3 +848,20 @@ body.raceday-tv-on{overflow:hidden}
 .lang-switch{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:6px 0 8px;padding:3px;border-radius:9px;background:#ffffff14}
 .lang-switch button{padding:6px 4px;border:0;border-radius:7px;background:transparent;color:inherit;font-size:12px;font-weight:600;cursor:pointer;opacity:.75}
 .lang-switch button[aria-pressed="true"]{background:#fff;color:#00345f;opacity:1}
+
+/* "AvilonX was updated" notice */
+.update-banner{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));z-index:300;display:flex;align-items:center;gap:12px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);padding:10px 12px 10px 16px;border-radius:12px;background:#00345f;color:#fff;box-shadow:0 10px 30px #00203d55;font-weight:600}
+.update-banner .button{min-height:38px;padding:0 16px}
+.update-banner .text-button{color:#cfe2f5}
+@media (min-width:721px){.update-banner{bottom:24px}}
+
+/* Phones: bigger touch targets and text, for use outside at the loft */
+@media (max-width:720px){
+  .button{min-height:48px;font-size:15px}
+  .field input:not([type=checkbox]):not([type=radio]),.field select,.field textarea{min-height:48px;font-size:16px}
+  .text-button{min-height:40px;padding:8px 6px;font-size:14px}
+  .reader-choice-options label{min-height:52px}
+  .entry-chip{min-height:38px;font-size:13px}
+  .page-view h2{font-size:24px}
+  .lang-switch button{min-height:38px;font-size:13px}
+}
