@@ -1,16 +1,79 @@
-import { supabase, escapeHTML, formatDate, phDateTimeLocalToUtc, utcToPhDateTimeLocal, stateTag, tableRows, dbError, message } from '../../../assets/js/shared.js';
+import { supabase, escapeHTML, formatDate, phDateTimeLocalToUtc, utcToPhDateTimeLocal, stateTag, dbError, message } from '../../../assets/js/shared.js';
+
+const STATUSES=[['draft','Draft'],['open','Open'],['closed','Closed']];
 
 export async function render(view) {
   const {data:points,error}=await supabase.from('race_points').select('id,location,sector,latitude,longitude').order('location');if(error)throw error;
   const {data:races,error:raceError}=await supabase.from('races').select('*').order('id',{ascending:false});if(raceError)throw raceError;
   const {data:entries,error:entryError}=await supabase.from('race_entries').select('race_id');if(entryError)throw entryError;
-  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">RACE CALENDAR</span><h2>Race schedules</h2><p>Set the schedule's open and end dates. Add the official release time when it is known.</p></div></div><section class="panel"><h3>Create a race</h3><form id="race-form" class="form-grid"><label class="field"><span>Race name</span><input name="name" maxlength="180" required></label><label class="field"><span>Release point</span><select name="race_point_id" required><option value="">Choose a location</option>${points.map(p=>`<option value="${p.id}">${escapeHTML(p.sector)} · ${escapeHTML(p.location)}</option>`).join('')}</select></label><label class="field"><span>Open date</span><input name="open_date" type="date" required></label><label class="field"><span>End date</span><input name="end_date" type="date" required></label><div class="form-actions"><button class="button primary">Create schedule</button></div></form></section><section class="panel"><div class="panel-heading"><h3>All schedules</h3></div>${tableRows(races.map(r=>({...r,entry_count:entries.filter(e=>e.race_id===r.id).length})),[{key:'name',label:'Race'},{key:'release_location',label:'Release point'},{key:'open_date',label:'Open date',render:r=>escapeHTML(displayScheduleDate(r.open_date))},{key:'end_date',label:'End date',render:r=>escapeHTML(displayScheduleDate(r.end_date))},{key:'release_at_utc',label:'Release time',render:r=>escapeHTML(formatDate(r.release_at_utc))},{key:'entry_count',label:'Pigeons'},{key:'status',label:'Status',render:r=>stateTag(r.status)},{key:'status',label:'Change status',render:r=>`<select data-status="${r.id}" aria-label="Race status"><option ${r.status==='draft'?'selected':''}>draft</option><option ${r.status==='open'?'selected':''}>open</option><option ${r.status==='closed'?'selected':''}>closed</option></select>`},{key:'release_at_utc',label:'Add release date and time',render:r=>`<div class="race-release-editor"><input type="datetime-local" data-release-at="${r.id}" aria-label="Release date and time for ${escapeHTML(r.name)}" value="${utcToPhDateTimeLocal(r.release_at_utc)}"><button type="button" class="button secondary" data-save-release="${r.id}">${r.release_at_utc?'Save time':'Add time'}</button></div>`}], 'No schedules yet.',false)}</section>`;
-  const raceForm=view.querySelector('#race-form'),openDateInput=raceForm.elements.open_date,endDateInput=raceForm.elements.end_date;
+  const pigeonCount=id=>entries.filter(entry=>entry.race_id===id).length;
+
+  view.innerHTML=`<div class="split-heading"><div><h2>Race schedules</h2></div></div>
+  <div class="schedule-toolbar"><button class="button primary" type="button" data-create-schedule><span aria-hidden="true">＋</span> Create schedule</button></div>
+  <div class="schedule-layout" data-schedule-layout>
+    <section class="panel schedule-list"><div class="table-scroll"><table><thead><tr><th>Race</th><th>Release point</th><th>Release time</th><th>Pigeons</th><th>Status</th></tr></thead><tbody data-schedule-rows></tbody></table></div></section>
+    <aside class="panel schedule-editor" data-schedule-editor hidden>
+      <div class="schedule-editor-head"><h3 data-editor-title>Edit schedule</h3><button class="schedule-editor-close" type="button" data-close-editor aria-label="Close">×</button></div>
+      <form id="race-form" class="schedule-form">
+        <label class="field"><span>Race name</span><input name="name" maxlength="180" required></label>
+        <label class="field"><span>Release point</span><select name="race_point_id" required><option value="">Choose a location</option>${points.map(p=>`<option value="${p.id}">${escapeHTML(p.location)}${p.sector?` · ${escapeHTML(p.sector)}`:''}</option>`).join('')}</select><small class="small" data-point-note hidden>Pigeons are already registered, so the release point is locked. Their distances were measured from it.</small></label>
+        <div class="schedule-form-pair"><label class="field"><span>Open date</span><input name="open_date" type="date" required></label><label class="field"><span>End date</span><input name="end_date" type="date" required></label></div>
+        <label class="field"><span>Status</span><select name="status">${STATUSES.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>
+        <div class="field"><span>Official release</span><div class="schedule-form-pair"><input name="release_date" type="date" aria-label="Official release date"><input name="release_time" type="time" aria-label="Official release time"></div><small class="small">Philippine time. Needed before the race can open. Leave blank until it is known.</small></div>
+        <div class="schedule-form-actions"><button class="button primary" type="submit" data-save-schedule>Save changes</button><button class="button secondary" type="button" data-cancel-editor>Cancel</button></div>
+      </form>
+    </aside>
+  </div>`;
+
+  const layout=view.querySelector('[data-schedule-layout]'),editor=view.querySelector('[data-schedule-editor]'),form=view.querySelector('#race-form'),rowsNode=view.querySelector('[data-schedule-rows]'),title=view.querySelector('[data-editor-title]'),saveButton=view.querySelector('[data-save-schedule]'),pointNote=view.querySelector('[data-point-note]');
+  const {open_date:openDateInput,end_date:endDateInput,release_date:releaseDateInput,release_time:releaseTimeInput}=form.elements;
+  let selectedId=null;
+
+  const drawRows=()=>{
+    rowsNode.innerHTML=races.length?races.map(race=>`<tr class="schedule-row ${race.id===selectedId?'is-selected':''}" data-race-row="${race.id}" tabindex="0" aria-selected="${race.id===selectedId}"><td data-label="Race"><strong>${escapeHTML(race.name)}</strong></td><td data-label="Release point">${escapeHTML(race.release_location||'—')}</td><td data-label="Release time">${escapeHTML(race.release_at_utc?formatDate(race.release_at_utc):'Not set')}</td><td data-label="Pigeons">${pigeonCount(race.id)}</td><td data-label="Status">${stateTag(race.status)}</td></tr>`).join(''):'<tr><td class="empty-cell" colspan="5">No schedules yet. Press Create schedule to add one.</td></tr>';
+    rowsNode.querySelectorAll('[data-race-row]').forEach(row=>{const pick=()=>openEditor(races.find(race=>race.id===Number(row.dataset.raceRow)));row.onclick=pick;row.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();pick();}};});
+  };
   const validateDateRange=()=>{endDateInput.min=openDateInput.value;const invalid=Boolean(openDateInput.value&&endDateInput.value&&endDateInput.value<openDateInput.value);endDateInput.setCustomValidity(invalid?'End date must be on or after open date.':'');return !invalid;};
   openDateInput.addEventListener('input',validateDateRange);endDateInput.addEventListener('input',validateDateRange);
-  raceForm.onsubmit=async e=>{e.preventDefault();const f=e.currentTarget;if(!validateDateRange()){endDateInput.reportValidity();return;}const point=points.find(p=>p.id===Number(f.race_point_id.value));if(!point)return;const {error}=await supabase.from('races').insert({name:f.name.value.trim(),race_point_id:point.id,release_location:point.location,release_latitude:point.latitude,release_longitude:point.longitude,open_date:f.elements.open_date.value,end_date:f.elements.end_date.value,release_at_utc:null,status:'draft'});if(error){message(dbError(error),'error');return;}window.dispatchEvent(new Event('app:refresh'));};
-  view.querySelectorAll('[data-save-release]').forEach(button=>button.onclick=async()=>{const id=Number(button.dataset.saveRelease),race=races.find(item=>item.id===id),input=view.querySelector(`[data-release-at="${id}"]`);if(!race||!input)return;if(!input.value&&race.status==='open'){input.value=utcToPhDateTimeLocal(race.release_at_utc);message('Close this race before removing its release date and time.','error');return;}const releaseAt=phDateTimeLocalToUtc(input.value);if(input.value&&!releaseAt){message('Enter a valid release date and time.','error');return;}button.disabled=true;const {error}=await supabase.from('races').update({release_at_utc:releaseAt}).eq('id',id);button.disabled=false;if(error){message(dbError(error),'error');return;}race.release_at_utc=releaseAt;button.textContent=releaseAt?'Save time':'Add time';message(releaseAt?'Release date and time saved.':'Release date and time cleared.','success');});
-  view.querySelectorAll('[data-status]').forEach(el=>{const race=races.find(item=>item.id===Number(el.dataset.status));el.onchange=async()=>{if(el.value==='open'&&!race?.release_at_utc){el.value=race?.status||'draft';message('Add a release date and time before opening this race.','error');return;}const previous=race?.status||'draft';el.disabled=true;const {error}=await supabase.from('races').update({status:el.value}).eq('id',el.dataset.status);el.disabled=false;if(error){el.value=previous;message(dbError(error),'error');return;}if(race)race.status=el.value;message('Race status updated.','success');};});
-}
 
-function displayScheduleDate(value){return value?new Intl.DateTimeFormat('en-PH',{dateStyle:'medium',timeZone:'UTC'}).format(new Date(`${value}T00:00:00Z`)):'—';}
+  function openEditor(race){
+    selectedId=race?.id??null;form.reset();
+    title.textContent=race?'Edit schedule':'Create schedule';saveButton.textContent=race?'Save changes':'Create schedule';
+    const locked=Boolean(race&&pigeonCount(race.id));form.elements.race_point_id.disabled=locked;pointNote.hidden=!locked;
+    if(race){
+      form.elements.name.value=race.name||'';
+      form.elements.race_point_id.value=race.race_point_id??points.find(point=>point.location===race.release_location)?.id??'';
+      openDateInput.value=race.open_date||'';endDateInput.value=race.end_date||'';form.elements.status.value=race.status||'draft';
+      const [date='',time='']=utcToPhDateTimeLocal(race.release_at_utc).split('T');releaseDateInput.value=date;releaseTimeInput.value=time;
+    }
+    validateDateRange();editor.hidden=false;layout.classList.add('has-editor');drawRows();
+    if(matchMedia('(max-width:980px)').matches)editor.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  const closeEditor=()=>{selectedId=null;editor.hidden=true;layout.classList.remove('has-editor');drawRows();};
+
+  view.querySelector('[data-create-schedule]').onclick=()=>{openEditor(null);form.elements.name.focus();};
+  view.querySelector('[data-close-editor]').onclick=closeEditor;view.querySelector('[data-cancel-editor]').onclick=closeEditor;
+
+  form.onsubmit=async event=>{
+    event.preventDefault();
+    if(!validateDateRange()){endDateInput.reportValidity();return;}
+    const race=races.find(item=>item.id===selectedId),status=form.elements.status.value;
+    if(Boolean(releaseDateInput.value)!==Boolean(releaseTimeInput.value)){message('Enter both the official release date and time, or leave both blank.','error');(releaseDateInput.value?releaseTimeInput:releaseDateInput).focus();return;}
+    const releaseAt=releaseDateInput.value?phDateTimeLocalToUtc(`${releaseDateInput.value}T${releaseTimeInput.value}`):null;
+    if(releaseDateInput.value&&!releaseAt){message('Enter a valid release date and time.','error');return;}
+    if(status==='open'&&!releaseAt){message('Add the official release date and time before opening this race.','error');releaseDateInput.focus();return;}
+    const record={name:form.elements.name.value.trim(),open_date:openDateInput.value,end_date:endDateInput.value,status,release_at_utc:releaseAt};
+    if(!form.elements.race_point_id.disabled){
+      const point=points.find(item=>item.id===Number(form.elements.race_point_id.value));if(!point){form.elements.race_point_id.reportValidity();return;}
+      Object.assign(record,{race_point_id:point.id,release_location:point.location,release_latitude:point.latitude,release_longitude:point.longitude});
+    }
+    saveButton.disabled=true;
+    const {error:saveError}=race?await supabase.from('races').update(record).eq('id',race.id):await supabase.from('races').insert(record);
+    saveButton.disabled=false;
+    if(saveError){message(dbError(saveError),'error');return;}
+    message(race?'Schedule saved.':'Schedule created.','success');window.dispatchEvent(new Event('app:refresh'));
+  };
+
+  drawRows();
+  if(races.length)openEditor(races[0]);
+}

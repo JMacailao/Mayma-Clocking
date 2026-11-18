@@ -500,3 +500,46 @@ video#camera[hidden]{display:none}
   .entry-form-grid .field input,.entry-form-grid .field select{font-size:16px}
   .entry-form-grid .form-actions .button{width:100%}
 }
+
+/* Race schedules: table with an edit panel beside it */
+.schedule-toolbar{margin:0 0 18px}
+.schedule-toolbar .button span{font-size:18px;line-height:1}
+.schedule-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:17px;align-items:start}
+.schedule-layout.has-editor{grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr)}
+.schedule-layout>.panel{margin:0}
+.schedule-list{min-height:420px;padding:14px 12px}
+.schedule-list th{padding:14px 18px;font-size:10px}
+.schedule-list td{padding:16px 18px;font-size:14px}
+.schedule-row{cursor:pointer;transition:background .14s}
+.schedule-row:hover td{background:#f4f8fb}
+.schedule-row.is-selected td{background:#e8f0f8}
+.schedule-row.is-selected td:first-child{border-radius:8px 0 0 8px}
+.schedule-row.is-selected td:last-child{border-radius:0 8px 8px 0}
+.schedule-row:focus-visible{outline:3px solid #009fa838;outline-offset:-3px}
+.schedule-row strong{color:var(--ink)}
+.schedule-list .tag{padding:6px 12px;font-size:12px;font-weight:700}
+.schedule-editor{padding:0}
+.schedule-editor[hidden]{display:none}
+.schedule-editor-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line)}
+.schedule-editor-head h3{margin:0;font:700 20px Manrope;letter-spacing:-.03em}
+.schedule-editor-close{display:grid;place-items:center;width:36px;height:36px;border:0;border-radius:8px;background:none;color:var(--ink);font-size:26px;line-height:1;cursor:pointer}
+.schedule-editor-close:hover{background:#eef3f8}
+.schedule-form{display:grid;gap:16px;padding:20px 22px 24px}
+.schedule-form .field>span{color:var(--ink);font-size:13px}
+.schedule-form input,.schedule-form select{width:100%;min-height:44px;border:1px solid #dce5ed;border-radius:7px;background:#fff;color:var(--ink);padding:0 12px;font-size:14px;outline:none}
+.schedule-form input:focus,.schedule-form select:focus{border-color:#009fa8;box-shadow:0 0 0 3px #009fa817}
+.schedule-form select:disabled{background:#f2f5f8;color:#607489}
+.schedule-form-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.schedule-form-pair>*,.schedule-form input{min-width:0}
+.schedule-form-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:10px}
+.schedule-form-actions .button{min-height:52px;font-size:15px}
+.schedule-form-actions .button.secondary{background:#fff}
+@media(max-width:980px){.schedule-layout.has-editor{grid-template-columns:1fr}.schedule-list{min-height:0}}
+@media(max-width:720px){
+  .schedule-toolbar .button{width:100%}
+  .schedule-list{padding:8px}
+  .schedule-form{padding:18px 16px 20px}.schedule-editor-head{padding:14px 16px}
+  .schedule-form input,.schedule-form select{font-size:16px}
+  .schedule-form-pair{gap:12px}
+  .schedule-row.is-selected td{border-radius:0!important}
+}
