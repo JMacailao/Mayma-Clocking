@@ -828,3 +828,18 @@ body.raceday-tv-on{overflow:hidden}
 .notify-box[hidden]{display:none}
 .notify-box div{display:grid;gap:2px}
 .notify-box span{color:var(--muted);font-size:13px}
+
+/* Race entries: more options, last-race birds, early warning */
+.entry-more{border:1px solid var(--line);border-radius:10px;background:#fbfcfd}
+.entry-more>summary{padding:11px 14px;font-weight:700;font-size:13px;cursor:pointer;list-style-position:inside}
+.entry-more>summary .small{font-weight:500}
+.entry-more-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:4px 14px 14px}
+.entry-more-grid .field{grid-column:auto!important}
+.entry-last-race{display:grid;gap:6px;margin-top:8px}
+.entry-last-race[hidden]{display:none}
+.entry-last-race>div{display:flex;flex-wrap:wrap;gap:6px}
+.entry-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #b9d3ea;border-radius:999px;background:#f1f7fd;color:#00345f;font-weight:700;font-size:12px;cursor:pointer}
+.entry-chip span{color:var(--muted);font-weight:500}
+.entry-chip:hover{background:#e2effb}
+.entry-bird-warning{display:block;margin:4px 0;padding:6px 9px;border-radius:8px;background:#fdecec;color:#a11d1d;font-size:12px;font-weight:700}
+@media (max-width:720px){.entry-more-grid{grid-template-columns:1fr}}
