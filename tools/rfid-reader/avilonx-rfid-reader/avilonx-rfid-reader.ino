@@ -123,6 +123,9 @@ struct StoredScan {
   uint32_t checksum;
 };
 const uint32_t SCAN_MAGIC = 0x53434131UL;
+// Declared up here because the Arduino IDE adds function declarations near the
+// top of the sketch, and sendTag() returns this type.
+enum SendResult { SEND_ANSWERED, SEND_RETRY };
 unsigned long lastSendAttempt = 0;
 unsigned long sendWaitMs = 0;
 const unsigned long SEND_NEXT_MS = 300UL;      // after an answer, send the next tap soon
@@ -533,8 +536,6 @@ void handleDeviceSave() {
   lastSendAttempt = 0;  // send any saved taps now
   server.send(200, "text/plain", "Device key saved. Tap a tag: the AvilonX reply appears above.");
 }
-
-enum SendResult { SEND_ANSWERED, SEND_RETRY };
 
 // Sends one saved tap. SEND_ANSWERED means AvilonX gave a definite answer
 // (clocked, duplicate, or refused): the tap is then removed so it cannot block
