@@ -43,6 +43,14 @@ CREATE TABLE IF NOT EXISTS public.rfid_devices (
 );
 CREATE INDEX IF NOT EXISTS idx_rfid_devices_club ON public.rfid_devices(club_id);
 
+-- Online status: the reader sends a short signal about every minute while it
+-- has internet (device_rfid_heartbeat), with how many taps it still holds and
+-- where its clock comes from. Online = a signal in the last 3 minutes.
+ALTER TABLE public.rfid_devices ADD COLUMN IF NOT EXISTS last_heartbeat_at timestamptz;
+ALTER TABLE public.rfid_devices ADD COLUMN IF NOT EXISTS pending_taps integer NOT NULL DEFAULT 0;
+ALTER TABLE public.rfid_devices ADD COLUMN IF NOT EXISTS clock_source text;
+ALTER TABLE public.rfid_devices ADD COLUMN IF NOT EXISTS firmware text;
+
 -- A reader's job follows from who uses it:
 --   club admin (no member)  -> register: taps fill the Race entries tag field, never clock
 --   one member (loft clock) -> clock: taps clock only that member's own pigeons, never register
@@ -97,13 +105,17 @@ $$;
 REVOKE ALL ON FUNCTION public._new_rfid_device_key() FROM PUBLIC, anon, authenticated;
 
 -- Club admin: list this club's readers.
+-- (The column list grew for the online status, so an older copy is dropped first.)
+DROP FUNCTION IF EXISTS public.admin_list_rfid_devices();
 CREATE OR REPLACE FUNCTION public.admin_list_rfid_devices()
-RETURNS TABLE (id bigint, serial text, name text, member_id bigint, member_name text, mode text, last_seen_at timestamptz, last_tag text, created_at timestamptz)
+RETURNS TABLE (id bigint, serial text, name text, member_id bigint, member_name text, mode text, last_seen_at timestamptz, last_tag text, created_at timestamptz,
+  last_heartbeat_at timestamptz, pending_taps integer, clock_source text, is_online boolean)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
   IF NOT public.can_manage_club_data() THEN RAISE EXCEPTION 'Club administrator or staff account required.' USING ERRCODE = '42501'; END IF;
   RETURN QUERY
-    SELECT d.id, d.serial::text, d.name, d.member_id, m.full_name::text, d.mode, d.last_seen_at, d.last_tag::text, d.created_at
+    SELECT d.id, d.serial::text, d.name, d.member_id, m.full_name::text, d.mode, d.last_seen_at, d.last_tag::text, d.created_at,
+      d.last_heartbeat_at, d.pending_taps, d.clock_source, coalesce(d.last_heartbeat_at > now() - interval '3 minutes', false)
     FROM public.rfid_devices AS d LEFT JOIN public.members AS m ON m.id = d.member_id
     WHERE d.club_id = public.current_club_id()
     ORDER BY d.created_at DESC;
@@ -142,12 +154,14 @@ REVOKE ALL ON FUNCTION public._require_superadmin() FROM PUBLIC, anon, authentic
 -- so an older copy is dropped first.)
 DROP FUNCTION IF EXISTS public.superadmin_list_rfid_devices();
 CREATE OR REPLACE FUNCTION public.superadmin_list_rfid_devices()
-RETURNS TABLE (id bigint, serial text, name text, club_id bigint, club_name text, member_id bigint, member_name text, mode text, last_seen_at timestamptz, last_tag text, created_at timestamptz)
+RETURNS TABLE (id bigint, serial text, name text, club_id bigint, club_name text, member_id bigint, member_name text, mode text, last_seen_at timestamptz, last_tag text, created_at timestamptz,
+  last_heartbeat_at timestamptz, pending_taps integer, clock_source text, is_online boolean)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
   PERFORM public._require_superadmin();
   RETURN QUERY
-    SELECT d.id, d.serial::text, d.name, d.club_id, c.name::text, d.member_id, m.full_name::text, d.mode, d.last_seen_at, d.last_tag::text, d.created_at
+    SELECT d.id, d.serial::text, d.name, d.club_id, c.name::text, d.member_id, m.full_name::text, d.mode, d.last_seen_at, d.last_tag::text, d.created_at,
+      d.last_heartbeat_at, d.pending_taps, d.clock_source, coalesce(d.last_heartbeat_at > now() - interval '3 minutes', false)
     FROM public.rfid_devices AS d JOIN public.clubs AS c ON c.id = d.club_id LEFT JOIN public.members AS m ON m.id = d.member_id
     ORDER BY d.created_at DESC;
 END;
@@ -341,7 +355,7 @@ BEGIN
     END IF;
   END IF;
 
-  UPDATE public.rfid_devices AS d SET last_seen_at = now(), last_tag = v_uid WHERE d.id = v_device.id;
+  UPDATE public.rfid_devices AS d SET last_seen_at = now(), last_heartbeat_at = now(), last_tag = v_uid WHERE d.id = v_device.id;
   DELETE FROM public.rfid_device_scans AS s WHERE s.scanned_at < now() - interval '4 days';
 
   IF v_device.mode = 'register' THEN
@@ -420,6 +434,29 @@ GRANT EXECUTE ON FUNCTION public.admin_list_rfid_devices(),
   public.superadmin_list_club_members(bigint), public.superadmin_set_rfid_device_member(bigint, bigint),
   public.superadmin_reset_rfid_device_key(bigint), public.superadmin_delete_rfid_device(bigint) TO authenticated;
 -- The reader signs in with its serial and key, not a user account.
+-- Called by the reader itself about every minute while it has internet.
+CREATE OR REPLACE FUNCTION public.device_rfid_heartbeat(p_serial text, p_key text, p_pending integer DEFAULT 0, p_clock text DEFAULT NULL, p_firmware text DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = '' AS $$
+DECLARE
+  v_device public.rfid_devices%ROWTYPE;
+BEGIN
+  SELECT d.* INTO v_device FROM public.rfid_devices AS d WHERE d.serial = public.normalize_device_serial(p_serial) FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'This reader is not registered. Ask the Super Admin to register serial %.', coalesce(public.normalize_device_serial(p_serial), p_serial) USING ERRCODE = '42501';
+  END IF;
+  IF v_device.key_hash <> public._rfid_device_key_hash(p_key) THEN
+    RAISE EXCEPTION 'The device key is wrong. Ask the Super Admin for a new key.' USING ERRCODE = '42501';
+  END IF;
+  UPDATE public.rfid_devices AS d
+  SET last_heartbeat_at = now(), pending_taps = greatest(0, least(coalesce(p_pending, 0), 100000)),
+      clock_source = left(p_clock, 20), firmware = left(p_firmware, 40)
+  WHERE d.id = v_device.id;
+  RETURN jsonb_build_object('status', 'online', 'mode', v_device.mode, 'name', v_device.name, 'server_time', now());
+END;
+$$;
+REVOKE ALL ON FUNCTION public.device_rfid_heartbeat(text, text, integer, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.device_rfid_heartbeat(text, text, integer, text, text) TO anon, authenticated;
+
 REVOKE ALL ON FUNCTION public.device_rfid_scan(text, text, text, timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.device_rfid_scan(text, text, text, timestamptz) TO anon, authenticated;
 

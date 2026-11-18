@@ -170,6 +170,12 @@ Create a club account with exactly that name to hand the old data to that club.
   On Race entries, members with a loft clock are marked **RFID reader**; add
   their pigeons' RFID tag so the reader can clock them. Club admins see their
   readers on **Admin → RFID readers**.
+- **Reader online status.** While it has internet, each reader sends AvilonX a
+  short signal about every minute. **Admin → RFID readers** and **Register RFID
+  reader** show each reader as **Online** (signal in the last 3 minutes, with any
+  taps still waiting to send), **Offline** (last online time) or **Never
+  connected**, refreshed every 30 seconds. Needs the latest `rfid-devices.sql`
+  and reader sketch.
 - **Three ways to clock one pigeon**: the member's loft RFID reader (uses the tap
   time, also offline), an Android phone (**Start phone NFC** on Clocking) and the
   sticker scratch code. The phone and sticker use the time they reach AvilonX.

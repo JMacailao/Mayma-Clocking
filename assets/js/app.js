@@ -82,7 +82,7 @@ async function renderPage(view,role,identity,page=body.dataset.view,setCleanup=f
   else if(page==='clocking'&&role==='admin'){const pageModule=await import('../../pages/admin/clocking/page.js');await pageModule.render(view,identity,setCleanup);}
   else if(page==='bird-bonding'&&role==='admin'){const pageModule=await import('../../pages/admin/birds/page.js');await pageModule.render(view,identity,setCleanup);}
   else if(page==='entry-remarks'&&role==='admin'){const pageModule=await import('../../pages/admin/remarks/page.js');await pageModule.render(view,identity);}
-  else if(page==='rfid-readers'&&role==='admin'){const pageModule=await import('../../pages/admin/readers/page.js');await pageModule.render(view,identity);}
+  else if(page==='rfid-readers'&&role==='admin'){const pageModule=await import('../../pages/admin/readers/page.js');await pageModule.render(view,identity,setCleanup);}
   else if(page==='results'&&role==='admin'){const pageModule=await import('../../pages/admin/results/page.js');await pageModule.render(view);}
   else if(page==='dashboard'&&role==='member'){const pageModule=await import('../../pages/member/dashboard/page.js');await pageModule.render(view,identity);}
   else if(page==='member-clocking'&&role==='member'){const pageModule=await import('../../pages/member/clocking/page.js');await pageModule.render(view,identity,setCleanup);}

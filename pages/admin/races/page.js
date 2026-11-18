@@ -89,10 +89,11 @@ export async function render(view) {
       const clocked=new Set((clocks||[]).map(clock=>clock.race_entry_id));
       const waitingMembers=new Set(raceEntries.filter(entry=>!clocked.has(entry.id)).map(entry=>entry.member_id));
       const releasedAt=race.release_at_utc?new Date(String(race.release_at_utc).replace(' ','T')+(/[zZ]|[+-]\d\d:?\d\d$/.test(String(race.release_at_utc))?'':'Z')):null;
-      const silent=readers.filter(reader=>reader.member_id&&waitingMembers.has(reader.member_id)&&(!reader.last_seen_at||(releasedAt&&new Date(reader.last_seen_at)<releasedAt)));
+      const lastContact=reader=>[reader.last_seen_at,reader.last_heartbeat_at].filter(Boolean).map(value=>new Date(value)).sort((a,b)=>b-a)[0]||null;
+      const silent=readers.filter(reader=>{if(!reader.member_id||!waitingMembers.has(reader.member_id))return false;const contact=lastContact(reader);return Number(reader.pending_taps)>0||!contact||(releasedAt&&contact<releasedAt);});
       if(!silent.length)return true;
-      const list=silent.map(reader=>`• ${reader.name} (${reader.member_name||'member'}), ${reader.last_seen_at?`last seen ${formatDate(reader.last_seen_at)}`:'never used'}`).join('\n');
-      return confirm(`Before closing ${race.name}: these loft readers have not sent anything to AvilonX since the release, so they may still hold taps saved while offline:\n\n${list}\n\nTaps that arrive after the race is closed are not accepted. Ask these members to connect their reader to the internet first.\n\nClose the race anyway?`);
+      const list=silent.map(reader=>{const contact=lastContact(reader),waiting=Number(reader.pending_taps)||0;return `• ${reader.name} (${reader.member_name||'member'}), ${reader.is_online?'online now':contact?`last online ${formatDate(contact)}`:'never connected'}${waiting?`, ${waiting} tap${waiting===1?'':'s'} still waiting to send`:''}`;}).join('\n');
+      return confirm(`Before closing ${race.name}: these loft readers may still hold taps saved while offline (they still report taps waiting, or have not been online since the release):\n\n${list}\n\nTaps that arrive after the race is closed are not accepted. Ask these members to connect their reader to the internet first.\n\nClose the race anyway?`);
     }catch{return true;}
   }
 

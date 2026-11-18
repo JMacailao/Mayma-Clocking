@@ -617,3 +617,8 @@ video#camera[hidden]{display:none}
 @media(max-width:560px){.bird-filters .field{min-width:0;width:100%}}
 .reader-choice[hidden]{display:none}
 .button[hidden]{display:none}
+.reader-status{font-weight:700;white-space:nowrap}
+.reader-status.is-online{color:#0f8758}
+.reader-status.is-offline{color:#a86600}
+.reader-status.is-never{color:var(--muted)}
+.reader-warn{color:#a86600;font-weight:600}
