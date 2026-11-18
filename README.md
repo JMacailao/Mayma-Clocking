@@ -70,6 +70,10 @@ requests in the browser.
       tag still active in another race (that race is not closed and the tag has
       not expired there) cannot be entered in a new race. Run it after
       `nfc-tags.sql`.
+  15. `bird-ring-only.sql` — Bird bonding gets a **Ring number only (sticker)**
+      tab: bond a bird without an RFID tag (ring, loft, name, colour, photo). It
+      is entered on Race entries → **Sticker entries** (ring + sticker) and
+      clocked with its sticker. Run it after `bird-bonding.sql`.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.

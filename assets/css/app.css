@@ -687,3 +687,7 @@ video#camera[hidden]{display:none}
 .usb-reader-status[hidden]{display:none}
 .usb-reader-status.is-ok{background:#e9f7ef;color:#0f8758}
 .usb-reader-status.is-bad{background:#fff1ee;color:#a2302a}
+
+/* Bird bonding: RFID bond or ring number only (sticker birds) */
+[data-bond="ring"] .bond-rfid-only,[data-bond="rfid"] .bond-ring-only{display:none!important}
+.bird-ring-only{display:inline-block;padding:2px 8px;border-radius:999px;background:#fff7e0;color:#8a5a00;font-size:12px;font-weight:600}
