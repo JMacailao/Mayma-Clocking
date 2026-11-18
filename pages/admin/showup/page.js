@@ -2,7 +2,7 @@ import { supabase, escapeHTML, formatDate, message, number, ringLabel } from '..
 import { normalizeNfcUid, formatNfcUid, phoneNfcSupported, startPhoneNfc, NFC_HELP, listenForReaderKeys, listenForDeviceScans, usbReaderStatus } from '../../../assets/js/nfc.js';
 import { birdPhotoUrls } from '../birds/page.js';
 
-const READER_KEY='avilonx.showup.reader';
+const READER_KEY='avilonx.reader';
 const asUtc=value=>value?new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(String(value))?String(value).replace(' ','T'):`${String(value).replace(' ','T')}Z`):null;
 
 // The show-up state of a clocked pigeon. Disqualified = its race is closed and

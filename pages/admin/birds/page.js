@@ -3,7 +3,7 @@ import { normalizeNfcUid, formatNfcUid, phoneNfcSupported, startPhoneNfc, NFC_HE
 
 export const BIRD_COLOURS=['Blue bar','Blue check','Dark check','Red check','Red bar','Mealy','Grizzle','Black','White','Pied','Silver','Other'];
 const PHOTO_BUCKET='pigeon-photos';
-const READER_KEY='avilonx.birds.reader',BOND_KEY='avilonx.birds.bond';
+const READER_KEY='avilonx.reader',BOND_KEY='avilonx.birds.bond';
 const missingSql=error=>/pigeons|relation|schema cache/i.test(error?.message||'');
 
 // Signed links to private bird photos, one hour.
