@@ -2,7 +2,8 @@
   AvilonX Clocking - external RFID reader (ESP8266 + RC522)
 
   Every tag tapped on the RC522 is saved in the ESP8266's flash first, with the
-  time it was tapped, and then sent to AvilonX over Wi-Fi. When there is no
+  time it was tapped, and then sent to AvilonX over Wi-Fi. A tag is saved once:
+  tapping it again while it is still waiting to send does not save it again. When there is no
   Wi-Fi or no internet the taps stay saved (up to 150, kept through a power
   cut) and are sent as soon as the internet is back. AvilonX clocks a pigeon at
   the time its tag was tapped, not the time it arrived.
@@ -242,6 +243,19 @@ String manilaTime(uint32_t utcSeconds) {
 uint32_t readScanTime() {
   time_t t = time(nullptr);
   return t >= 1700000000 ? (uint32_t)t : 0;
+}
+
+// True when this tag is already saved and waiting to be sent.
+bool isAlreadySaved(const String &uid) {
+  if (!storageReady || pendingCount == 0) return false;
+  Dir dir = LittleFS.openDir(QUEUE_DIR);
+  while (dir.next()) {
+    String path = queuePath(dir.fileName());
+    if (path.endsWith(".tmp")) continue;
+    StoredScan item;
+    if (loadScanFile(path, item) && uid == item.uid) return true;
+  }
+  return false;
 }
 
 bool saveScan(const String &uid) {
@@ -627,7 +641,11 @@ void readRFID() {
     lastSeenMs = now;
     totalScans++;
     Serial.print(F("Tag: ")); Serial.println(uid);
-    if (saveScan(uid)) {
+    if (isAlreadySaved(uid)) {
+      // Each tag is saved once: the first tap (and its time) is the one sent.
+      lastReply = "Tag already saved; waiting to send. Not saved again.";
+      addHistory(uid + " - already saved, not saved again");
+    } else if (saveScan(uid)) {
       lastSendAttempt = 0;
       lastReply = readScanTime()
           ? (WiFi.status() == WL_CONNECTED ? "Saved; sending to AvilonX" : "Saved; will send when the internet is back")
