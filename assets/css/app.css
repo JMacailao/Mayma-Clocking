@@ -454,3 +454,49 @@ video#camera[hidden]{display:none}
   .dms-grid-head span:first-child{display:none}
   .dms-grid-head{grid-template-columns:64px repeat(3,minmax(0,1fr))}
 }
+
+/* Race entries: race picker bar, tabs, and the register form */
+.entry-race-bar{display:flex;align-items:center;gap:22px;margin:0 0 17px;padding:16px 22px;border:1px solid var(--line);border-radius:11px;background:#e9eef3}
+.entry-race-bar label{color:var(--ink);font-size:14px;font-weight:600;white-space:nowrap}
+.entry-race-bar select{width:min(100%,420px);min-height:44px;padding:0 12px;border:1px solid #cfd9e2;border-radius:7px;background:#fff;color:var(--ink);font-size:14px;outline:none}
+.entry-race-bar select:focus{border-color:#009fa8;box-shadow:0 0 0 3px #009fa817}
+.entry-tabs{padding:0;overflow:hidden}
+.entry-tab-bar{display:flex;align-items:stretch;padding:0 12px;border-bottom:1px solid var(--line);background:#f8fafc;overflow-x:auto}
+.entry-tab-bar button{position:relative;display:inline-flex;align-items:center;gap:10px;min-height:58px;padding:0 22px;border:0;background:none;color:#526a80;font-size:14px;font-weight:500;white-space:nowrap;cursor:pointer}
+.entry-tab-bar button+button::before{position:absolute;left:0;top:16px;bottom:16px;width:1px;background:var(--line);content:""}
+.entry-tab-bar button svg{width:22px;height:22px;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.entry-tab-bar button[aria-selected="true"]{color:var(--ink);font-weight:700}
+.entry-tab-bar button[aria-selected="true"]::after{position:absolute;left:8px;right:8px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--gold);content:""}
+.entry-tab-bar button:focus-visible{outline:3px solid #009fa838;outline-offset:-3px}
+.entry-tab-pane{padding:20px 22px 24px}
+.entry-tab-pane[hidden]{display:none}
+.entry-tab-intro{margin:0 0 16px;color:var(--muted);font-size:13px}
+.entry-tabs[data-tab="sheet"] [data-excel-only],.entry-tabs[data-tab="excel"] [data-sheet-only]{display:none!important}
+.entry-tabs .entry-sheet-actions:first-of-type{margin-top:0}
+.entry-form-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px 26px}
+.entry-form-grid .field{align-content:start}
+.entry-form-grid .span-3{grid-column:span 3}
+.entry-form-grid .span-2{grid-column:span 2}
+.entry-form-grid .field>span{color:var(--ink);font-size:13px}
+.entry-form-grid .field input,.entry-form-grid .field select{min-height:44px;font-size:14px}
+.entry-form-grid .form-actions{margin-top:8px}
+.entry-field-hint{color:var(--muted);font-weight:500}
+.input-with-button{display:flex;min-width:0}
+.input-with-button input{flex:1;min-width:0;border-top-right-radius:0!important;border-bottom-right-radius:0!important}
+.input-with-button button{display:grid;place-items:center;width:58px;flex:0 0 58px;border:1px solid #dce5ed;border-left:0;border-radius:0 7px 7px 0;background:#f4f7fa;color:var(--ink);cursor:pointer}
+.input-with-button button:hover{background:#eaf2f8}
+.input-with-button button:disabled{opacity:.55;cursor:wait}
+.input-with-button button svg{width:24px;height:24px;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+[data-registered-panel] th{background:#f4f7fa}
+@media(max-width:720px){
+  .entry-race-bar{flex-direction:column;align-items:stretch;gap:8px;padding:14px 16px}
+  .entry-race-bar select{width:100%;font-size:16px}
+  .entry-tab-bar{padding:0 4px}
+  .entry-tab-bar button{flex:1 1 0;justify-content:center;gap:0;min-height:52px;padding:0 6px;font-size:12px;white-space:normal;text-align:center;line-height:1.25}
+  .entry-tab-bar button svg{display:none}
+  .entry-tab-pane{padding:18px 16px 20px}
+  .entry-form-grid{grid-template-columns:1fr;gap:14px}
+  .entry-form-grid .span-3,.entry-form-grid .span-2{grid-column:1/-1}
+  .entry-form-grid .field input,.entry-form-grid .field select{font-size:16px}
+  .entry-form-grid .form-actions .button{width:100%}
+}
