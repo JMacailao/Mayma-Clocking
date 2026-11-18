@@ -75,7 +75,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   };
   input.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();const uid=normalizeNfcUid(input.value);input.value='';if(uid)tap(uid,'');else if(uid===null)message(NFC_HELP,'error');});
   const usbStatus=view.querySelector('[data-usb-status]');
-  const stopKeys=listenForReaderKeys((uid,info)=>{if(readerChoice()!=='wired')return false;tap(uid,'the USB reader',info.candidates);},{takeFromTextFields:true,onBurst:burst=>{if(readerChoice()==='wired'){usbStatus.hidden=false;usbReaderStatus(usbStatus)(burst);}}});
+  const stopKeys=listenForReaderKeys((uid,info)=>{if(readerChoice()!=='wired')return false;tap(uid,'the USB reader',info.candidates);},{takeFromTextFields:true,helper:()=>readerChoice()==='wired',onBurst:burst=>{if(readerChoice()==='wired'){usbStatus.hidden=false;usbReaderStatus(usbStatus)(burst);}}});
   const stopScans=listenForDeviceScans((uid,reader)=>{if(readerChoice()==='wireless')tap(uid,reader);});
   let stopPhone=()=>{};
   phoneButton.onclick=async()=>{try{message('Hold the pigeon\'s RFID tag to the back of the phone…','info');stopPhone();stopPhone=await startPhoneNfc(uid=>{stopPhone();tap(uid,'the phone');},error=>message(error.message,'error'));}catch(error){message(error.message,'error');}};

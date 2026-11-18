@@ -1,33 +1,21 @@
 <#
-  AvilonX Clocking - ACS ACR122U as an AvilonX reader (Windows).
+  AvilonX Clocking - ACS ACR122U helper for a Windows laptop or PC.
 
-  Reads each tag tapped on the ACR122U (or another PC/SC reader) and sends it
-  straight to AvilonX over the internet, the same way the ESP8266 reader does.
-  Nothing is typed into the browser, so it works whatever window is in front.
+  Reads each tag tapped on the ACR122U (or another PC/SC NFC reader) and hands
+  it to the AvilonX page open in the browser on this same computer. Nothing to
+  register and no key: just keep this window open.
 
-  On Race entries (RFID entries), Bird bonding and Show up, choose
-  "Wireless" as the reader: taps from this computer appear there.
+  1. Plug in the ACR122U and double-click "Start ACR122U for AvilonX.cmd".
+  2. In AvilonX (Race entries, Bird bonding, Show up) choose "Wired" as the
+     reader. The page shows "ACR122U helper connected".
+     If the browser asks to allow access to devices on your network, choose Allow.
+  3. Tap tags on the reader. Press Ctrl+C or close this window to stop.
 
-  First time:
-    1. Plug in the ACR122U. Double-click "Start ACR122U for AvilonX.cmd"
-       (next to this file). This window shows the computer's Device serial.
-    2. The AvilonX Super Admin registers that serial on Register RFID reader
-       for your club, Used by: Club admin (registering pigeons), and gives
-       you a device key.
-    3. Paste the device key into this window and press Enter. It is saved,
-       so next time the helper starts straight away.
-  Keep this window open while tapping tags. Press Ctrl+C to stop.
-  To use another key, delete the file shown at start-up ("Settings file").
+  Taps are shared only on this computer (127.0.0.1) and only with AvilonX pages.
 #>
 
 $ErrorActionPreference = 'Stop'
-[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-
-# AvilonX's Supabase project. The publishable key is public (it is in the web
-# app too); the reader proves who it is with its serial and device key.
-$SupabaseUrl = 'https://utfxtwgqdbjkbxlooolr.supabase.co'
-$SupabaseKey = 'sb_publishable_bUkPWYhRAP0nYd9yL01ObA__PJ3Q4v3'
-$Firmware    = 'acr122u-avilonx-2026.11'
+$Port = 47321
 
 Add-Type -TypeDefinition @'
 using System;
@@ -91,135 +79,123 @@ public static class AvilonXPcsc {
 }
 '@
 
-# ---- Settings: this computer's serial and its device key -------------------
-$SettingsDir  = Join-Path $env:APPDATA 'AvilonX'
-$SettingsFile = Join-Path $SettingsDir 'acr122u-reader.json'
-$settings = $null
-if (Test-Path $SettingsFile) {
-  try { $settings = Get-Content $SettingsFile -Raw | ConvertFrom-Json } catch { $settings = $null }
+# AvilonX pages that may read the taps (the browser sends the page's origin).
+function Test-AllowedOrigin([string]$Origin) {
+  if (-not $Origin) { return $false }
+  return $Origin -match '^https://(www\.)?avilonx\.site$' -or $Origin -match '^https://[a-z0-9-]+\.github\.io$' -or $Origin -match '^http://(localhost|127\.0\.0\.1)(:\d+)?$'
 }
-if (-not $settings -or -not $settings.serial) {
-  # The serial is the network card's MAC address, saved so it never changes.
-  $mac = $null
-  try {
-    $mac = Get-CimInstance Win32_NetworkAdapter -Filter 'PhysicalAdapter=True' |
-      Where-Object { $_.MACAddress } | Sort-Object DeviceID | Select-Object -First 1 -ExpandProperty MACAddress
-  } catch { $mac = $null }
-  if (-not $mac) {
-    $bytes = New-Object byte[] 6; (New-Object Random).NextBytes($bytes); $bytes[0] = $bytes[0] -bor 2
-    $mac = ($bytes | ForEach-Object { $_.ToString('X2') }) -join ':'
+
+$tags = New-Object System.Collections.ArrayList   # recent taps: @{ seq; uid }
+$seq = 0
+$readerName = ''
+
+function Send-Response($Client, [string]$Origin, [int]$Code, [string]$Body) {
+  $status = @{ 200 = 'OK'; 204 = 'No Content'; 404 = 'Not Found' }[$Code]
+  $lines = @("HTTP/1.1 $Code $status", 'Content-Type: application/json', 'Cache-Control: no-store', 'Connection: close')
+  if (Test-AllowedOrigin $Origin) {
+    $lines += "Access-Control-Allow-Origin: $Origin"
+    $lines += 'Vary: Origin'
+    $lines += 'Access-Control-Allow-Methods: GET, OPTIONS'
+    $lines += 'Access-Control-Allow-Headers: *'
+    $lines += 'Access-Control-Allow-Private-Network: true'
   }
-  $settings = [pscustomobject]@{ serial = ($mac -replace '[^0-9A-Fa-f]', '').ToUpper(); key = '' }
-}
-$serial = $settings.serial
-$serialShown = ($serial -split '(..)' | Where-Object { $_ }) -join ':'
-
-function Save-Settings {
-  if (-not (Test-Path $SettingsDir)) { New-Item -ItemType Directory -Path $SettingsDir | Out-Null }
-  $settings | ConvertTo-Json | Set-Content -Path $SettingsFile -Encoding UTF8
-}
-
-Write-Host ''
-Write-Host 'AvilonX Clocking - ACR122U reader (sends taps to AvilonX)' -ForegroundColor Green
-Write-Host ("Device serial: {0}" -f $serialShown) -ForegroundColor Cyan
-Write-Host ("Settings file: {0}" -f $SettingsFile)
-Write-Host ''
-
-if (-not $settings.key) {
-  Write-Host 'Ask the AvilonX Super Admin to register the Device serial above on'
-  Write-Host '"Register RFID reader" for your club (Used by: Club admin), then paste'
-  Write-Host 'the 32-character device key they give you.'
-  while (-not $settings.key) {
-    $typed = (Read-Host 'Device key') -replace '[^0-9A-Fa-f]', ''
-    if ($typed.Length -eq 32) { $settings.key = $typed.ToUpper(); Save-Settings; Write-Host 'Device key saved.' -ForegroundColor Green }
-    else { Write-Host 'The device key has 32 letters and numbers. Copy it again from AvilonX.' -ForegroundColor Yellow }
-  }
-} else {
-  Save-Settings
+  $bodyBytes = [Text.Encoding]::UTF8.GetBytes($Body)
+  $lines += "Content-Length: $($bodyBytes.Length)"
+  $headBytes = [Text.Encoding]::ASCII.GetBytes(($lines -join "`r`n") + "`r`n`r`n")
+  $stream = $Client.GetStream()
+  $stream.Write($headBytes, 0, $headBytes.Length)
+  if ($bodyBytes.Length) { $stream.Write($bodyBytes, 0, $bodyBytes.Length) }
+  $stream.Flush()
 }
 
-# ---- AvilonX calls -------------------------------------------------------------
-function Invoke-AvilonX([string]$Function, $Body) {
-  $json = $Body | ConvertTo-Json -Compress
+function Invoke-Request($Client) {
   try {
-    $reply = Invoke-RestMethod -Method Post -Uri "$SupabaseUrl/rest/v1/rpc/$Function" -Headers @{ apikey = $SupabaseKey } -ContentType 'application/json' -Body $json -TimeoutSec 10
-    return @{ ok = $true; reply = $reply }
-  } catch {
-    $text = $null
-    if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
-      try { $text = ($_.ErrorDetails.Message | ConvertFrom-Json).message } catch { $text = $_.ErrorDetails.Message }
+    $Client.ReceiveTimeout = 1000; $Client.SendTimeout = 1000
+    $stream = $Client.GetStream()
+    $buffer = New-Object byte[] 8192; $read = 0; $text = ''
+    while ($read -lt $buffer.Length -and -not $text.Contains("`r`n`r`n")) {
+      $n = $stream.Read($buffer, $read, $buffer.Length - $read)
+      if ($n -le 0) { break }
+      $read += $n; $text = [Text.Encoding]::ASCII.GetString($buffer, 0, $read)
     }
-    $status = $null
-    try { $status = [int]$_.Exception.Response.StatusCode } catch { $status = $null }
-    return @{ ok = $false; message = $(if ($text) { $text } else { $_.Exception.Message }); status = $status }
+    $requestLines = $text -split "`r`n"
+    $parts = $requestLines[0] -split ' '
+    $method = $parts[0]; $path = if ($parts.Length -gt 1) { $parts[1] } else { '/' }
+    $origin = ($requestLines | Where-Object { $_ -match '^Origin:\s*' } | Select-Object -First 1) -replace '^Origin:\s*', ''
+    if ($method -eq 'OPTIONS') { Send-Response $Client $origin 204 ''; return }
+    if (-not ($path -match '^/tag(\?|$)')) { Send-Response $Client $origin 404 '{"ok":false}'; return }
+    $after = -1
+    if ($path -match 'after=(\d+)') { $after = [int]$Matches[1] }
+    $items = @($script:tags | Where-Object { $after -ge 0 -and $_.seq -gt $after } | ForEach-Object { '{"seq":' + $_.seq + ',"uid":"' + $_.uid + '"}' })
+    $json = '{"ok":true,"app":"avilonx-acr122u","reader":' + (ConvertTo-Json ([string]$script:readerName)) + ',"seq":' + $script:seq + ',"tags":[' + ($items -join ',') + ']}'
+    Send-Response $Client $origin 200 $json
+  } catch {
+    # A page that went away mid-request: nothing to do.
+  } finally {
+    $Client.Close()
   }
 }
 
-function Send-Tag([string]$Uid) {
-  $result = Invoke-AvilonX 'device_rfid_scan' @{ p_serial = $serial; p_key = $settings.key; p_tag = $Uid; p_scanned_at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') }
-  $time = Get-Date -Format 'HH:mm:ss'
-  if ($result.ok) {
-    $color = 'Green'; if ($result.reply.status -ne 'sent' -and $result.reply.status -ne 'accepted') { $color = 'Yellow' }
-    Write-Host ("{0}  Tag {1}: {2}" -f $time, $Uid, $result.reply.message) -ForegroundColor $color
-    return $true
-  }
-  Write-Host ("{0}  Tag {1} not sent: {2}" -f $time, $Uid, $result.message) -ForegroundColor Red
-  # Retry later only when AvilonX could not be reached (not when it refused the tag).
-  return ($result.status -ge 400 -and $result.status -lt 500)
+try {
+  $listener = New-Object System.Net.Sockets.TcpListener([Net.IPAddress]::Loopback, $Port)
+  $listener.Start()
+} catch {
+  Write-Host "Could not start on port $Port. Is the helper already open in another window? Close it and try again." -ForegroundColor Red
+  Read-Host 'Press Enter to close'
+  exit 1
 }
 
-function Send-Heartbeat {
-  $result = Invoke-AvilonX 'device_rfid_heartbeat' @{ p_serial = $serial; p_key = $settings.key; p_pending = $script:pending.Count; p_clock = 'internet'; p_firmware = $Firmware }
-  if ($result.ok) { return $true }
-  Write-Host ("AvilonX: {0}" -f $result.message) -ForegroundColor Yellow
-  return $false
-}
+Write-Host ''
+Write-Host 'AvilonX Clocking - ACR122U helper' -ForegroundColor Green
+Write-Host 'Keep this window open. In AvilonX choose "Wired" as the reader, then tap tags.'
+Write-Host 'Nothing to register. Press Ctrl+C or close this window to stop.'
+Write-Host ''
 
-# ---- Main loop -------------------------------------------------------------------
-$script:pending = New-Object System.Collections.ArrayList
 $lastUid = $null
 $reader = $null
 $warned = $false
-$lastHeartbeat = [DateTime]::MinValue
+$nextRead = [DateTime]::MinValue
 
-if (Send-Heartbeat) { Write-Host 'Connected to AvilonX. On Race entries choose "Wireless", then tap tags here.' -ForegroundColor Green }
-$lastHeartbeat = Get-Date
-
-while ($true) {
-  try {
-    if (-not $reader) {
-      $readers = [AvilonXPcsc]::Readers()
-      $reader = $readers | Where-Object { $_ -match 'ACR122|PICC|NFC|Contactless' } | Select-Object -First 1
-      if (-not $reader) { $reader = $readers | Select-Object -First 1 }
-      if ($reader) { Write-Host "Reader ready: $reader" -ForegroundColor Green; $warned = $false }
-      elseif (-not $warned) { Write-Host 'No NFC reader found. Plug in the ACR122U; this window will pick it up.' -ForegroundColor Yellow; $warned = $true }
-    }
-
-    if ($reader) {
-      $uid = [AvilonXPcsc]::ReadUid($reader)
-      if ($uid -and $uid -ne $lastUid) {
-        if (@(8, 14, 20) -contains $uid.Length) { [void]$script:pending.Add($uid) }
-        else { Write-Host "Tag $uid has an unusual ID length and was not sent." -ForegroundColor Yellow }
+try {
+  while ($true) {
+    # Answer the AvilonX page quickly, then check the reader every 250 ms.
+    while ($listener.Pending()) { Invoke-Request ($listener.AcceptTcpClient()) }
+    if ((Get-Date) -ge $nextRead) {
+      $nextRead = (Get-Date).AddMilliseconds(250)
+      try {
+        if (-not $reader) {
+          $readers = [AvilonXPcsc]::Readers()
+          $reader = $readers | Where-Object { $_ -match 'ACR122|PICC|NFC|Contactless' } | Select-Object -First 1
+          if (-not $reader) { $reader = $readers | Select-Object -First 1 }
+          if ($reader) { Write-Host "Reader ready: $reader" -ForegroundColor Green; $warned = $false; $script:readerName = $reader }
+          elseif (-not $warned) { Write-Host 'No NFC reader found. Plug in the ACR122U; this window will pick it up.' -ForegroundColor Yellow; $warned = $true; $script:readerName = '' }
+        }
+        if ($reader) {
+          $uid = [AvilonXPcsc]::ReadUid($reader)
+          if ($uid -and $uid -ne $lastUid) {
+            if (@(8, 14, 20) -contains $uid.Length) {
+              $script:seq++
+              [void]$script:tags.Add(@{ seq = $script:seq; uid = $uid })
+              while ($script:tags.Count -gt 20) { $script:tags.RemoveAt(0) }
+              Write-Host ("{0}  Tag {1}" -f (Get-Date -Format 'HH:mm:ss'), $uid) -ForegroundColor Cyan
+            } else { Write-Host "Tag $uid has an unusual ID length and was ignored." -ForegroundColor Yellow }
+          }
+          # Remember the tag until it is lifted off, so each tap counts once.
+          $lastUid = $uid
+          if (-not ([AvilonXPcsc]::Readers() -contains $reader)) {
+            Write-Host 'Reader unplugged. Waiting for it to come back...' -ForegroundColor Yellow
+            $reader = $null; $lastUid = $null; $script:readerName = ''
+          }
+        }
+      } catch {
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        [AvilonXPcsc]::Close()
+        $reader = $null; $lastUid = $null; $script:readerName = ''
+        $nextRead = (Get-Date).AddSeconds(2)
       }
-      # Remember the tag until it is lifted off, so each tap is sent once.
-      $lastUid = $uid
-      if (-not ([AvilonXPcsc]::Readers() -contains $reader)) {
-        Write-Host 'Reader unplugged. Waiting for it to come back...' -ForegroundColor Yellow
-        $reader = $null; $lastUid = $null
-      }
     }
-
-    # Send waiting taps, oldest first; keep them when AvilonX cannot be reached.
-    while ($script:pending.Count -gt 0) {
-      if (Send-Tag $script:pending[0]) { $script:pending.RemoveAt(0); $lastHeartbeat = Get-Date } else { break }
-    }
-
-    if (((Get-Date) - $lastHeartbeat).TotalSeconds -ge 60) { [void](Send-Heartbeat); $lastHeartbeat = Get-Date }
-  } catch {
-    Write-Host $_.Exception.Message -ForegroundColor Red
-    [AvilonXPcsc]::Close()
-    $reader = $null; $lastUid = $null
-    Start-Sleep -Seconds 2
+    Start-Sleep -Milliseconds 40
   }
-  Start-Sleep -Milliseconds 250
+} finally {
+  $listener.Stop()
 }

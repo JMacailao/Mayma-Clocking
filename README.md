@@ -162,12 +162,13 @@ Create a club account with exactly that name to hand the old data to that club.
   cannot see them. On Windows there are two helpers in `tools/nfc-reader/`
   (nothing to install; double-click the `.cmd` file so Windows does not block the
   script, and keep its window open):
-  - **Start ACR122U for AvilonX.cmd** (recommended): sends each tap straight to
-    AvilonX over the internet, like the ESP8266 reader, so it works whatever window
-    is in front. The first time it shows the computer's **Device serial**; the Super
-    Admin registers it on **Register RFID reader** (Used by: Club admin) and the
-    device key is pasted into the window. On Race entries, Bird bonding and Show up
-    choose **Wireless**.
+  - **Start ACR122U for AvilonX.cmd** (recommended): nothing to register. It
+    hands each tap to the AvilonX page open on the same computer (it listens only
+    on 127.0.0.1, port 47321, for AvilonX pages), so it works whatever window is in
+    front. On Race entries, Bird bonding and Show up choose **Wired**; the page shows
+    "ACR122U helper connected". The first time, the browser asks to let the site
+    access apps and devices on this computer: choose **Allow**. Admin Clocking and
+    Register NFC use it too. The download is on RFID readers and Race entries.
   - **Start ACR122U keyboard helper.cmd**: types each tag's ID and Enter into the
     window in front (choose **Wired**). Click the browser page after starting it.
 - **ESP8266 + RC522 RFID reader** (`tools/rfid-reader/avilonx-rfid-reader/`). The

@@ -7,7 +7,7 @@ import { pageUrl, supabase } from './shared.js';
 // Download link for the Windows helper that makes an ACS ACR122U (or other PC/SC
 // reader) type tag IDs like a keyboard.
 export const readerHelperUrl=()=>pageUrl('tools/nfc-reader/acr122u-avilonx-helper.zip');
-export const readerHelperLink=()=>`<a href="${readerHelperUrl()}" download>Download the ACR122U helper</a> (Windows: unzip it, double-click <strong>Start ACR122U for AvilonX</strong>, then choose Wireless).`;
+export const readerHelperLink=()=>`<a href="${readerHelperUrl()}" download>Download the ACR122U helper</a> (Windows: unzip it, double-click <strong>Start ACR122U for AvilonX</strong>, keep its window open, then choose Wired).`;
 
 export const NFC_HELP='That is not a valid NFC tag ID. Tag IDs are hex, for example 04:A2:3B:1C:5D:80:00. If your USB reader types only digits, set it to output the UID in hex (see the reader manual).';
 
@@ -70,7 +70,7 @@ export const nfcSetupGuideHtml=()=>`<details class="nfc-setup"><summary>Reader s
 <h4>iPhone (XS or newer)</h4><ol><li>The tag must carry its clocking link, or nothing happens when you tap it. The Super Admin writes it when registering the tag on an Android phone, or with an iPhone as below.</li><li>Unlock the iPhone and hold its <strong>top edge</strong> near the tag.</li><li>Tap the notification. The Clocking page opens and clocks the pigeon. Sign in first if asked.</li></ol><p class="small">iPhone browsers cannot read tags directly, so the Start phone NFC button does not appear on iPhone.</p>
 <h4>Write a tag's link with an iPhone</h4><ol><li>Install the free <strong>NFC Tools</strong> app from the App Store.</li><li>In Safari open <strong>Register NFC</strong>, find the tag and tap <strong>Copy link</strong>.</li><li>In NFC Tools: <strong>Write → Add a record → URL / URI</strong>, paste the link, then <strong>Write</strong> and hold the iPhone's top edge to the tag.</li></ol><p class="small">Use NTAG213, NTAG215 or NTAG216 tags. iPhones cannot use MIFARE Classic tags (common key fobs): in NFC Tools tap <strong>Read</strong> to see a tag's type. Close the camera and Wallet before tapping.</p>
 <h4>Phone or computer with an external NFC reader (Android, iPhone, Windows, Mac)</h4><ol><li>Use a reader that works as a <strong>keyboard</strong> (often sold as "keyboard emulation" or "HID" mode).</li><li>Connect it: <strong>Android</strong> with a USB-OTG adapter; <strong>iPhone or iPad</strong> with a USB-C adapter or a Lightning to USB camera adapter; or pair a <strong>Bluetooth</strong> reader as a keyboard in the phone's Bluetooth settings.</li><li>Open the NFC page and tap the tag on the reader. There is no need to tap the reader field first; the ID is sent automatically.</li><li>The reader must type the ID in <strong>hex</strong> (letters and numbers). If it types only digits, switch it to hex as its manual describes. To check a reader, open the Notes app and tap a tag: letters and numbers should appear.</li></ol>
-<h4>ACS ACR122U (Windows only)</h4><ol><li>${readerHelperLink()}</li><li>The first time, it shows the computer's Device serial: the Super Admin registers it on Register RFID reader (Used by: Club admin) and you paste the device key into the window.</li><li>Keep its window open, choose <strong>Wireless</strong> as the reader, then tap tags on the ACR122U.</li></ol><p class="small">The ACR122U does not work on Android phones, iPhone, iPad or Mac: phone browsers cannot use this kind of reader. Use a keyboard-type reader on phones.</p>
+<h4>ACS ACR122U (Windows only)</h4><ol><li>${readerHelperLink()}</li><li>Keep its window open, choose <strong>Wired</strong> as the reader, then tap tags on the ACR122U. Nothing to register. If the browser asks to allow access to devices on your network, choose Allow.</li></ol><p class="small">The ACR122U does not work on Android phones, iPhone, iPad or Mac: phone browsers cannot use this kind of reader. Use a keyboard-type reader on phones.</p>
 </div></details>`;
 
 // Keyboard-type NFC readers (USB, or Bluetooth paired as a keyboard) type the
@@ -122,7 +122,33 @@ export function uidCandidates(text){
 // field is taken back out and used as the tag. onTag(uid, {candidates, raw})
 // can return false to leave the keys alone (another reader chosen). onBurst
 // ({raw, uid, ended}) reports every fast burst, valid or not, for a status line.
-export function listenForReaderKeys(onTag,{maxGapMs=100,takeFromTextFields=false,onBurst=null}={}){
+// The ACR122U helper (tools/nfc-reader) runs on the same computer and shares
+// each tap at this address. The page asks it for new taps while wanted, so a
+// laptop reader works with nothing to register and whatever window is in front.
+const LOCAL_HELPER='http://127.0.0.1:47321/tag';
+function pollLocalHelper(onUid,isWanted,onState){
+  let stopped=false,timer=null,seq=null,state='';
+  const report=(next,extra={})=>{if(state!==next){state=next;onState?.({helper:next,...extra});}};
+  const tick=async()=>{
+    if(stopped)return;
+    let delay=3000;
+    if(isWanted()){
+      try{
+        const response=await fetch(`${LOCAL_HELPER}?after=${seq??''}`,{cache:'no-store'});
+        const data=await response.json();
+        report('connected',{reader:data.reader||''});
+        if(seq===null||data.seq<seq)seq=data.seq;
+        else{for(const tag of data.tags||[])if(tag.seq>seq&&!stopped)onUid(String(tag.uid));seq=data.seq;}
+        delay=350;
+      }catch{report('missing');}
+    }else{state='';seq=null;}
+    if(!stopped)timer=setTimeout(tick,delay);
+  };
+  tick();
+  return()=>{stopped=true;clearTimeout(timer);};
+}
+
+export function listenForReaderKeys(onTag,{maxGapMs=100,takeFromTextFields=false,onBurst=null,helper=null}={}){
   let buffer='',last=0,start=null,idleTimer=null;
   const TEXT_TYPES=/^(text|search|number|email|tel|url|password)$/i;
   const isTextField=el=>Boolean(el)&&(el.isContentEditable||el.tagName==='TEXTAREA'||(el.tagName==='INPUT'&&TEXT_TYPES.test(el.type||'text')&&!el.readOnly));
@@ -161,13 +187,31 @@ export function listenForReaderKeys(onTag,{maxGapMs=100,takeFromTextFields=false
     }else{buffer='';start=null;clearTimeout(idleTimer);}
   };
   document.addEventListener('keydown',onKey,true);
-  return()=>{clearTimeout(idleTimer);document.removeEventListener('keydown',onKey,true);};
+  // helper: true, or a function saying when to listen (for example only while
+  // "Wired" is chosen), to also take taps from the ACR122U helper.
+  const stopHelper=helper?pollLocalHelper(uid=>{
+    const candidates=uidCandidates(uid),first=candidates[0];
+    onBurst?.({raw:uid,uid:first||null,ended:'helper'});
+    if(first)onTag(first,{candidates,raw:uid,source:'helper'});
+  },typeof helper==='function'?helper:()=>true,state=>onBurst?.(state)):()=>{};
+  return()=>{clearTimeout(idleTimer);document.removeEventListener('keydown',onKey,true);stopHelper();};
 }
 
 // A status line under the reader choice: what the USB reader last typed.
 export function usbReaderStatus(element){
-  return({raw,uid,ended})=>{
+  return({raw,uid,ended,helper,reader})=>{
     if(!element)return;
+    if(helper){
+      element.className=`small usb-reader-status ${helper==='connected'?'is-ok':'is-bad'}`;
+      element.textContent=helper==='connected'?`ACR122U helper connected${reader?` (${reader})`:''}. Tap a tag on the reader.`
+        :'ACR122U helper not found. On Windows, start "Start ACR122U for AvilonX" and keep its window open. If it is open, the browser may have blocked it: click the icon left of the web address, allow access to apps and devices on this computer (local network), and reload. Keyboard-type USB readers work without it.';
+      return;
+    }
+    if(ended==='helper'){
+      element.className=`small usb-reader-status ${uid?'is-ok':'is-bad'}`;
+      element.textContent=uid?`ACR122U read tag ${formatNfcUid(uid)}.`:`ACR122U read "${raw}": that is not a tag ID.`;
+      return;
+    }
     const end=ended==='Enter'?' + Enter':ended==='Tab'?' + Tab':'';
     element.className=`small usb-reader-status ${uid?'is-ok':'is-bad'}`;
     element.textContent=uid?`USB reader typed "${raw}"${end}: read as tag ${formatNfcUid(uid)}.`

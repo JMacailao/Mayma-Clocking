@@ -99,7 +99,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   const usbStatus=view.querySelector('[data-usb-status]');
   // A USB reader may type the ID in another form: use the one the Super Admin registered.
   const registeredForm=async candidates=>{if(candidates.length<2)return candidates[0];const {data}=await supabase.from('nfc_tags').select('tag_uid').in('tag_uid',candidates);return candidates.find(item=>(data||[]).some(row=>row.tag_uid===item))||candidates[0];};
-  const stopReaderKeys=listenForReaderKeys((uid,info)=>{if(readerChoice()!=='wired')return false;registeredForm(info.candidates).then(best=>fillTag(best,'the USB reader')).catch(()=>fillTag(uid,'the USB reader'));},{takeFromTextFields:true,onBurst:burst=>{if(readerChoice()==='wired'){usbStatus.hidden=false;usbReaderStatus(usbStatus)(burst);}}});
+  const stopReaderKeys=listenForReaderKeys((uid,info)=>{if(readerChoice()!=='wired')return false;registeredForm(info.candidates).then(best=>fillTag(best,'the USB reader')).catch(()=>fillTag(uid,'the USB reader'));},{helper:()=>readerChoice()==='wired',takeFromTextFields:true,onBurst:burst=>{if(readerChoice()==='wired'){usbStatus.hidden=false;usbReaderStatus(usbStatus)(burst);}}});
   const stopDeviceScans=listenForDeviceScans((uid,reader)=>{if(readerChoice()==='wireless')fillTag(uid,reader);});
   let stopPhone=()=>{};
   tapButton.onclick=async()=>{try{message('Hold the bird\'s RFID tag to the back of the phone…','info');stopPhone();stopPhone=await startPhoneNfc(uid=>{stopPhone();fillTag(uid,'the phone');},error=>message(error.message,'error'));}catch(error){message(error.message,'error');}};

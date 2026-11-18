@@ -48,7 +48,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     nfcBusy=true;try{const result=await clockEntry(matches[0]);addLog(result.text,result.ok&&!result.duplicate?'success':'error');message(result.text,result.ok?(result.duplicate?'info':'success'):'error');}finally{nfcBusy=false;}
   };
   nfcInput.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();const uid=normalizeNfcUid(nfcInput.value);nfcInput.value='';if(uid)clockTag(uid);else if(uid===null)message(NFC_HELP,'error');});
-  const stopReaderKeys=listenForReaderKeys(clockTag);
+  const stopReaderKeys=listenForReaderKeys(clockTag,{helper:true});
   let stopPhoneNfc=()=>{};
   if(startButton)startButton.onclick=async()=>{
     if(startButton.getAttribute('aria-pressed')==='true'){stopPhoneNfc();stopPhoneNfc=()=>{};startButton.setAttribute('aria-pressed','false');startButton.textContent='Start phone NFC';return;}

@@ -59,7 +59,7 @@ export async function render(view,setPageCleanup){
   };
   const onHidden=()=>{if(document.hidden&&stopNfc)endNfc('Phone NFC paused while the app was in the background. Press Start again.');};
   document.addEventListener('visibilitychange',onHidden);
-  const stopReaderKeys=listenForReaderKeys(uid=>register(uid));
+  const stopReaderKeys=listenForReaderKeys(uid=>register(uid),{helper:true});
   // Readers belong to clubs, so ask before registering a tag one of them read.
   const stopDeviceScans=listenForDeviceScans((uid,reader)=>{if(confirm(`Register NFC tag ${formatNfcUid(uid)}, read by the RFID reader "${reader}"?`))register(uid);});
   setPageCleanup(()=>{stopReaderKeys();stopDeviceScans();document.removeEventListener('visibilitychange',onHidden);clearTimeout(reloadTimer);endNfc('');});
