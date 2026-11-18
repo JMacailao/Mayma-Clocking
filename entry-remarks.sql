@@ -39,6 +39,10 @@ ALTER TABLE public.race_entries ADD COLUMN IF NOT EXISTS remarks text[] NOT NULL
 ALTER TABLE public.race_entries DROP CONSTRAINT IF EXISTS race_entries_remarks_limit;
 ALTER TABLE public.race_entries ADD CONSTRAINT race_entries_remarks_limit CHECK (cardinality(remarks) <= 30);
 
+-- Practice races (Race schedules → "Practice race") never appear in the
+-- public results.
+ALTER TABLE public.races ADD COLUMN IF NOT EXISTS is_practice boolean NOT NULL DEFAULT false;
+
 -- Public results show each ring with its remarks, e.g. "12345 P1/P2/P3", and
 -- leave out disqualified results (race closed, never verified on Show up).
 -- This replaces the version in public-results.sql (same name and columns), so
@@ -87,6 +91,7 @@ AS $function$
     AND c.verification <> 'rejected'
     -- Disqualified: the race is closed and the pigeon never showed up (Show up).
     AND NOT (c.verification = 'provisional' AND r.status = 'closed')
+    AND NOT r.is_practice
   ORDER BY r.name, m.loft_name, e.pigeon_ring;
 $function$;
 

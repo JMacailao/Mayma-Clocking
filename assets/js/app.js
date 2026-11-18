@@ -22,7 +22,7 @@ async function getIdentity() {
 const loginUrl=()=>`${url('pages/login/index.html')}?next=${encodeURIComponent(location.pathname+location.search)}`;
 const homeFor = (role) => url(role==='superadmin'?'pages/superadmin/clubs/index.html':['admin','staff'].includes(role)?'pages/admin/dashboard/index.html':'pages/member/dashboard/index.html');
 function superadminNav(active) {
-  const links=[['clubs','Club accounts','pages/superadmin/clubs/index.html','⌂'],['sticker-register','Register Sticker','pages/superadmin/stickers/register/index.html','▣'],['nfc-register','Register NFC','pages/superadmin/nfc/index.html','◉'],['rfid-register','Register RFID reader','pages/superadmin/readers/index.html','⌁'],['sticker-generate','Generate Sticker','pages/superadmin/stickers/generate/index.html','▤']];
+  const links=[['clubs','Club accounts','pages/superadmin/clubs/index.html','⌂'],['sticker-register','Register Sticker','pages/superadmin/stickers/register/index.html','▣'],['nfc-register','Register NFC','pages/superadmin/nfc/index.html','◉'],['rfid-register','Register RFID reader','pages/superadmin/readers/index.html','⌁'],['sticker-generate','Generate Sticker','pages/superadmin/stickers/generate/index.html','▤'],['setup','Setup checklist','pages/superadmin/setup/index.html','✓']];
   return links.map(([key,label,href,icon])=>`<a class="nav-link ${active===key?'active':''}" ${active===key?'aria-current="page"':''} href="${url(href)}"><span class="nav-icon">${icon}</span>${label}</a>`).join('');
 }
 function adminNav(active,canManageAccounts) {
@@ -72,6 +72,7 @@ async function renderPage(view,role,identity,page=body.dataset.view,setCleanup=f
   else if(page==='sticker-register'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/stickers/register/page.js');await pageModule.render(view,setCleanup);}
   else if(page==='nfc-register'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/nfc/page.js');await pageModule.render(view,setCleanup);}
   else if(page==='rfid-register'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/readers/page.js');await pageModule.render(view,setCleanup);}
+  else if(page==='setup'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/setup/page.js');await pageModule.render(view);}
   else if(page==='sticker-generate'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/stickers/generate/page.js');await pageModule.render(view);}
   else if(page==='team-users'&&role==='admin'&&identity.profile.role==='admin'){const pageModule=await import('../../pages/admin/users/page.js');await pageModule.render(view,identity);}
   else if(page==='dashboard'&&role==='admin'){const pageModule=await import('../../pages/admin/dashboard/page.js');await pageModule.render(view);}

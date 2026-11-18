@@ -77,7 +77,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   </form></div></section>
   <section class="panel"><div class="panel-heading"><h3>Bonded birds</h3><span class="count-pill" data-bird-count></span></div>
   <div class="bird-filters"><label class="field"><span>Member</span><select data-filter-member><option value="">All members</option>${members.map(m=>`<option value="${m.id}">${escapeHTML(m.member_no)} · ${escapeHTML(m.full_name)}</option>`).join('')}</select></label><label class="field"><span>Search</span><input data-filter-text placeholder="Ring, bird name or colour"></label><label class="bird-show-retired"><input type="checkbox" data-filter-retired> Show retired birds</label></div>
-  <div class="bird-grid" data-bird-grid></div></section>`;
+  <div class="bird-list" data-bird-grid></div></section>`;
 
   const form=view.querySelector('#bird-form'),grid=view.querySelector('[data-bird-grid]'),count=view.querySelector('[data-bird-count]'),title=view.querySelector('[data-bird-form-title]'),saveButton=view.querySelector('[data-save-bird]'),cancelButton=view.querySelector('[data-cancel-edit]');
   const preview=view.querySelector('[data-photo-preview]'),emptyPhoto=view.querySelector('[data-photo-empty]'),tapButton=view.querySelector('[data-tap-nfc]');
@@ -191,16 +191,21 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     const list=birds.filter(bird=>(showRetired||bird.status==='active')&&(!memberFilter||bird.member_id===memberFilter)&&(!text||[bird.ring_number,bird.bird_name,bird.color].some(value=>String(value||'').toLowerCase().includes(text))));
     const active=birds.filter(bird=>bird.status==='active').length;
     count.textContent=`${active} bonded${birds.length>active?` · ${birds.length-active} retired`:''}`;
-    grid.innerHTML=list.length?list.map(bird=>{const member=memberById.get(bird.member_id),photo=photoUrls.get(bird.photo_path);return `<article class="bird-card ${bird.status==='retired'?'is-retired':''}" data-bird="${bird.id}">
-      <div class="bird-card-photo">${photo?`<img src="${escapeHTML(photo)}" alt="Photo of ${escapeHTML(bird.bird_name)}" loading="lazy">`:'<span>No photo</span>'}</div>
-      <div class="bird-card-body"><div class="bird-card-ring">${escapeHTML(bird.ring_number)}${bird.status==='retired'?' <span class="tag closed">Retired</span>':''}</div>
-      <div class="bird-card-name">${escapeHTML(bird.bird_name)}</div>
-      <dl><div><dt>Colour</dt><dd>${escapeHTML(bird.color)}</dd></div><div><dt>Loft</dt><dd>${escapeHTML(bird.loft_name)}</dd></div><div><dt>Member</dt><dd>${escapeHTML(member?`${member.member_no} · ${member.full_name}`:'—')}</dd></div><div><dt>RFID</dt><dd>${bird.bond_type==='ring'?'<span class="bird-ring-only">Ring number only · sticker entries</span>':bird.nfc_tag?escapeHTML(formatNfcUid(bird.nfc_tag)):'<span class="tag-expired">None: edit to add one before racing</span>'}</dd></div>${bird.sex||bird.hatch_year?`<div><dt>Bird</dt><dd>${escapeHTML([bird.sex==='cock'?'Cock':bird.sex==='hen'?'Hen':'',bird.hatch_year||''].filter(Boolean).join(' · '))}</dd></div>`:''}</dl>
-      <p class="small">Bonded ${escapeHTML(formatDate(bird.created_at))}</p>
-      <div class="bird-card-actions"><button class="text-button" type="button" data-edit-bird>Edit</button><button class="text-button" type="button" data-retire-bird>${bird.status==='active'?'Retire':'Make active'}</button>${raced.has(bird.id)?'':'<button class="text-button danger-text" type="button" data-delete-bird>Delete</button>'}</div></div></article>`;}).join(''):`<p class="small">${birds.length?'No birds match the filters.':'No birds bonded yet. Bond the first bird above.'}</p>`;
+    const rfidCell=bird=>bird.bond_type==='ring'?'<span class="bird-ring-only">Ring only · sticker</span>':bird.nfc_tag?`<code>${escapeHTML(formatNfcUid(bird.nfc_tag))}</code>`:'<span class="tag-expired">None: edit to add one</span>';
+    grid.innerHTML=list.length?`<div class="table-scroll"><table class="bird-table"><thead><tr><th>Photo</th><th>Ring</th><th>Bird</th><th>Colour</th><th>Loft</th><th>Member</th><th>RFID</th><th>Bonded</th><th></th></tr></thead><tbody>${list.map(bird=>{const member=memberById.get(bird.member_id),photo=photoUrls.get(bird.photo_path);return `<tr class="bird-row ${bird.status==='retired'?'is-retired':''}" data-bird="${bird.id}">
+      <td data-label="Photo" class="bird-col-photo">${photo?`<button type="button" class="bird-thumb" data-view-photo aria-label="View photo of ${escapeHTML(bird.bird_name)}"><img src="${escapeHTML(photo)}" alt="" loading="lazy"></button>`:'<span class="bird-thumb is-empty">No photo</span>'}</td>
+      <td data-label="Ring"><strong>${escapeHTML(bird.ring_number)}</strong>${bird.status==='retired'?' <span class="tag closed">Retired</span>':''}</td>
+      <td data-label="Bird">${escapeHTML(bird.bird_name)}${bird.sex||bird.hatch_year?`<br><span class="small">${escapeHTML([bird.sex==='cock'?'Cock':bird.sex==='hen'?'Hen':'',bird.hatch_year||''].filter(Boolean).join(' · '))}</span>`:''}</td>
+      <td data-label="Colour" class="bird-col-colour">${escapeHTML(bird.color)}</td>
+      <td data-label="Loft" class="bird-col-loft">${escapeHTML(bird.loft_name)}</td>
+      <td data-label="Member">${escapeHTML(member?`${member.member_no} · ${member.full_name}`:'—')}</td>
+      <td data-label="RFID">${rfidCell(bird)}</td>
+      <td data-label="Bonded" class="bird-col-date">${escapeHTML(formatDate(bird.created_at))}</td>
+      <td data-label="Actions" class="bird-actions"><button class="text-button" type="button" data-edit-bird>Edit</button><button class="text-button" type="button" data-retire-bird>${bird.status==='active'?'Retire':'Make active'}</button>${raced.has(bird.id)?'':'<button class="text-button danger-text" type="button" data-delete-bird>Delete</button>'}</td></tr>`;}).join('')}</tbody></table></div>`:`<p class="small">${birds.length?'No birds match the filters.':'No birds bonded yet. Bond the first bird above.'}</p>`;
     grid.querySelectorAll('[data-bird]').forEach(card=>{
       const bird=birds.find(item=>item.id===Number(card.dataset.bird));
       card.querySelector('[data-edit-bird]').onclick=()=>editBird(bird);
+      const thumb=card.querySelector('[data-view-photo]');if(thumb)thumb.onclick=()=>viewPhoto(bird);
       card.querySelector('[data-retire-bird]').onclick=async()=>{
         const retiring=bird.status==='active';
         if(retiring&&!confirm(`Retire ${bird.ring_number} (${bird.bird_name})? It can no longer be entered in races, and its RFID tag becomes free for another bird.`))return;
@@ -217,6 +222,14 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
         message(`${bird.ring_number} deleted.`,'success');await reload();
       };
     });
+  }
+  // Full-size photo of a bird, opened from the list.
+  const viewer=document.createElement('dialog');viewer.className='photo-viewer';view.append(viewer);
+  viewer.addEventListener('click',event=>{if(event.target===viewer)viewer.close();});
+  function viewPhoto(bird){
+    const member=memberById.get(bird.member_id),photo=photoUrls.get(bird.photo_path);if(!photo)return;
+    viewer.innerHTML=`<img src="${escapeHTML(photo)}" alt="Photo of ${escapeHTML(bird.bird_name)}"><div class="photo-viewer-caption"><div><strong>${escapeHTML(bird.ring_number)} · ${escapeHTML(bird.bird_name)}</strong><span>${escapeHTML(bird.color)} · ${escapeHTML(bird.loft_name)}${member?` · ${escapeHTML(member.full_name)}`:''}</span></div><form method="dialog"><button class="button secondary">Close</button></form></div>`;
+    try{viewer.showModal();}catch{viewer.setAttribute('open','');}
   }
   filterMember.onchange=drawGrid;filterText.oninput=drawGrid;filterRetired.onchange=drawGrid;
   resetForm();drawGrid();
