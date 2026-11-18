@@ -2,16 +2,15 @@
 --
 -- After a pigeon is clocked, its owner brings it to the club. The club admin
 -- or staff taps the bird's RFID tag on the Show up page, which marks the clock
--- receipt as verified. A receipt that is still not verified when the pigeon's
--- RFID tag expires (the expiry set on Race entries) is disqualified: it is
--- left out of the results.
+-- receipt as verified. When the race is closed (done), a receipt that was never
+-- verified is disqualified: it is left out of the results.
 --
 -- Run after nfc-tags.sql. Safe to run again.
 
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'race_entries' AND column_name = 'nfc_expires_at') THEN
-    RAISE EXCEPTION 'Run the latest nfc-tags.sql first (it adds the RFID tag expiry), then show-up.sql.';
+  IF to_regprocedure('public.normalize_nfc_uid(text)') IS NULL THEN
+    RAISE EXCEPTION 'Run nfc-tags.sql first, then show-up.sql.';
   END IF;
 END $$;
 
@@ -19,13 +18,13 @@ ALTER TABLE public.clock_events ADD COLUMN IF NOT EXISTS shown_up_at timestamptz
 ALTER TABLE public.clock_events ADD COLUMN IF NOT EXISTS shown_up_by uuid;
 ALTER TABLE public.clock_events ADD COLUMN IF NOT EXISTS shown_up_with text;
 
--- A receipt is disqualified when it was never verified and the pigeon's RFID
--- tag has expired.
-CREATE OR REPLACE FUNCTION public.clock_is_disqualified(p_verification text, p_expires_at timestamptz)
-RETURNS boolean LANGUAGE sql STABLE SET search_path = '' AS $$
-  SELECT p_verification = 'provisional' AND p_expires_at IS NOT NULL AND now() > p_expires_at
+-- A receipt is disqualified when its race is closed and it was never verified.
+DROP FUNCTION IF EXISTS public.clock_is_disqualified(text, timestamptz);
+CREATE OR REPLACE FUNCTION public.clock_is_disqualified(p_verification text, p_race_status text)
+RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
+  SELECT p_verification = 'provisional' AND p_race_status = 'closed'
 $$;
-GRANT EXECUTE ON FUNCTION public.clock_is_disqualified(text, timestamptz) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.clock_is_disqualified(text, text) TO anon, authenticated;
 
 -- Club admin or staff: the bird's RFID tag was tapped on the Show up page.
 CREATE OR REPLACE FUNCTION public.admin_show_up_tap(p_tag text, p_race_id bigint DEFAULT NULL, p_reader text DEFAULT NULL)
@@ -65,10 +64,9 @@ BEGIN
     RETURN jsonb_build_object('status', 'error', 'entry_id', v_entry.id, 'pigeon_ring', v_entry.pigeon_ring, 'race', v_race.name,
       'message', 'The result for ring ' || v_entry.pigeon_ring || ' was rejected by the club.');
   END IF;
-  IF public.clock_is_disqualified(v_clock.verification, v_entry.nfc_expires_at) THEN
+  IF public.clock_is_disqualified(v_clock.verification, v_race.status) THEN
     RETURN jsonb_build_object('status', 'disqualified', 'entry_id', v_entry.id, 'pigeon_ring', v_entry.pigeon_ring, 'race', v_race.name,
-      'message', 'Too late: the RFID tag on ring ' || v_entry.pigeon_ring || ' expired on '
-        || to_char(v_entry.nfc_expires_at AT TIME ZONE 'Asia/Manila', 'Mon DD, HH12:MI AM') || '. This result is disqualified.');
+      'message', 'Too late: ' || v_race.name || ' is closed and ring ' || v_entry.pigeon_ring || ' did not show up before it closed. This result is disqualified.');
   END IF;
 
   UPDATE public.clock_events AS c

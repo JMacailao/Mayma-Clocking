@@ -68,6 +68,7 @@ export async function render(view) {
       Object.assign(record,{race_point_id:point.id,release_location:point.location,release_latitude:point.latitude,release_longitude:point.longitude});
     }
     if(race&&status==='closed'&&race.status!=='closed'&&!(await confirmReadersSynced(race)))return;
+    if(race&&status==='closed'&&race.status!=='closed'&&!(await confirmShowUps(race)))return;
     saveButton.disabled=true;
     const {error:saveError}=race?await supabase.from('races').update(record).eq('id',race.id):await supabase.from('races').insert(record);
     saveButton.disabled=false;
@@ -94,6 +95,18 @@ export async function render(view) {
       if(!silent.length)return true;
       const list=silent.map(reader=>{const contact=lastContact(reader),waiting=Number(reader.pending_taps)||0;return `• ${reader.name} (${reader.member_name||'member'}), ${reader.is_online?'online now':contact?`last online ${formatDate(contact)}`:'never connected'}${waiting?`, ${waiting} tap${waiting===1?'':'s'} still waiting to send`:''}`;}).join('\n');
       return confirm(`Before closing ${race.name}: these loft readers may still hold taps saved while offline (they still report taps waiting, or have not been online since the release):\n\n${list}\n\nTaps that arrive after the race is closed are not accepted. Ask these members to connect their reader to the internet first.\n\nClose the race anyway?`);
+    }catch{return true;}
+  }
+
+  // Closing a race disqualifies clocked pigeons that never showed up.
+  async function confirmShowUps(race){
+    try{
+      const raceEntries=entries.filter(entry=>entry.race_id===race.id);if(!raceEntries.length)return true;
+      const {data:clocks,error:clockError}=await supabase.from('clock_events').select('race_entry_id,verification').in('race_entry_id',raceEntries.map(entry=>entry.id));
+      if(clockError)return true;
+      const waiting=(clocks||[]).filter(clock=>clock.verification==='provisional').length;
+      if(!waiting)return true;
+      return confirm(`${waiting} clocked pigeon${waiting===1?' has':'s have'} not shown up yet (Show up). Closing ${race.name} disqualifies ${waiting===1?'it':'them'}: ${waiting===1?'it is':'they are'} left out of the results.\n\nClose the race anyway?`);
     }catch{return true;}
   }
 

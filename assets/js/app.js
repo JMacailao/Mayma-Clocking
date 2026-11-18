@@ -96,6 +96,8 @@ async function main(){
   const role=body.dataset.role,active=body.dataset.active,identity=await guard(role,active);
   if(!identity)return;
   await navigateRoute(routeFor(location.href),{push:false,identity});
+  // Members get a pop-up with the result whenever one of their pigeons is clocked (also by their loft reader).
+  if(role==='member'&&identity.profile?.member_id)import('./member-results-watch.js').then(module=>module.watchMemberReceipts(identity.profile.member_id)).catch(error=>console.warn('Result pop-ups unavailable:',error));
 }
 const routes=[
   {

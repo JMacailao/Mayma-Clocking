@@ -16,6 +16,8 @@ export async function render(view,identity,setPageCleanup) {
  const flyingTime=seconds=>{if(seconds==null)return '—';const s=Math.round(Number(seconds)),h=Math.floor(s/3600),m=Math.floor(s%3600/60),sec=s%60;return `${h} h ${String(m).padStart(2,'0')} min ${String(sec).padStart(2,'0')} s`;};
  const showReceipt=data=>{
   if(!data||!receiptDialog)return;
+  // Tell the result watcher this receipt was already shown here.
+  if(data.receipt_id)window.dispatchEvent(new CustomEvent('avilonx:receipt-shown',{detail:{id:data.receipt_id}}));
   const accepted=data.status==='accepted';
   receiptDialog.querySelector('[data-receipt-title]').textContent=accepted?'Pigeon clocked':'Already clocked';
   receiptDialog.querySelector('[data-receipt-subtitle]').textContent=accepted?'Provisional until verified by the club.':'This pigeon already had a receipt; here are its details.';
