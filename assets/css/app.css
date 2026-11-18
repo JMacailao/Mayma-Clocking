@@ -622,3 +622,8 @@ video#camera[hidden]{display:none}
 .reader-status.is-offline{color:#a86600}
 .reader-status.is-never{color:var(--muted)}
 .reader-warn{color:#a86600;font-weight:600}
+.entry-bird-tap{display:grid;gap:2px;min-height:76px;align-content:center;padding:10px 14px;border:2px dashed #b9cfe2;border-radius:10px;background:#f6f9fc;color:var(--ink);font-size:14px}
+.entry-bird-tap span{color:var(--muted);font-size:12px;font-weight:500}
+.entry-bird-tap[hidden]{display:none}
+.entry-bird-preview>div{flex:1;min-width:0}
+.entry-bird-preview .entry-bird-nfc{display:block;margin-top:2px;color:#006c73;font-weight:700}
