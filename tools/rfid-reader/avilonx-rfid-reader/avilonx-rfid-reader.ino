@@ -1,12 +1,13 @@
 /*
   AvilonX Clocking - external RFID reader (ESP8266 + RC522)
 
-  Every tag tapped on the RC522 is sent to AvilonX over Wi-Fi. A club admin must
-  first register this reader on the RFID readers page (Device serial below) and
-  copy the device key it gives into this reader's page. Readers that are not
+  Every tag tapped on the RC522 is sent to AvilonX over Wi-Fi. The Super Admin
+  must first register this reader for a club (Register RFID reader page, using
+  the Device serial below) and the device key it gives is entered on this
+  reader's page. Readers that are not
   registered are refused by AvilonX.
 
-  The admin chooses the reader's mode on the RFID readers page:
+  The club admin chooses the reader's mode on Admin > RFID readers:
     Register  each tap fills the NFC tag field on the Race entries and
               Register NFC pages that are open in the club's browser.
     Clocking  each tap clocks that tag's pigeon in an open race, at
@@ -17,7 +18,7 @@
        library (Sketch > Include Library > Manage Libraries). Board: your
        ESP8266 board, e.g. "NodeMCU 1.0 (ESP-12E Module)". Upload this sketch.
     2. Join the Wi-Fi "RFID-READER" (password below) and open http://192.168.4.1
-    3. Register the Device serial on AvilonX (Admin > RFID readers).
+    3. The Super Admin registers the Device serial (Register RFID reader).
     4. On http://192.168.4.1 enter the device key, then pick your 2.4 GHz Wi-Fi
        and press Save & Connect. Tap a tag: the page shows AvilonX's reply.
 
@@ -122,7 +123,7 @@ li b{font-family:ui-monospace,monospace}li:last-child{border:0}@media(max-width:
 <h2 style="margin-top:18px">Recent taps</h2><ul id="history"><li>No taps yet</li></ul></section>
 <section class="card"><h2>AvilonX registration</h2>
 <p>Device serial: <span class="serial" id="serial">—</span></p>
-<p class="muted">A club admin registers this serial on AvilonX (Admin &gt; RFID readers) and gets a device key. The reader is refused until it is registered and the key is saved here.</p>
+<p class="muted">The AvilonX Super Admin registers this serial for your club (Register RFID reader) and gives a device key. The reader is refused until it is registered and the key is saved here.</p>
 <p>Device key: <b id="keyStatus">Checking...</b></p>
 <form id="keyForm"><label for="key">Device key from AvilonX</label>
 <input id="key" name="key" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="32 letters and numbers" required>

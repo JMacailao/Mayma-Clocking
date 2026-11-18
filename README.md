@@ -43,9 +43,9 @@ requests in the browser.
    9. `nfc-tags.sql` — enables NFC tag clocking: race entries can store each pigeon's
       NFC tag ID instead of (or as well as) a sticker, and members clock by tapping
       the tag. Run it after `sticker-barcodes.sql`; it is safe to re-run.
-  10. `rfid-devices.sql` — enables external ESP8266 + RC522 RFID readers. A club
-      admin registers each reader by serial number on **RFID readers**; unregistered
-      readers are refused. Run it after `nfc-tags.sql`; it is safe to re-run.
+  10. `rfid-devices.sql` — enables external ESP8266 + RC522 RFID readers. The
+      Super Admin registers each reader by serial number for a club on **Register
+      RFID reader**; unregistered readers are refused. Run it after `nfc-tags.sql`; it is safe to re-run.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.
@@ -147,9 +147,10 @@ Create a club account with exactly that name to hand the old data to that club.
   reader sends every tag over Wi-Fi straight to AvilonX, so no phone or computer is
   needed beside it. Upload the sketch, join the reader's Wi-Fi `RFID-READER`
   (password `RFID12345`; change it in the sketch), open `http://192.168.4.1` and copy
-  its **Device serial**. A club admin registers that serial on **Admin → RFID
-  readers**, which gives a one-time device key; enter the key and the internet Wi-Fi
-  on the reader's page. Each reader has a mode: **Register** fills the NFC tag field
+  its **Device serial**. The Super Admin registers that serial for the club on
+  **Register RFID reader**, which gives a one-time device key; enter the key and the
+  internet Wi-Fi on the reader's page. The club then picks each reader's mode on
+  **Admin → RFID readers**: **Register** fills the NFC tag field
   on the open Race entries page (and offers the tag on Register NFC), and
   **Clocking** clocks the tag's pigeon in an open race at Supabase server time. Tie a
   reader to a member to make it that member's loft clock (it then clocks only their
