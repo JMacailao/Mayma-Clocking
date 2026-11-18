@@ -371,3 +371,6 @@ video#camera[hidden]{display:none}
 .clock-receipt-list{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:14px 0;font-size:14px}
 .clock-receipt-list dt{color:var(--muted);font-weight:600}
 .clock-receipt-list dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+.sticker-size-toggle{grid-column:1/-1}
+.sticker-size-toggle .button{width:auto;justify-self:start}
+.sticker-size[hidden]{display:none}

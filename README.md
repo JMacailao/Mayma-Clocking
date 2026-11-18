@@ -76,7 +76,7 @@ Create a club account with exactly that name to hand the old data to that club.
   whether to register them for club use immediately, then export or print a landscape
   A4 sheet. By default each sticker set is 6.3 × 0.5 cm (152 per page, four columns of
   38): a 2.85 cm reference stub and a 3.45 × 0.5 cm clocking label, each with a dashed
-  box inside, the AvilonX mark, sticker number and barcode. Under **Sticker size**,
+  box inside, the AvilonX mark, sticker number and barcode. Under **Show sticker size**,
   choose a height and whole width, or custom left and right column widths, in cm;
   barcodes and text scale to fit, and sizes too small to scan are refused.
 - `pages/admin/dashboard/`: club overview.
