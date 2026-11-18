@@ -74,8 +74,8 @@ Create a club account with exactly that name to hand the old data to that club.
   on a USB NFC reader or Android phone.
 - `pages/superadmin/stickers/generate/`: generate unique barcode batches and choose
   whether to register them for club use immediately, then export or print a landscape
-  A4 sheet of 152 sticker sets (four columns of 38). Each set has a 27 mm reference
-  stub and a 36 × 5 mm clocking label with the AvilonX mark, sticker number, and
+  A4 sheet of 124 sticker sets (four columns of 31). Each set has a 29 mm reference
+  stub and a 36 × 6 mm clocking label, each with a dashed box inside, with the AvilonX mark, sticker number, and
   secret-code barcode.
 - `pages/admin/dashboard/`: club overview.
 - `pages/admin/members/`: member and loft records, with `.xlsx`, `.xls`, and `.csv`
