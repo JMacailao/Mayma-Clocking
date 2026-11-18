@@ -865,3 +865,39 @@ body.raceday-tv-on{overflow:hidden}
   .page-view h2{font-size:24px}
   .lang-switch button{min-height:38px;font-size:13px}
 }
+
+/* Login page: header, sign-in card and public results card */
+body.login-page{min-height:100vh;background:#f3f6f9}
+.login-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px clamp(16px,4.5vw,72px);background:#fff;border-bottom:1px solid var(--line)}
+.login-header .brand{color:var(--ink)}
+.login-install .install-app-button{display:inline-flex;align-items:center;gap:8px;min-height:46px;padding:0 22px;border:1.5px solid var(--ink);border-radius:999px;background:#fff;color:var(--ink);font-weight:700}
+.login-install .install-app-button::before{content:"";width:18px;height:18px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4v11M7 10l5 5 5-5M5 20h14'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4v11M7 10l5 5 5-5M5 20h14'/%3E%3C/svg%3E") center/contain no-repeat}
+.login-grid{display:grid;grid-template-columns:minmax(0,500px) minmax(0,1fr);gap:20px;align-items:stretch;max-width:1560px;margin:0 auto;padding:clamp(18px,3.5vw,54px) clamp(14px,4.5vw,72px)}
+.login-grid .login-card{width:auto;max-width:none;margin:0;padding:clamp(24px,3.2vw,46px);border-radius:22px;align-self:stretch;box-shadow:0 1px 2px #0f2a4410}
+.login-grid .login-card>.eyebrow{letter-spacing:.14em}
+.login-grid .login-card h1{position:relative;margin:14px 0 26px;font:800 clamp(30px,3.2vw,44px)/1.08 Manrope;letter-spacing:-.04em;color:#0f2a44}
+.login-grid .login-card h1::after{content:"";position:absolute;left:0;bottom:-14px;width:88px;height:4px;border-radius:4px;background:#f05a00}
+.login-grid .login-card h1+p,.login-grid [data-login-intro]{margin:28px 0 22px;color:#4b5f73;font-size:16px;line-height:1.6}
+.login-grid .login-tabs{margin:0 0 24px;padding:5px;border-radius:12px}
+.login-grid .login-tab{min-height:46px;font-size:16px;border-radius:9px}
+.login-grid .field>span{font-weight:700;font-size:15px}
+.login-grid input,.login-grid select{min-height:54px;border-radius:12px;font-size:16px}
+.login-grid .button.primary{min-height:56px;border-radius:12px;font-size:18px;box-shadow:0 4px 0 #f05a00}
+.login-grid .login-help{font-size:14px;line-height:1.6}
+.login-results .public-results-filter{display:grid;grid-template-columns:1fr 1fr;gap:16px 26px}
+.login-results .public-results-filter .form-actions{grid-column:1/-1;margin:6px 0 0}
+.login-results .public-results-filter .button{width:100%}
+.login-results .public-results-empty{display:grid;justify-items:center;gap:12px;padding:34px 12px;font-size:18px;color:#4b5f73}
+.results-podium{width:clamp(120px,14vw,170px);height:auto}
+.login-results .public-results-note{margin:18px 0 0;padding-top:18px;border-top:1px solid var(--line);font-size:14px}
+@media (max-width:900px){.login-grid{grid-template-columns:1fr}.login-results .public-results-filter{grid-template-columns:1fr}}
+@media (max-width:520px){.login-header{padding:10px 14px}.login-header .brand-logo{width:56px;height:auto}.login-install .install-app-button{min-height:40px;padding:0 14px;font-size:13px}}
+.login-header .brand{gap:14px;font:800 26px Manrope}
+.login-header .brand-logo{width:84px;height:auto}
+.login-header .brand-sub{font-size:13px;letter-spacing:.24em}
+.password-field{position:relative;display:block}
+.password-field input{width:100%;padding-right:54px}
+.password-eye{position:absolute;top:50%;right:8px;display:grid;place-items:center;width:40px;height:40px;transform:translateY(-50%);border:0;border-radius:8px;background:none;color:#4b5f73;cursor:pointer}
+.password-eye svg{width:24px;height:24px;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.password-eye[aria-pressed="true"]{color:#f05a00}
+@media (max-width:520px){.login-header .brand{font-size:20px}.login-header .brand-logo{width:58px}.login-header .brand-sub{font-size:10px}}

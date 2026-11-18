@@ -10,7 +10,7 @@
   const buttons = () => document.querySelectorAll('[data-install-app]');
 
   function syncInstallButtons() {
-    const host = document.querySelector('.sidebar-bottom') ||
+    const host = document.querySelector('[data-install-host]') || document.querySelector('.sidebar-bottom') ||
       document.querySelector('#login-content') || document.querySelector('.landing-hero');
     if (installPrompt && !installed() && host && !host.querySelector('[data-install-app]')) {
       const button = document.createElement('button');

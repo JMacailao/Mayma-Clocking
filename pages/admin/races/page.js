@@ -20,6 +20,7 @@ export async function render(view) {
         <div class="schedule-form-pair"><label class="field"><span>Open date</span><input name="open_date" type="date" required></label><label class="field"><span>End date</span><input name="end_date" type="date" required></label></div>
         <label class="field"><span>Status</span><select name="status">${STATUSES.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>
         <div class="field"><span>Official release</span><div class="schedule-form-pair"><input name="release_date" type="date" aria-label="Official release date"><input name="release_time" type="time" aria-label="Official release time"></div><small class="small">Philippine time. Needed before the race can open. Leave blank until it is known.</small></div>
+        <div class="field"><span>RFID tag expiry</span><div class="schedule-form-pair"><select name="nfc_expiry_days" aria-label="RFID tag expiry"><option value="">No expiry</option><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option><option value="5">5 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="custom">Custom…</option></select><input name="nfc_expiry_custom" type="number" min="1" max="365" step="1" inputmode="numeric" placeholder="Days" aria-label="RFID tag expiry in days" hidden></div><small class="small">For every pigeon entered in this race with an RFID tag, counted from the official release. After it the tag no longer clocks (the sticker still works) and is free for the next race.</small></div>
         <label class="schedule-practice"><input type="checkbox" name="is_practice"><span><strong>Practice race</strong> A test race to try readers and phones. It never appears in the public results.</span></label>
         <div class="schedule-form-actions"><button class="button primary" type="submit" data-save-schedule>Save changes</button><button class="button secondary" type="button" data-cancel-editor>Cancel</button></div>
       </form>
@@ -37,6 +38,9 @@ export async function render(view) {
   const validateDateRange=()=>{endDateInput.min=openDateInput.value;const invalid=Boolean(openDateInput.value&&endDateInput.value&&endDateInput.value<openDateInput.value);endDateInput.setCustomValidity(invalid?'End date must be on or after open date.':'');return !invalid;};
   openDateInput.addEventListener('input',validateDateRange);endDateInput.addEventListener('input',validateDateRange);
 
+  const expirySelect=form.elements.nfc_expiry_days,expiryCustom=form.elements.nfc_expiry_custom;
+  const setExpiry=days=>{const preset=[...expirySelect.options].some(option=>option.value===String(days??''));expirySelect.value=days==null?'':preset?String(days):'custom';expiryCustom.hidden=expirySelect.value!=='custom';expiryCustom.value=expirySelect.value==='custom'?String(days):'';};
+  expirySelect.addEventListener('change',()=>{expiryCustom.hidden=expirySelect.value!=='custom';if(!expiryCustom.hidden)expiryCustom.focus();});
   function openEditor(race){
     selectedId=race?.id??null;form.reset();
     title.textContent=race?'Edit schedule':'Create schedule';saveButton.textContent=race?'Save changes':'Create schedule';
@@ -44,9 +48,10 @@ export async function render(view) {
     if(race){
       form.elements.name.value=race.name||'';
       form.elements.race_point_id.value=race.race_point_id??points.find(point=>point.location===race.release_location)?.id??'';
-      openDateInput.value=race.open_date||'';endDateInput.value=race.end_date||'';form.elements.status.value=race.status||'draft';form.elements.is_practice.checked=Boolean(race.is_practice);
+      openDateInput.value=race.open_date||'';endDateInput.value=race.end_date||'';form.elements.status.value=race.status||'draft';form.elements.is_practice.checked=Boolean(race.is_practice);setExpiry(race.nfc_expiry_days);
       const [date='',time='']=utcToPhDateTimeLocal(race.release_at_utc).split('T');releaseDateInput.value=date;releaseTimeInput.value=time;
     }
+    if(!race)setExpiry(null);
     validateDateRange();editor.hidden=false;layout.classList.add('has-editor');drawRows();
     if(matchMedia('(max-width:980px)').matches)editor.scrollIntoView({behavior:'smooth',block:'start'});
   }
@@ -64,6 +69,10 @@ export async function render(view) {
     if(releaseDateInput.value&&!releaseAt){message('Enter a valid release date and time.','error');return;}
     if(status==='open'&&!releaseAt){message('Add the official release date and time before opening this race.','error');releaseDateInput.focus();return;}
     const record={name:form.elements.name.value.trim(),open_date:openDateInput.value,end_date:endDateInput.value,status,release_at_utc:releaseAt};
+    const expiryDays=expirySelect.value==='custom'?Number(expiryCustom.value):expirySelect.value?Number(expirySelect.value):null;
+    if(expirySelect.value==='custom'&&!(Number.isInteger(expiryDays)&&expiryDays>=1&&expiryDays<=365)){message('Enter the RFID tag expiry in days (1 to 365).','error');expiryCustom.focus();return;}
+    // Sent only when set (or already set), so saving still works before race-tag-expiry.sql is run.
+    if(expiryDays!==null||race?.nfc_expiry_days!=null)record.nfc_expiry_days=expiryDays;
     // Sent only when ticked (or already a practice race), so saving still works before race-day.sql is run.
     if(form.elements.is_practice.checked||race?.is_practice)record.is_practice=form.elements.is_practice.checked;
     if(!form.elements.race_point_id.disabled){
@@ -75,7 +84,7 @@ export async function render(view) {
     saveButton.disabled=true;
     const {error:saveError}=race?await supabase.from('races').update(record).eq('id',race.id):await supabase.from('races').insert(record);
     saveButton.disabled=false;
-    if(saveError){message(/is_practice/i.test(saveError.message||'')?'Practice races are not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':dbError(saveError),'error');return;}
+    if(saveError){message(/nfc_expiry_days/i.test(saveError.message||'')?'RFID tag expiry per race is not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':/is_practice/i.test(saveError.message||'')?'Practice races are not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':dbError(saveError),'error');return;}
     message(race?'Schedule saved.':'Schedule created.','success');window.dispatchEvent(new Event('app:refresh'));
   };
 

@@ -103,6 +103,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
     'bird-bonding', to_regclass('public.pigeons') IS NOT NULL,
     'show-up', EXISTS (SELECT 1 FROM pg_proc AS p JOIN pg_namespace AS n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'clock_is_disqualified'),
     'rfid-tag-in-use', EXISTS (SELECT 1 FROM pg_proc AS p JOIN pg_namespace AS n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'require_rfid_tag_free'),
+    'race-tag-expiry', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'races' AND column_name = 'nfc_expiry_days'),
     'bird-ring-only', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'pigeons' AND column_name = 'bond_type'),
     'race-day', to_regclass('public.audit_log') IS NOT NULL,
     'realtime', EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'clock_events')
