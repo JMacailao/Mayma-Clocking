@@ -51,6 +51,12 @@ requests in the browser.
       Race entries. The ticked remarks are shown after the ring number, for
       example `12345 P1/P2/P3`, on entries, clocking, results and public results.
       Safe to re-run; run it again after re-running `public-results.sql`.
+  12. `bird-bonding.sql` — **Bird bonding**: before a bird can be entered in a race,
+      the club admin or staff bonds it with its ring number, RFID tag, loft name,
+      bird name, colour and a photo (stored in the private `pigeon-photos`
+      Supabase Storage bucket this file creates). Race entries then choose one of
+      the member's bonded birds; the ring and RFID come from the bond. Run it after
+      `nfc-tags.sql`; safe to re-run.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
    account** (username + password, 8+ characters). This screen appears only once.
    If you already had an administrator, that account becomes the superadmin.
