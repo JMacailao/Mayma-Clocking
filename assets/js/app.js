@@ -78,7 +78,7 @@ async function renderPage(view,role,identity,page=body.dataset.view,setCleanup=f
   else if(page==='race-points'){const pageModule=await import('../../pages/admin/race-points/page.js');await pageModule.render(view,identity.profile.role==='admin');}
   else if(page==='races'){const pageModule=await import('../../pages/admin/races/page.js');await pageModule.render(view);}
   else if(page==='entries'){const pageModule=await import('../../pages/admin/entries/page.js');await pageModule.entriesPage(view,setCleanup);}
-  else if(page==='clocking'&&role==='admin'){const pageModule=await import('../../pages/admin/clocking/page.js');await pageModule.render(view,identity);}
+  else if(page==='clocking'&&role==='admin'){const pageModule=await import('../../pages/admin/clocking/page.js');await pageModule.render(view,identity,setCleanup);}
   else if(page==='results'&&role==='admin'){const pageModule=await import('../../pages/admin/results/page.js');await pageModule.render(view);}
   else if(page==='dashboard'&&role==='member'){const pageModule=await import('../../pages/member/dashboard/page.js');await pageModule.render(view,identity);}
   else if(page==='member-clocking'&&role==='member'){const pageModule=await import('../../pages/member/clocking/page.js');await pageModule.render(view,identity,setCleanup);}

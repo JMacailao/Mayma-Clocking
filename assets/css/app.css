@@ -543,3 +543,4 @@ video#camera[hidden]{display:none}
   .schedule-form-pair{gap:12px}
   .schedule-row.is-selected td{border-radius:0!important}
 }
+.nfc-clock-panel .form-grid>.field,#admin-clock-form>.field{align-content:start}
