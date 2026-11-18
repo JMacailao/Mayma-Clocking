@@ -8,7 +8,7 @@ export const escapeHTML = (value='') => String(value ?? '').replace(/[&<>"']/g, 
 export const message = (text, kind='info') => { const el=document.querySelector('[data-message]'); if(el){el.textContent=text;el.className=`notice ${kind}`;el.hidden=!text;if(text&&el.scrollIntoView)el.scrollIntoView({behavior:'smooth',block:'nearest'});} };
 // A column or function the app needs is missing from the database: name the SQL
 // file that adds it, so the club can run it in the Supabase SQL Editor.
-const MISSING_SQL=[[/open_date|end_date/,'race-schedule-dates.sql'],[/release_at_utc/,'race-release-time.sql'],[/nfc_tag|nfc_tags|submit_member_nfc_clock|superadmin_register_nfc_tag/,'nfc-tags.sql'],[/barcode_sticker|scratch_code|is_registered|sticker_season|superadmin_register_sticker|superadmin_generate_sticker_batch/,'sticker-barcodes.sql'],[/public_race_results|public_result_clubs/,'public-results.sql']];
+const MISSING_SQL=[[/open_date|end_date/,'race-schedule-dates.sql'],[/release_at_utc/,'race-release-time.sql'],[/rfid_device|rfid_recent_scans/,'rfid-devices.sql'],[/nfc_tag|nfc_tags|submit_member_nfc_clock|superadmin_register_nfc_tag/,'nfc-tags.sql'],[/barcode_sticker|scratch_code|is_registered|sticker_season|superadmin_register_sticker|superadmin_generate_sticker_batch/,'sticker-barcodes.sql'],[/public_race_results|public_result_clubs/,'public-results.sql']];
 export const missingSchemaMessage = (error) => {
   const text=`${error?.message||''} ${error?.details||''} ${error?.hint||''}`;
   if(!['PGRST204','PGRST202','PGRST200','42703','42883'].includes(error?.code)&&!/schema cache|does not exist/i.test(text))return null;

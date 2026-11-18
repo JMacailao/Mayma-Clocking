@@ -2,7 +2,7 @@
 // HTTPS). Elsewhere a USB NFC reader set to "keyboard" mode types the tag ID into
 // a text field and presses Enter, which works in any browser.
 
-import { pageUrl } from './shared.js';
+import { pageUrl, supabase } from './shared.js';
 
 // Download link for the Windows helper that makes an ACS ACR122U (or other PC/SC
 // reader) type tag IDs like a keyboard.
@@ -78,6 +78,28 @@ export const nfcSetupGuideHtml=()=>`<details class="nfc-setup"><summary>Reader s
 // first, which on phones would also open the on-screen keyboard. Readers type far
 // faster than a person, so only quick bursts ending in Enter count as a tag; when
 // a text field has focus it is left to that field. Returns a stop function.
+// External RFID readers (ESP8266 + RC522, see tools/rfid-reader) in Register
+// mode send each tag to Supabase. This polls for tags read since the page
+// opened and calls onTag(uid, readerName) for each one. Older taps are skipped.
+// Stops quietly when rfid-devices.sql has not been run. Returns a stop function.
+export function listenForDeviceScans(onTag,{intervalMs=1500}={}){
+  let lastId=null,timer=null,stopped=false,busy=false;
+  const poll=async()=>{
+    if(stopped||busy||document.hidden)return;busy=true;
+    try{
+      const {data,error}=await supabase.rpc('rfid_recent_scans',{p_after_id:lastId});
+      if(error){if(/rfid_recent_scans|function|permission/i.test(error.message||''))stop();return;}
+      const rows=(data||[]).slice().sort((a,b)=>a.id-b.id);
+      if(lastId===null){lastId=rows.length?rows[rows.length-1].id:0;return;}
+      for(const row of rows){lastId=Math.max(lastId,row.id);const uid=normalizeNfcUid(row.tag_uid);if(uid&&!stopped)onTag(uid,row.device_name);}
+    }catch{/* network hiccup: try again next time */}
+    finally{busy=false;}
+  };
+  const stop=()=>{stopped=true;clearInterval(timer);};
+  timer=setInterval(poll,intervalMs);poll();
+  return stop;
+}
+
 export function listenForReaderKeys(onTag,{maxGapMs=60}={}){
   let buffer='',last=0;
   const editable=el=>el&&(el.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));

@@ -1,6 +1,6 @@
 import { supabase, escapeHTML, message, dbError, number, tableRows, loadSpreadsheetParser, normalizeImportHeader } from '../../../assets/js/shared.js';
 import { bindStickerScanner, stickerScannerDialogHtml } from '../../superadmin/stickers/shared.js';
-import { normalizeNfcUid, formatNfcUid, startPhoneNfc, NFC_HELP, readerHelperLink, listenForReaderKeys } from '../../../assets/js/nfc.js';
+import { normalizeNfcUid, formatNfcUid, startPhoneNfc, NFC_HELP, readerHelperLink, listenForReaderKeys, listenForDeviceScans } from '../../../assets/js/nfc.js';
 
 let spreadsheetZipReaderPromise=null;
 function loadSpreadsheetZipReader(){
@@ -360,7 +360,8 @@ export async function entriesPage(view,setPageCleanup=()=>{}) {
   let stopEntryNfc=()=>{},nfcTimer=null,disposed=false;
   view.insertAdjacentHTML('beforeend',stickerScannerDialogHtml());const stopStickerScanner=bindStickerScanner(view,entryForm);
   const stopReaderKeys=listenForReaderKeys(uid=>{entryForm.elements.nfc_tag.value=formatNfcUid(uid);message(`NFC tag ${formatNfcUid(uid)} read.`,'success');});
-  setPageCleanup(()=>{disposed=true;stopEntryNfc();clearTimeout(nfcTimer);stopStickerScanner();stopReaderKeys();});
+  const stopDeviceScans=listenForDeviceScans((uid,reader)=>{entryForm.elements.nfc_tag.value=formatNfcUid(uid);message(`NFC tag ${formatNfcUid(uid)} read by ${reader}.`,'success');});
+  setPageCleanup(()=>{disposed=true;stopEntryNfc();clearTimeout(nfcTimer);stopStickerScanner();stopReaderKeys();stopDeviceScans();});
   if(tapButton)tapButton.onclick=async()=>{tapButton.disabled=true;message('Hold the pigeon\'s NFC tag against the back of the phone…','info');let stop=()=>{};try{stop=await startPhoneNfc(uid=>{stop();tapButton.disabled=false;entryForm.elements.nfc_tag.value=formatNfcUid(uid);message(`NFC tag ${formatNfcUid(uid)} read.`,'success');},error=>message(error.message,'error'));stopEntryNfc=stop;if(disposed){stop();return;}nfcTimer=setTimeout(()=>{if(tapButton.disabled){stop();tapButton.disabled=false;}},30000);}catch(error){tapButton.disabled=false;message(error.message,'error');}};
   mountEntrySheetImport(view,races,members,entries);
   view.querySelector('#entry-race').addEventListener('change',event=>{try{sessionStorage.setItem(RACE_KEY,event.target.value);}catch{/* storage unavailable */}});

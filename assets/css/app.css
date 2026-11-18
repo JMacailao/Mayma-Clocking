@@ -544,3 +544,13 @@ video#camera[hidden]{display:none}
   .schedule-row.is-selected td{border-radius:0!important}
 }
 .nfc-clock-panel .form-grid>.field,#admin-clock-form>.field{align-content:start}
+
+/* RFID readers */
+.reader-steps{margin:0 0 18px;padding-left:20px;color:var(--muted);font-size:13px;line-height:1.7}
+.reader-steps strong{color:var(--ink)}
+.reader-key{margin-top:18px;padding:16px;border:1px solid #b3dedf;border-radius:9px;background:#e6f6f5;color:var(--ink);font-size:13px}
+.reader-key p{margin:0 0 8px}.reader-key p:last-child{margin:8px 0 0}
+.reader-key-value{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.reader-key-value code{padding:10px 12px;border:1px solid var(--line);border-radius:7px;background:#fff;font-size:16px;letter-spacing:.06em;user-select:all;overflow-wrap:anywhere}
+[data-reader] select{min-height:38px;max-width:230px;border:1px solid #dce5ed;border-radius:7px;background:#fff;color:var(--ink);padding:0 8px;font-size:12px}
+#reader-form>.field{align-content:start}
