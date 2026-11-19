@@ -97,7 +97,7 @@ DECLARE
   v_race_club bigint;
 BEGIN
   IF NEW.pigeon_id IS NULL THEN
-    RAISE EXCEPTION 'Choose a bonded bird. Bond the bird (ring, RFID, loft, name, colour and photo) on Band Assignments first.' USING ERRCODE = '22023';
+    RAISE EXCEPTION 'Choose a bonded bird. Bond the bird (ring, RFID, loft, name, colour and photo) on Bird bonding first.' USING ERRCODE = '22023';
   END IF;
   SELECT p.* INTO v_pigeon FROM public.pigeons AS p WHERE p.id = NEW.pigeon_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'That bonded bird was not found.' USING ERRCODE = '22023'; END IF;
@@ -105,7 +105,7 @@ BEGIN
     RAISE EXCEPTION 'Bird % is retired and cannot be entered in a race.', v_pigeon.ring_number USING ERRCODE = '22023';
   END IF;
   IF v_pigeon.nfc_tag IS NULL THEN
-    RAISE EXCEPTION 'Bird % has no RFID tag. Add its tag on Band Assignments first.', v_pigeon.ring_number USING ERRCODE = '22023';
+    RAISE EXCEPTION 'Bird % has no RFID tag. Add its tag on Bird bonding first.', v_pigeon.ring_number USING ERRCODE = '22023';
   END IF;
   SELECT r.club_id INTO v_race_club FROM public.races AS r WHERE r.id = NEW.race_id;
   IF v_race_club IS DISTINCT FROM v_pigeon.club_id THEN

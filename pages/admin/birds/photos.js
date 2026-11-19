@@ -1,6 +1,6 @@
 import { supabase } from '../../../assets/js/shared.js';
 
-// Band Assignments helpers shared with Race entries, Show up and My pigeons:
+// Bird bonding helpers shared with Race entries, Show up and My pigeons:
 // colours, private photo links and photo shrinking.
 export const BIRD_COLOURS=['Blue bar','Blue check','Dark check','Red check','Red bar','Mealy','Grizzle','Black','White','Pied','Silver','Other'];
 export const PHOTO_BUCKET='pigeon-photos';

@@ -1,4 +1,4 @@
-// Band Assignments: list, Bond a bird dialog, ring-number-only birds.
+// Bird bonding: list, Bond a bird dialog, ring-number-only birds.
 module.exports = async (page, { app, check, sample, BASE, toast }) => {
   await app(sample + `F.session={user:{id:'u'}};F.tables.app_profiles=[{id:'u',role:'admin',username:'jmb',club_id:1,is_active:true}];F.tables.clubs=[{id:1,name:'Club'}];F.tables.nfc_tags=[{tag_uid:'843519DB'}];`);
   await page.goto(`${BASE}/repo/pages/admin/birds/index.html`); await page.waitForSelector('.bird-table');

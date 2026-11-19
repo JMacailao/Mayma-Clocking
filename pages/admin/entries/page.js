@@ -13,7 +13,7 @@ export async function entriesPage(view,setPageCleanup=()=>{}) {
   // The club's remarks, ticked per entry (built on Entry remarks). Missing table = no remarks yet.
   let remarkOptions=[];
   try{const {data:options,error:remarkError}=await supabase.from('entry_remark_options').select('label').eq('is_active',true).order('sort_order').order('label');if(!remarkError)remarkOptions=(options||[]).map(option=>option.label);}catch{/* entry-remarks.sql not run yet */}
-  // Bonded birds (Band Assignments). When bonding is set up, entries must use one of them.
+  // Bonded birds (Bird bonding). When bonding is set up, entries must use one of them.
   let birds=null,birdPhotos=new Map();
   try{const {data:bonded,error:birdError}=await supabase.from('pigeons').select('*').order('ring_number');if(!birdError){birds=bonded||[];birdPhotos=await birdPhotoUrls(birds.filter(bird=>bird.status==='active').map(bird=>bird.photo_path));}}catch{/* bird-bonding.sql not run yet */}
   const birdById=new Map((birds||[]).map(bird=>[bird.id,bird]));
