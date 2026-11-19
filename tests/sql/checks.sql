@@ -74,6 +74,25 @@ DO $$ BEGIN
   UPDATE public.clubs SET rfid_entry_sticker = 'required';
 END $$;
 
+-- One device per account: a second device is asked first; forcing takes over.
+DO $$ DECLARE v_user uuid; r jsonb; BEGIN
+  INSERT INTO auth.users (email) VALUES ('device-test@users.mayma.invalid') RETURNING id INTO v_user;
+  INSERT INTO public.app_profiles (id, role, username, club_id, is_active) SELECT v_user, 'admin', 'devicetest', id, true FROM public.clubs LIMIT 1;
+  PERFORM set_config('request.jwt.claim.sub', v_user::text, true);
+  ASSERT (public.claim_account_device('device-AAAA', 'Phone', false)->>'status') = 'ok', 'off by default: always ok';
+  UPDATE public.clubs SET single_device = true;
+  ASSERT (public.claim_account_device('device-AAAA', 'Phone', false)->>'status') = 'ok', 'first device';
+  r := public.claim_account_device('device-BBBB', 'Laptop', false);
+  ASSERT r->>'status' = 'other_device' AND r->>'device_label' = 'Phone', 'second device is asked: ' || r::text;
+  ASSERT (public.check_account_device('device-AAAA')->>'status') = 'ok', 'first device still holds it';
+  ASSERT (public.claim_account_device('device-BBBB', 'Laptop', true)->>'status') = 'ok', 'forcing takes over';
+  ASSERT (public.check_account_device('device-AAAA')->>'status') = 'replaced', 'first device learns it was replaced';
+  PERFORM public.release_account_device('device-BBBB');
+  ASSERT (public.check_account_device('device-BBBB')->>'status') = 'unclaimed', 'signing out frees the account';
+  UPDATE public.clubs SET single_device = false;
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+END $$;
+
 -- Change history records changes, and skips saves that change nothing.
 DO $$ DECLARE before bigint := (SELECT count(*) FROM public.audit_log); BEGIN
   UPDATE public.races SET name = 'Race B2' WHERE name = 'Race B';

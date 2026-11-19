@@ -44,7 +44,8 @@ try{const fn=${JSON.stringify(url.searchParams.get('fn') || 'render')};const cb=
   const page = await context.newPage();
   const pageErrors = [];
   page.on('pageerror', e => pageErrors.push(e.message));
-  page.on('dialog', d => d.accept());
+  // Pop-ups are accepted, unless the test answers them itself (page.once('dialog', ...)).
+  page.on('dialog', d => { if (page.listenerCount('dialog') === 1) d.accept().catch(() => {}); });
   const failures = [];
   const ctx = {
     BASE, OUT, REPO, FIXTURES: path.join(REPO, 'tests/fixtures'), sample: require('./sample-race.cjs'), log: (...a) => console.log('   ', ...a),

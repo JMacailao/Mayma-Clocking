@@ -33,6 +33,7 @@ photos and Realtime for live updates.
 | `member-results-watch.js` | Members: the result pop-up and phone notification when a pigeon is clocked (live, plus a check every 15 seconds). |
 | `i18n.js` | English / Tagalog switch. |
 | `update-check.js` | "AvilonX was updated" notice and a reload that fetches fresh files. |
+| `device-session.js` | One device per account: this browser's device id, the question at sign-in, signing out when another device took over. |
 | `pwa.js` | Install button and service worker registration. |
 
 ## Pages
@@ -48,7 +49,7 @@ Admin (`pages/admin/`):
 | Races | `races` | Race schedules: release, dates, status, practice, RFID tag expiry. |
 | Race entries | `entries` | Split by job, below. |
 | Entry remarks, Clocking, Show up, RFID readers, Results, Change history, Team accounts | `remarks`, `clocking`, `showup`, `readers`, `results`, `history`, `users` | |
-| Club settings | `settings` | Club administrator only: whether RFID entries need the sticker. |
+| Club settings | `settings` | Club administrator only: whether RFID entries need the sticker, and one device per account. |
 
 Race entries (`pages/admin/entries/`):
 

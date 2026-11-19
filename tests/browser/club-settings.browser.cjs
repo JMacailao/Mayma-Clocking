@@ -7,14 +7,14 @@ module.exports = async (page, { open, check, sample, toast }) => {
   check(call?.p_rfid_entry_sticker === 'optional', 'saves optional');
   check(/optional/.test(await toast()), 'confirms the save');
   await open('/repo/pages/admin/settings/page.js', `F.tables.clubs=[{id:1,name:'Mayma Club'}];`);
-  check(/not set up yet/.test(await page.locator('.notice.error').innerText()), 'explains when club-settings.sql was not run');
+  check(/not set up yet/.test(await page.locator('.notice.error').first().innerText()), 'explains when club-settings.sql was not run');
 
   const entries = rule => sample + `F.tables.clubs=[{id:1,name:'Club',rfid_entry_sticker:'${rule}'}];F.tables.races.unshift({id:6,name:'Lucena Open',status:'open',release_location:'Lucena',open_date:'2026-11-20',end_date:'2026-11-21',club_id:1});
     F.tables.nfc_tags=[{tag_uid:'6C811F4A'}];F.tables.race_entries=F.tables.race_entries.filter(e=>e.id!==13);`;
   const tapAndSave = async () => {
     await page.selectOption('#entry-race', '6'); await page.check('#entry-form [name=nfc_read_with][value=wired]');
     await page.locator('body').click({ position: { x: 5, y: 5 } }); await page.keyboard.type('6C811F4A', { delay: 5 }); await page.keyboard.press('Enter'); await page.waitForTimeout(300);
-    let dialogText = ''; page.once('dialog', d => { dialogText = d.message(); });
+    let dialogText = ''; page.once('dialog', d => { dialogText = d.message(); d.accept().catch(() => {}); });
     await page.click('#entry-form button.primary'); await page.waitForTimeout(500);
     return dialogText;
   };

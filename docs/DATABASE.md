@@ -25,6 +25,7 @@ checklist** page shows which parts are done.
 | `bird-ring-only.sql` | Birds bonded by ring number only (sticker entries). |
 | `race-tag-expiry.sql` | RFID tag expiry per race, applied to its entries. |
 | `club-settings.sql` | Club settings: whether RFID entries need the sticker (required or optional). |
+| `account-devices.sql` | One device per account (Club settings): signing in elsewhere asks first and signs the other device out. |
 | `race-day.sql` | Change history, practice races, live updates (Realtime), `setup_status()`. |
 
 Rebuild `avilonx-update.sql` after changing any file:

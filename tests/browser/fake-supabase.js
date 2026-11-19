@@ -24,7 +24,10 @@ function query(table){
   return q;
 }
 export const createClient=()=>({
-  auth:{getSession:async()=>({data:{session:F.session||null}}),signOut:async()=>({error:null}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},
+  auth:{
+    // Signing in and out lasts across page loads in this tab (like the real client).
+    getSession:async()=>{let state=null;try{state=sessionStorage.getItem('fake.auth');}catch{}if(state==='out')return {data:{session:null}};if(state&&state!=='out')return {data:{session:{user:{id:state}}}};return {data:{session:F.session||null}};},
+    signInWithPassword:async()=>{if(!F.signIn)return {data:null,error:{message:'Invalid login credentials'}};try{sessionStorage.setItem('fake.auth',F.signIn.id);}catch{}return {data:{user:F.signIn},error:null};},signOut:async()=>{try{sessionStorage.setItem('fake.auth','out');}catch{}return {error:null};},onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},
   from:query,
   rpc:async(name,args)=>{F.ops.push(['rpc',name,args]);const r=F.rpc[name];if(r===undefined)return {data:null,error:{message:`Could not find the function public.${name}`}};const v=typeof r==='function'?await r(args):r;return v&&v.__error?{data:null,error:v.__error}:{data:v,error:null};},
   storage:{from:()=>({createSignedUrls:async paths=>({data:paths.map(path=>({path,signedUrl:F.photo||'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"><rect width="40" height="30" fill="%237b9cc8"/></svg>'})),error:null}),upload:async()=>({error:null}),remove:async()=>({error:null})})},

@@ -1,5 +1,6 @@
 import { supabase, authError, USERNAME_RE, USERNAME_HELP, pageUrl as url } from '../../assets/js/shared.js';
 import { mountPublicResults } from '../results/public.js';
+import { claimDevice } from '../../assets/js/device-session.js';
 
 const signOutUser = async()=>{const {error}=await supabase.auth.signOut({scope:'local'});if(error)throw error;};
 // The page to return to after signing in, when it is a page of this site for the
@@ -42,6 +43,7 @@ function renderSignIn(container){
   showAudience(tab.dataset.audience);
  });
  if((new URLSearchParams(location.search).get('next')||'').includes('/pages/member/'))showAudience('member');
+ if(new URLSearchParams(location.search).get('signedout')==='device')loginMessage(container,'You were signed out because this account was signed in on another device. The club allows one device per account.','info');
  const form=container.querySelector('#login-form');
  const eye=container.querySelector('[data-show-password]');eye.onclick=()=>{const field=form.elements.password,show=field.type==='password';field.type=show?'text':'password';eye.setAttribute('aria-pressed',String(show));eye.setAttribute('aria-label',show?'Hide password':'Show password');field.focus();};
  form.onsubmit=async event=>{event.preventDefault();const username=form.elements.username.value.trim().toLowerCase();if(!USERNAME_RE.test(username)){loginMessage(container,USERNAME_HELP,'error');return;}const button=form.querySelector('button');tabs.forEach(tab=>tab.disabled=true);button.disabled=true;button.textContent='Signing in…';
@@ -52,6 +54,8 @@ function renderSignIn(container){
   if(profile.is_active===false){await signOutUser();tabs.forEach(tab=>tab.disabled=false);button.disabled=false;button.textContent='Sign in →';loginMessage(container,'This account is disabled. Ask your club administrator to reactivate it.','error');return;}
   const isMember=profile.role==='member';
   if((audience==='member')!==isMember){await signOutUser();tabs.forEach(tab=>tab.disabled=false);button.disabled=false;button.textContent='Sign in →';loginMessage(container,isMember?'This is a member account. Choose Member above.':'This is a club-team account. Choose Club team above.','error');return;}
+  // One device per account (when the club uses it): ask before signing the other device out.
+  if(profile.role!=='superadmin'&&!(await claimDevice())){await signOutUser();tabs.forEach(tab=>tab.disabled=false);button.disabled=false;button.textContent='Sign in →';loginMessage(container,'Not signed in: the account stays signed in on the other device.','info');return;}
   location.href=nextFor(profile.role)||homeFor(profile.role);};
 }
 function renderSuperAdmin(container){

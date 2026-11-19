@@ -89,7 +89,10 @@ The separate files, for reference:
   17. `club-settings.sql` — **Club settings** (Administration): the club administrator
       chooses whether RFID entries need the sticker (required) or not (optional,
       with a warning before saving without one).
-  18. `race-day.sql` — change history (who changed races, entries, clocks and
+  18. `account-devices.sql` — **One device per account** (Club settings): each account
+      can be signed in on one device at a time; signing in elsewhere asks first and
+      signs the other device out.
+  19. `race-day.sql` — change history (who changed races, entries, clocks and
       birds, and when), practice races, instant result pop-ups (Supabase
       Realtime) and the Setup checklist. Run it last.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
