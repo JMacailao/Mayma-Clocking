@@ -130,6 +130,8 @@ bool restartAfterResetBlinks = false;
 bool restartAfterApChange = false;
 unsigned long apChangeRestartAt = 0;
 unsigned long lastReconnectAttempt = 0;
+unsigned long wifiLostAt = 0;        // when the router Wi-Fi went away (0 = connected)
+unsigned long lastWifiNoticeMs = 0;  // last "no Wi-Fi" line in the Serial Monitor
 
 // Saved taps: one small file per tap in LittleFS (/q), removed once AvilonX
 // has answered it. The limit keeps the flash from filling up.
@@ -584,9 +586,17 @@ void restoreDefaultApOnly() {
 void beginRouterConnection() {
   if (config.ssid[0] == '\0') return;
   WiFi.begin(config.ssid, config.password);
-  Serial.print(F("Connecting to Wi-Fi: "));
-  Serial.println(config.ssid);
   lastReconnectAttempt = millis();
+  // Reconnecting runs in the background: tags are read and saved meanwhile.
+  // While offline, say so every 5 minutes instead of every 30-second try.
+  if (wifiLostAt == 0) {
+    Serial.print(F("Connecting to Wi-Fi: ")); Serial.println(config.ssid);
+  } else if (lastWifiNoticeMs == 0 || (unsigned long)(millis() - lastWifiNoticeMs) >= 300000UL) {
+    lastWifiNoticeMs = millis();
+    Serial.print(F("No Wi-Fi \"")); Serial.print(config.ssid); Serial.print(F("\" for "));
+    Serial.print((millis() - wifiLostAt) / 60000UL); Serial.print(F(" min. Tags are still read and saved ("));
+    Serial.print(pendingCount); Serial.println(F(" waiting to send). Trying again every 30 seconds."));
+  }
 }
 
 void blink(int times) {
@@ -1051,6 +1061,16 @@ void loop() {
   keepRtcInStep();
   sendPending();
   keepOnline();
+  // Note when the Wi-Fi went away / came back (for the messages above).
+  static bool wifiUp = false;
+  if (WiFi.status() == WL_CONNECTED) {
+    if (wifiLostAt != 0) { Serial.print(F("Wi-Fi back after ")); Serial.print((millis() - wifiLostAt) / 1000UL); Serial.println(F(" s: sending saved taps.")); }
+    wifiLostAt = 0; lastWifiNoticeMs = 0; wifiUp = true;
+  } else if (config.ssid[0] != '\0' && wifiLostAt == 0 && (wifiUp || millis() > 60000UL)) {
+    // Lost, or not found within a minute of switching on.
+    wifiLostAt = millis(); wifiUp = false;
+    Serial.println(F("No Wi-Fi. Tags are still read and saved; they are sent when the Wi-Fi is back."));
+  }
   if (config.ssid[0] != '\0' && WiFi.status() != WL_CONNECTED &&
       (unsigned long)(millis() - lastReconnectAttempt) >= 30000UL) {
     beginRouterConnection();
