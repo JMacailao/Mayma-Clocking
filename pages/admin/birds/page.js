@@ -48,7 +48,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     <label class="field span-3"><span>Sex <span class="small">(optional)</span></span><select name="sex"><option value="">Not set</option><option value="cock">Cock</option><option value="hen">Hen</option></select></label>
     <label class="field span-3"><span>Hatch year <span class="small">(optional)</span></span><input name="hatch_year" type="number" min="1990" max="2100" step="1" inputmode="numeric" placeholder="${new Date().getFullYear()}"></label>
     <div class="field span-6 reader-choice bond-rfid-only" role="radiogroup" aria-labelledby="bird-reader-label"><span id="bird-reader-label">Which RFID reader are you using?</span><div class="reader-choice-options"><label><input type="radio" name="nfc_read_with" value="wireless"><span><strong>Wireless</strong> ESP8266 Wi-Fi reader</span></label><label><input type="radio" name="nfc_read_with" value="wired"><span><strong>Wired</strong> USB reader</span></label><label><input type="radio" name="nfc_read_with" value="phone"><span><strong>Android phone</strong> NFC</span></label></div><small class="small usb-reader-status" data-usb-status hidden></small></div>
-    <label class="field span-3 bond-rfid-only"><span>RFID tag</span><div class="input-with-button"><input name="nfc_tag" required maxlength="40" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Tap the bird's RFID tag"><button type="button" data-tap-nfc aria-label="Read the RFID tag with this phone" title="Read with this phone" hidden><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 9.5a4 4 0 0 1 0 5M11.5 7a8 8 0 0 1 0 10M15 4.5a12 12 0 0 1 0 15"/><circle cx="4.5" cy="12" r="1"/></svg></button></div><small class="small">Required: on Race entries the bird is picked by tapping this tag. The tag must be registered by the Super Admin.</small></label>
+    <label class="field span-3 bond-rfid-only"><span>RFID tag</span><div class="input-with-button"><input name="nfc_tag" required maxlength="40" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Tap the bird's RFID tag"><button type="button" data-tap-nfc aria-label="Read the RFID tag with this phone" title="Read with this phone" hidden><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 9.5a4 4 0 0 1 0 5M11.5 7a8 8 0 0 1 0 10M15 4.5a12 12 0 0 1 0 15"/><circle cx="4.5" cy="12" r="1"/></svg></button></div><small class="small bird-tag-status" data-tag-check hidden></small><small class="small">Required: on Race entries the bird is picked by tapping this tag. The tag must first be registered by the Super Admin (Register NFC).</small></label>
     <div class="field span-3 bird-photo-field"><span>Photo of the bird</span><div class="bird-photo-picker"><img data-photo-preview alt="" hidden><div class="bird-photo-empty" data-photo-empty>No photo yet</div><label class="button secondary bird-photo-button"><input name="photo" type="file" accept="image/*" hidden>Choose or take photo</label></div><small class="small" data-photo-hint>Required. Choose it from the photo library or take one with the camera; it is made smaller before uploading.</small></div>
     <div class="form-actions"><button class="button primary" type="submit" data-save-bird>Bond bird</button><button class="button secondary" type="button" data-cancel-edit>Cancel</button></div>
   </form></div></section></dialog>
@@ -85,7 +85,25 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   const applyReaderChoice=()=>{tapButton.hidden=readerChoice()!=='phone'||!phoneNfcSupported();const usbLine=view.querySelector('[data-usb-status]');if(usbLine){usbLine.hidden=readerChoice()!=='wired';if(readerChoice()==='wired'&&!usbLine.textContent)usbLine.textContent='USB reader: waiting for a tap. What it types will show here.';}try{if(readerChoice())localStorage.setItem(READER_KEY,readerChoice());}catch{/* storage unavailable */}};
   try{const saved=localStorage.getItem(READER_KEY);const radio=saved&&form.querySelector(`[name=nfc_read_with][value="${saved}"]`);if(radio)radio.checked=true;}catch{/* storage unavailable */}
   form.querySelectorAll('[name=nfc_read_with]').forEach(radio=>radio.addEventListener('change',applyReaderChoice));applyReaderChoice();
-  const fillTag=(uid,from)=>{form.elements.nfc_tag.value=formatNfcUid(uid);message(`RFID tag ${formatNfcUid(uid)} read${from?` by ${from}`:''}.`,'success');};
+  // Every tag read is checked at once: registered by the Super Admin, and not
+  // assigned to another active bird. (The database checks again on saving.)
+  const tagCheck=view.querySelector('[data-tag-check]');
+  const showTagCheck=(ok,text)=>{tagCheck.hidden=!text;tagCheck.className=`small bird-tag-status ${ok?'is-ok':'is-bad'}`;tagCheck.textContent=text||'';};
+  const checkTag=async uid=>{
+    const label=formatNfcUid(uid);
+    const {data,error}=await supabase.from('nfc_tags').select('tag_uid').eq('tag_uid',uid).maybeSingle();
+    if(error)return {ok:true,text:''};// cannot check here: the database still checks on saving
+    if(!data)return {ok:false,text:`RFID tag ${label} is not registered. Ask the Super Admin to register it on Register NFC first, then tap it again.`};
+    const other=birds.find(bird=>bird.status==='active'&&bird.nfc_tag===uid&&bird.id!==editing?.id);
+    if(other)return {ok:false,text:`RFID tag ${label} is already assigned to ${other.ring_number} (${other.bird_name}). Retire that bird first, or use another tag.`};
+    return {ok:true,text:`RFID tag ${label}: registered ✓`};
+  };
+  const fillTag=async(uid,from)=>{
+    const result=await checkTag(uid);
+    if(!result.ok){form.elements.nfc_tag.value='';showTagCheck(false,result.text);message(result.text,'error');return;}
+    form.elements.nfc_tag.value=formatNfcUid(uid);showTagCheck(true,result.text);
+    message(`RFID tag ${formatNfcUid(uid)} read${from?` by ${from}`:''}.`,'success');
+  };
   form.elements.nfc_tag.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();const uid=normalizeNfcUid(form.elements.nfc_tag.value);if(uid)fillTag(uid,'');else if(uid===null)message(NFC_HELP,'error');});
   const usbStatus=view.querySelector('[data-usb-status]');
   // A USB reader may type the ID in another form: use the one the Super Admin registered.
@@ -97,6 +115,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   setPageCleanup(()=>{stopReaderKeys();stopDeviceScans();stopPhone();if(previewUrl)URL.revokeObjectURL(previewUrl);});
 
   const resetForm=()=>{
+    showTagCheck(true,'');
     editing=null;form.reset();photoBlob=null;showPreview(null);form.elements.color_other.hidden=true;form.elements.color_other.required=false;
     try{const saved=localStorage.getItem(READER_KEY);const radio=saved&&form.querySelector(`[name=nfc_read_with][value="${saved}"]`);if(radio)radio.checked=true;}catch{/* storage unavailable */}
     title.textContent='Bond a bird';form.elements.member_id.disabled=false;
@@ -136,6 +155,8 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
       if(tag===null){message(NFC_HELP,'error');form.elements.nfc_tag.focus();return;}
       if(!tag){message('Tap the bird\'s RFID tag, or use the Ring number only tab for a bird raced with a sticker only.','error');form.elements.nfc_tag.focus();return;}
       if(!readerChoice()){message('Choose which RFID reader you are using: Wireless, Wired or Android phone.','error');return;}
+      const tagResult=await checkTag(tag);
+      if(!tagResult.ok){showTagCheck(false,tagResult.text);message(tagResult.text,'error');form.elements.nfc_tag.focus();return;}
     }
     if(!editing&&!photoBlob){message('Take or choose a photo of the bird. A photo is required.','error');return;}
     const colour=form.elements.color.value==='Other'?form.elements.color_other.value.trim():form.elements.color.value;

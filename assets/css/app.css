@@ -1079,3 +1079,7 @@ body.login-page{min-height:100vh;background:#f3f6f9}
 .telegram-setup ol{display:grid;gap:10px;padding-left:20px}
 .telegram-setup code{padding:2px 6px;border-radius:6px;background:#eef2f6;word-break:break-all}
 .telegram-secret{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.bird-tag-status{display:block;margin-top:6px;padding:7px 10px;border-radius:8px;font-weight:700}
+.bird-tag-status[hidden]{display:none}
+.bird-tag-status.is-ok{background:#e7f6ee;color:#11653a}
+.bird-tag-status.is-bad{background:#fdecec;color:#a11d1d}
