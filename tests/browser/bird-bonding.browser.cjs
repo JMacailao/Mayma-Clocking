@@ -8,6 +8,7 @@ module.exports = async (page, { app, check, sample, BASE, toast }) => {
   check((await page.locator('.nav-link.active').innerText()) === 'Bird bonding', 'the menu shows the page');
   await page.click('[data-view-photo]');
   check(await page.locator('.photo-viewer').evaluate(d => d.open), 'a photo opens full size'); await page.keyboard.press('Escape');
+  check(!(await page.locator('#bird-form [name=photo]').getAttribute('capture')), 'the photo can be chosen from the library (iPhone does not force the camera)');
   await page.click('[data-bond-new]'); await page.click('[data-bond-tab=ring]');
   check(!(await page.locator('[name=nfc_tag]').isVisible()), 'ring-only bonding has no RFID field');
   await page.selectOption('#bird-form [name=member_id]', '8'); await page.fill('#bird-form [name=ring_number]', 'PH-9'); await page.fill('#bird-form [name=bird_name]', 'Nine'); await page.selectOption('#bird-form [name=color]', 'Blue bar');

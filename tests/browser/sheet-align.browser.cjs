@@ -3,6 +3,7 @@ module.exports = async (page, { open, check, sample, FIXTURES, OUT }) => {
   await open('/repo/pages/admin/entries/page.js', sample, { fn: 'entriesPage' });
   await page.click('[data-entry-tab=sheet]');
   check(await page.locator('[data-sheet-align]').isDisabled(), 'Align on guide waits for a photo');
+  check(!(await page.locator('[data-sheet-file]').getAttribute('capture')), 'the sheet photo can be chosen from the library (iPhone does not force the camera)');
   await page.setInputFiles('[data-sheet-file]', `${FIXTURES}/loading-form.webp`); await page.waitForTimeout(1200);
   check(/Table not found/.test(await page.locator('[data-sheet-grid-note]').innerText()), 'the sideways photo: table not found yet');
   check(/Align on guide/.test(await page.locator('[data-sheet-grid-note]').innerText()), 'suggests Align on guide');
