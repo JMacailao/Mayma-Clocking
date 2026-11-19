@@ -3,7 +3,7 @@
 # so a club only has to run one file in the Supabase SQL Editor.
 # Run from the repository root after changing any of the files below.
 set -e
-FILES="multi-club account-credentials public-results sticker-barcodes race-release-time race-schedule-dates nfc-tags rfid-devices entry-remarks bird-bonding show-up rfid-tag-in-use bird-ring-only race-tag-expiry club-settings account-devices race-day"
+FILES="multi-club account-credentials public-results sticker-barcodes race-release-time race-schedule-dates nfc-tags rfid-devices entry-remarks bird-bonding show-up rfid-tag-in-use bird-ring-only race-tag-expiry club-settings account-devices telegram race-day"
 OUT=avilonx-update.sql
 {
   echo "-- AvilonX Clocking: ALL updates in one file."

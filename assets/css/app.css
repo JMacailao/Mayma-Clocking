@@ -1071,3 +1071,11 @@ body.login-page{min-height:100vh;background:#f3f6f9}
 .settings-choice input{width:18px;height:18px;margin-top:3px}
 .settings-choice span{display:grid;gap:3px;color:var(--muted);font-size:14px}
 .settings-choice strong{color:#0f2a44;font-size:15px}
+
+/* Telegram (member Settings, Super Admin) */
+.telegram-state{padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800}
+.telegram-state.is-on{background:#e7f6ee;color:#11653a}
+.telegram-steps{display:grid;gap:6px;margin:6px 0 4px;padding-left:20px}
+.telegram-setup ol{display:grid;gap:10px;padding-left:20px}
+.telegram-setup code{padding:2px 6px;border-radius:6px;background:#eef2f6;word-break:break-all}
+.telegram-secret{display:flex;gap:8px;align-items:center;flex-wrap:wrap}

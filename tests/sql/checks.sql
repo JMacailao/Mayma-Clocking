@@ -93,6 +93,26 @@ DO $$ DECLARE v_user uuid; r jsonb; BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
 
+-- Telegram: only loft reader owners who connected Telegram get a message per clock.
+DO $$ DECLARE v_member bigint; v_entry bigint; v_code text; r jsonb; BEGIN
+  SELECT id INTO v_member FROM public.members WHERE member_no = '161';
+  SELECT id INTO v_entry FROM public.race_entries WHERE barcode = '222';
+  UPDATE public.members SET telegram_link_code = 'abcdef0123456789abcd', telegram_link_expires_at = now() + interval '5 minutes' WHERE id = v_member;
+  r := public.telegram_link_by_code('abcdef0123456789abcd', 987654321);
+  ASSERT (r->>'ok')::boolean, 'a valid code connects the chat';
+  ASSERT NOT (public.telegram_link_by_code('abcdef0123456789abcd', 1)->>'ok')::boolean, 'a code works once';
+  INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, source, verification) VALUES (v_entry, 'PH-1', now() AT TIME ZONE 'UTC', 'barcode', 'provisional');
+  ASSERT NOT EXISTS (SELECT 1 FROM public.telegram_outbox), 'no message without a loft reader';
+  DELETE FROM public.clock_events WHERE race_entry_id = v_entry;
+  INSERT INTO public.rfid_devices (club_id, serial, name, member_id, mode, key_hash) SELECT club_id, 'A1B2C3D4E5F6', 'Loft', v_member, 'clock', '\x00'::bytea FROM public.members WHERE id = v_member;
+  INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, source, verification) VALUES (v_entry, 'PH-1', now() AT TIME ZONE 'UTC', 'barcode', 'provisional');
+  ASSERT (SELECT count(*) FROM public.telegram_outbox WHERE chat_id = 987654321) = 1, 'the reader owner gets one message';
+  ASSERT (SELECT text FROM public.telegram_outbox LIMIT 1) LIKE '%PH-1 was clocked%Race: Race B%Clocked with: Sticker%', (SELECT text FROM public.telegram_outbox LIMIT 1);
+  ASSERT public.telegram_unlink_chat(987654321) = 1, '/stop disconnects';
+  DELETE FROM public.clock_events WHERE race_entry_id = v_entry;
+  DELETE FROM public.rfid_devices WHERE serial = 'A1B2C3D4E5F6';
+END $$;
+
 -- Change history records changes, and skips saves that change nothing.
 DO $$ DECLARE before bigint := (SELECT count(*) FROM public.audit_log); BEGIN
   UPDATE public.races SET name = 'Race B2' WHERE name = 'Race B';
