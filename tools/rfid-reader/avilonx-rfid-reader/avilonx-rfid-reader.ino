@@ -179,7 +179,7 @@ const char PAGE[] PROGMEM = R"HTML(
 <main class="page" id="dashboard"><div class="grid"><div>
 <section class="card" id="scannerCard"><div class="cardhead"><span>◉ &nbsp; Live Scan</span><span class="status good" id="readyBadge">Reader active</span></div><div class="scanner"><div class="waves">◉</div><h2>Ready to Scan</h2><p>Tap an RFID tag on the RC522 reader</p></div></section>
 <section class="card" id="historyCard"><div class="cardhead"><span>◷ &nbsp; Recent Taps</span><span class="status" id="recentCount">Last 20</span></div><div class="tablewrap"><table><thead><tr><th>Recent #</th><th>Tag (UID)</th><th>AvilonX reply</th></tr></thead><tbody id="history"><tr><td colspan="3" class="muted">No scans yet</td></tr></tbody></table></div></section>
-<section class="card" id="about"><div class="cardhead">Reader information</div><div class="cardbody"><div class="muted">Every tap is saved in the reader's flash with the time it was tapped, then sent to AvilonX. Without internet the taps wait here (up to 150, kept through a power cut) and are sent when the internet is back; AvilonX clocks them at their tap time. Tap times need the reader's clock, which it sets from the internet once it has been online since power-up: <b id="clockState">checking…</b>. The reader always runs its own hotspot at <b>192.168.4.1</b>, also while connected to your Wi-Fi. Your club admin chooses Register or Clocking mode in AvilonX.</div></div></section>
+<section class="card" id="about"><div class="cardhead">Reader information</div><div class="cardbody"><div class="muted">Every tap is saved in the reader's flash with the time it was tapped, then sent to AvilonX. Without internet the taps wait here (up to 150, kept through a power cut) and are sent when the internet is back; AvilonX clocks them at their tap time. Tap times need the reader's clock, which it sets from the internet once it has been online since power-up: <b id="clockState">checking…</b>. <button class="btn alt" type="button" id="phoneClock" hidden>Set clock from this phone</button> The reader always runs its own hotspot at <b>192.168.4.1</b>, also while connected to your Wi-Fi. Your club admin chooses Register or Clocking mode in AvilonX.</div></div></section>
 </div><div>
 <section class="card"><div class="cardbody"><div class="taginfo"><div><span class="smalllabel">RFID READER: <b id="rfidState">Checking...</b></span><br><span class="smalllabel">LAST TAG (UID)</span><div class="uid" id="uid">Waiting for card</div></div><div><span class="smalllabel">AVILONX REPLY</span><div class="reply" id="reply">No tags sent yet</div></div></div><div class="stats"><div class="stat"><span class="smalllabel">MODE</span><strong class="orange" id="mode">—</strong></div><div class="stat"><span class="smalllabel">TOTAL SCANS</span><strong id="count">0</strong></div><div class="stat"><span class="smalllabel">WAITING TO SEND</span><strong id="pending">0</strong></div></div></div></section>
 <section class="card" id="registration"><div class="cardhead">◇ &nbsp; Device Registration</div><div class="cardbody"><div class="panelrow"><span class="smalllabel">DEVICE SERIAL</span><button class="btn alt" type="button" id="copySerial">Copy serial</button></div><div class="deviceid" id="serial">—</div><div class="divider"></div><div class="panelrow"><b style="font-size:13px">Device Key</b><span class="status" id="keyStatus">Checking...</span></div><form id="keyForm"><div class="field"><label for="key">Device key from the AvilonX Super Admin</label><input id="key" name="key" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Paste 32-character device key" required></div><div class="buttons"><button class="btn" type="submit">Save Device Key</button></div></form><div id="keyMessage" class="message" role="status"></div><p class="notice">Send this device serial to the AvilonX Super Admin first. They register it for your club and give you the device key, which is saved inside the ESP8266.</p></div></section>
@@ -189,10 +189,11 @@ const char PAGE[] PROGMEM = R"HTML(
 const $=id=>document.getElementById(id);let previousUID='',updating=false,scanning=false;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 function statusBadge(el,label,good){el.textContent=label;el.className='status '+(good?'good':'bad');}
-async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;if($('rfidState')){$('rfidState').textContent=s.rfid_ok?('OK'+(s.rfid_restarts?' (restarted '+s.rfid_restarts+'x)':'')):'Not answering: check RC522 wiring and 3.3V';$('rfidState').className=s.rfid_ok?'ok':'bad';}$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=(s.clock_synced?'clock is set from '+(s.clock_source==='ds1302'?'the DS1302 battery clock':'internet time')+', Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)')+(s.clock_source==='ds1302_unset'?'. The DS1302 needs internet once to set its time':'')+(s.clock_source==='internet'?'. No DS1302 found: the time is lost if the reader is switched off':'');statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=s.ap_ssid||'RFID-READER';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';$('avilonxState').textContent=s.avilonx_online?'Online (the club can see this reader)':(s.wifi_connected?'Not reachable yet':'Offline (no internet)');statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
+async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;if($('rfidState')){$('rfidState').textContent=s.rfid_ok?('OK'+(s.rfid_restarts?' (restarted '+s.rfid_restarts+'x)':'')):'Not answering: check RC522 wiring and 3.3V';$('rfidState').className=s.rfid_ok?'ok':'bad';}$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;if($('phoneClock'))$('phoneClock').hidden=Boolean(s.clock_synced);$('clockState').textContent=(s.clock_source==='phone'?'set from a phone (internet time will replace it), ':'')+(s.clock_synced?'clock is set from '+(s.clock_source==='ds1302'?'the DS1302 battery clock':'internet time')+', Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)')+(s.clock_source==='ds1302_unset'?'. The DS1302 needs internet once to set its time':'')+(s.clock_source==='internet'?'. No DS1302 found: the time is lost if the reader is switched off':'');statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=s.ap_ssid||'RFID-READER';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';$('avilonxState').textContent=s.avilonx_online?'Online (the club can see this reader)':(s.wifi_connected?'Not reachable yet':'Offline (no internet)');statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
 async function scanNetworks(){if(scanning)return;scanning=true;const btn=$('scanBtn'),select=$('network');btn.disabled=true;select.replaceChildren(new Option('Scanning networks...',''));try{let items=null;for(let i=0;i<15&&!items;i++){const r=await fetch('/api/networks',{cache:'no-store'});if(r.status===202){await wait(1000);continue;}if(!r.ok)throw Error('scan failed');items=await r.json();}if(!items)throw Error('scan timed out');select.replaceChildren(new Option('Choose a Wi-Fi network',''));items.forEach(n=>select.add(new Option(n.ssid+' ('+n.rssi+' dBm)'+(n.open?' - Open':''),n.ssid)));$('message').textContent=items.length?'':'No Wi-Fi networks found. Try again.';}catch(e){select.replaceChildren(new Option('Could not scan',''));$('message').textContent='Wi-Fi scan failed. Try again.';}finally{scanning=false;btn.disabled=false;}}
 async function post(url,form,output){output.textContent='Saving...';try{const r=await fetch(url,{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok)update();}catch(e){output.textContent='Could not save. Check that you are connected to the reader hotspot.';}}
 $('scanBtn').addEventListener('click',scanNetworks);$('copySerial').addEventListener('click',()=>{const text=$('serial').textContent;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>{$('copySerial').textContent='Copied';});else window.prompt('Copy device serial',text);});$('wifiForm').addEventListener('submit',e=>{e.preventDefault();post('/wifi/save',e.target,$('message')).then(()=>$('password').value='');});$('keyForm').addEventListener('submit',e=>{e.preventDefault();post('/device/save',e.target,$('keyMessage')).then(()=>$('key').value='');});$('apForm').addEventListener('submit',async e=>{e.preventDefault();const form=e.target,output=$('apMessage'),pw=$('apPasswordInput').value;if(pw!==$('apConfirmInput').value){output.textContent='Passwords do not match.';return;}output.textContent='Saving hotspot credentials...';try{const r=await fetch('/ap/save',{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok){$('apPasswordInput').value='';$('apConfirmInput').value='';}}catch(err){output.textContent='Could not save; check your connection.';}});update();setInterval(update,1000);scanNetworks();
+document.addEventListener('click',async e=>{if(e.target.id!=='phoneClock')return;const now=new Date();if(!confirm('Set the reader clock to this phone\'s time: '+now.toLocaleString()+'?\n\nCheck the phone shows the correct date and time first.'))return;try{const r=await fetch('/clock/set',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'utc='+Math.floor(Date.now()/1000)});alert(await r.text());update();}catch(err){alert('The reader did not answer. Try again.');}});
 </script></body></html>
 )HTML";
 
@@ -280,6 +281,8 @@ bool rtcValid = false;       // its time can be trusted (set by this sketch, sti
 bool settingClockFromRtc = false;
 volatile bool internetTimeArrived = false;
 const uint8_t RTC_RAM_MARK = 0xA5;  // stored in DS1302 RAM once its time is set
+const uint8_t RTC_FROM_PHONE = 0x50; // DS1302 RAM byte 2: time came from a phone, not the internet
+bool clockFromPhone = false;          // until internet time replaces it
 
 uint8_t bcdToDec(uint8_t v) { return (v >> 4) * 10 + (v & 0x0F); }
 uint8_t decToBcd(uint8_t v) { return ((v / 10) << 4) | (v % 10); }
@@ -397,6 +400,7 @@ void beginRtc() {
   // The RAM mark is lost, and the clock halts, when the battery is flat or removed.
   rtcValid = ds1302ReadRegister(0xC1) == RTC_RAM_MARK && rtcRead(now);
   if (rtcValid) {
+    clockFromPhone = ds1302ReadRegister(0xC5) == RTC_FROM_PHONE;
     timeval tv = { (time_t)now, 0 };
     settingClockFromRtc = true; settimeofday(&tv, nullptr); settingClockFromRtc = false;
     Serial.print(F("Clock set from DS1302: ")); Serial.println(manilaTime(now));
@@ -412,6 +416,8 @@ void keepRtcInStep() {
   time_t t = time(nullptr);
   if (rtcPresent && t >= 1700000000) {
     rtcWrite((uint32_t)t);
+    ds1302WriteRegister(0xC4, 0x00);   // the time now comes from the internet
+    clockFromPhone = false;
     Serial.println(F("DS1302 set from internet time."));
   }
 }
@@ -426,6 +432,7 @@ uint32_t readScanTime() {
 }
 
 const char* clockSource() {
+  if (clockFromPhone) return "phone";
   if (rtcPresent && rtcValid) return "ds1302";
   if (rtcPresent) return "ds1302_unset";
   return time(nullptr) >= 1700000000 ? "internet" : "none";
@@ -722,6 +729,27 @@ void handleApSave() {
   apChangeRestartAt = millis() + 2000UL;
 }
 
+// Set the clock from the phone's time, without internet. Only while the clock
+// is not set at all: once set, only internet time can change it (so the time
+// cannot be moved back to make a pigeon look faster). AvilonX sees "phone".
+void handleClockSet() {
+  if (readScanTime() != 0) {
+    server.send(409, "text/plain", "The clock is already set. Only internet time can change it now.");
+    return;
+  }
+  uint32_t utc = (uint32_t)strtoul(server.arg("utc").c_str(), nullptr, 10);
+  if (utc < 1700000000UL || utc > 4102444800UL) {
+    server.send(400, "text/plain", "The phone's date and time look wrong. Check them, then try again.");
+    return;
+  }
+  timeval tv = { (time_t)utc, 0 };
+  settingClockFromRtc = true; settimeofday(&tv, nullptr); settingClockFromRtc = false;
+  if (rtcPresent) { rtcWrite(utc); ds1302WriteRegister(0xC4, RTC_FROM_PHONE); }
+  clockFromPhone = true;
+  Serial.print(F("Clock set from a phone: ")); Serial.println(manilaTime(utc));
+  server.send(200, "text/plain", "Clock set from your phone. Internet time will replace it as soon as the reader is online.");
+}
+
 void handleDeviceSave() {
   String key = cleanHex(server.arg("key"));
   if (key.length() != 32) {
@@ -1004,6 +1032,7 @@ void setup() {
   server.on("/wifi/save", HTTP_POST, handleWifiSave);
   server.on("/ap/save", HTTP_POST, handleApSave);
   server.on("/device/save", HTTP_POST, handleDeviceSave);
+  server.on("/clock/set", HTTP_POST, handleClockSet);
   server.onNotFound([]() { server.sendHeader("Location", "/"); server.send(302, "text/plain", ""); });
   server.begin();
 }
