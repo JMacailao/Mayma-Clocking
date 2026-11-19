@@ -117,6 +117,15 @@ String lastReply = "No tags sent yet";
 String lastMode = "";
 String lastSeenUID = "";
 unsigned long lastSeenMs = 0;
+// RC522 watchdog: the reader can stop answering after a power dip (Wi-Fi
+// sending draws current) and would then need a restart. It is checked every few
+// seconds and restarted on its own when needed.
+unsigned long lastRfidCheckMs = 0;
+unsigned long lastRfidActivityMs = 0;
+uint32_t rfidRestarts = 0;
+bool rfidOk = false;
+const unsigned long RFID_CHECK_MS = 5000UL;      // check the reader every 5 seconds
+const unsigned long RFID_REFRESH_MS = 60000UL;   // and refresh it after 1 quiet minute
 unsigned long buttonPressedAt = 0;
 bool resetAlreadyHandled = false;
 bool restartAfterResetBlinks = false;
@@ -174,7 +183,7 @@ const char PAGE[] PROGMEM = R"HTML(
 <section class="card" id="historyCard"><div class="cardhead"><span>◷ &nbsp; Recent Taps</span><span class="status" id="recentCount">Last 20</span></div><div class="tablewrap"><table><thead><tr><th>Recent #</th><th>Tag (UID)</th><th>AvilonX reply</th></tr></thead><tbody id="history"><tr><td colspan="3" class="muted">No scans yet</td></tr></tbody></table></div></section>
 <section class="card" id="about"><div class="cardhead">Reader information</div><div class="cardbody"><div class="muted">Every tap is saved in the reader's flash with the time it was tapped, then sent to AvilonX. Without internet the taps wait here (up to 150, kept through a power cut) and are sent when the internet is back; AvilonX clocks them at their tap time. Tap times need the reader's clock, which it sets from the internet once it has been online since power-up: <b id="clockState">checking…</b>. The reader always runs its own hotspot at <b>192.168.4.1</b>, also while connected to your Wi-Fi. Your club admin chooses Register or Clocking mode in AvilonX.</div></div></section>
 </div><div>
-<section class="card"><div class="cardbody"><div class="taginfo"><div><span class="smalllabel">LAST TAG (UID)</span><div class="uid" id="uid">Waiting for card</div></div><div><span class="smalllabel">AVILONX REPLY</span><div class="reply" id="reply">No tags sent yet</div></div></div><div class="stats"><div class="stat"><span class="smalllabel">MODE</span><strong class="orange" id="mode">—</strong></div><div class="stat"><span class="smalllabel">TOTAL SCANS</span><strong id="count">0</strong></div><div class="stat"><span class="smalllabel">WAITING TO SEND</span><strong id="pending">0</strong></div></div></div></section>
+<section class="card"><div class="cardbody"><div class="taginfo"><div><span class="smalllabel">RFID READER: <b id="rfidState">Checking...</b></span><br><span class="smalllabel">LAST TAG (UID)</span><div class="uid" id="uid">Waiting for card</div></div><div><span class="smalllabel">AVILONX REPLY</span><div class="reply" id="reply">No tags sent yet</div></div></div><div class="stats"><div class="stat"><span class="smalllabel">MODE</span><strong class="orange" id="mode">—</strong></div><div class="stat"><span class="smalllabel">TOTAL SCANS</span><strong id="count">0</strong></div><div class="stat"><span class="smalllabel">WAITING TO SEND</span><strong id="pending">0</strong></div></div></div></section>
 <section class="card" id="registration"><div class="cardhead">◇ &nbsp; Device Registration</div><div class="cardbody"><div class="panelrow"><span class="smalllabel">DEVICE SERIAL</span><button class="btn alt" type="button" id="copySerial">Copy serial</button></div><div class="deviceid" id="serial">—</div><div class="divider"></div><div class="panelrow"><b style="font-size:13px">Device Key</b><span class="status" id="keyStatus">Checking...</span></div><form id="keyForm"><div class="field"><label for="key">Device key from the AvilonX Super Admin</label><input id="key" name="key" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Paste 32-character device key" required></div><div class="buttons"><button class="btn" type="submit">Save Device Key</button></div></form><div id="keyMessage" class="message" role="status"></div><p class="notice">Send this device serial to the AvilonX Super Admin first. They register it for your club and give you the device key, which is saved inside the ESP8266.</p></div></section>
 <section class="card" id="wifi"><div class="cardhead"><span>◉ &nbsp; Wi-Fi Connection</span><span class="status" id="wifiStatus">Checking...</span></div><div class="cardbody"><div class="info"><b>Current network:</b> <span id="ssid">—</span><br><b>Router IP:</b> <span id="ip">—</span><br><b>AvilonX:</b> <span id="avilonxState">—</span><br><b>Device AP:</b> <span id="apName">RFID-READER</span> · 192.168.4.1</div><form id="wifiForm"><div class="field"><label for="network">Select a 2.4 GHz Wi-Fi network</label><select id="network" name="ssid" required><option value="">Scanning networks...</option></select></div><div class="field"><label for="password">Wi-Fi password</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="Password (blank for open Wi-Fi)"></div><div class="buttons"><button class="btn alt" type="button" id="scanBtn">↻ Scan Networks</button><button class="btn" type="submit">Save &amp; Connect</button></div></form><div class="message" id="message" role="status"></div><div class="divider"></div><h3 style="margin:12px 0 4px;font-size:16px">Reader hotspot settings</h3><p class="notice">Change the ESP8266's own Wi-Fi name and password. This does not change the internet router connection or AvilonX registration.</p><form id="apForm"><div class="field"><label for="apSsidInput">Reader Wi-Fi name (SSID)</label><input id="apSsidInput" name="ap_ssid" maxlength="32" required placeholder="RFID-READER"></div><div class="field"><label for="apPasswordInput">New reader Wi-Fi password</label><input id="apPasswordInput" name="ap_password" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="8–63 characters"></div><div class="field"><label for="apConfirmInput">Confirm new password</label><input id="apConfirmInput" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="Repeat new password"></div><div class="buttons"><button class="btn" type="submit">Update Reader Hotspot</button></div></form><div class="message" id="apMessage" role="status"></div><p class="notice">After saving, the reader will restart. Reconnect your phone to the new hotspot name; the website address stays 192.168.4.1.</p><p class="notice">Forgot the reader hotspot name or password? Hold the reset button on D0 for 10 seconds. The reader restarts and the hotspot returns to RFID-READER / RFID12345. The saved router connection, AvilonX key and saved taps are kept.</p></div></section>
 </div></div></main></div></div>
@@ -182,7 +191,7 @@ const char PAGE[] PROGMEM = R"HTML(
 const $=id=>document.getElementById(id);let previousUID='',updating=false,scanning=false;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 function statusBadge(el,label,good){el.textContent=label;el.className='status '+(good?'good':'bad');}
-async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=(s.clock_synced?'clock is set from '+(s.clock_source==='ds1302'?'the DS1302 battery clock':'internet time')+', Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)')+(s.clock_source==='ds1302_unset'?'. The DS1302 needs internet once to set its time':'')+(s.clock_source==='internet'?'. No DS1302 found: the time is lost if the reader is switched off':'');statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=s.ap_ssid||'RFID-READER';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';$('avilonxState').textContent=s.avilonx_online?'Online (the club can see this reader)':(s.wifi_connected?'Not reachable yet':'Offline (no internet)');statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
+async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;if($('rfidState')){$('rfidState').textContent=s.rfid_ok?('OK'+(s.rfid_restarts?' (restarted '+s.rfid_restarts+'x)':'')):'Not answering: check RC522 wiring and 3.3V';$('rfidState').className=s.rfid_ok?'ok':'bad';}$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=(s.clock_synced?'clock is set from '+(s.clock_source==='ds1302'?'the DS1302 battery clock':'internet time')+', Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)')+(s.clock_source==='ds1302_unset'?'. The DS1302 needs internet once to set its time':'')+(s.clock_source==='internet'?'. No DS1302 found: the time is lost if the reader is switched off':'');statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=s.ap_ssid||'RFID-READER';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';$('avilonxState').textContent=s.avilonx_online?'Online (the club can see this reader)':(s.wifi_connected?'Not reachable yet':'Offline (no internet)');statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
 async function scanNetworks(){if(scanning)return;scanning=true;const btn=$('scanBtn'),select=$('network');btn.disabled=true;select.replaceChildren(new Option('Scanning networks...',''));try{let items=null;for(let i=0;i<15&&!items;i++){const r=await fetch('/api/networks',{cache:'no-store'});if(r.status===202){await wait(1000);continue;}if(!r.ok)throw Error('scan failed');items=await r.json();}if(!items)throw Error('scan timed out');select.replaceChildren(new Option('Choose a Wi-Fi network',''));items.forEach(n=>select.add(new Option(n.ssid+' ('+n.rssi+' dBm)'+(n.open?' - Open':''),n.ssid)));$('message').textContent=items.length?'':'No Wi-Fi networks found. Try again.';}catch(e){select.replaceChildren(new Option('Could not scan',''));$('message').textContent='Wi-Fi scan failed. Try again.';}finally{scanning=false;btn.disabled=false;}}
 async function post(url,form,output){output.textContent='Saving...';try{const r=await fetch(url,{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok)update();}catch(e){output.textContent='Could not save. Check that you are connected to the reader hotspot.';}}
 $('scanBtn').addEventListener('click',scanNetworks);$('copySerial').addEventListener('click',()=>{const text=$('serial').textContent;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>{$('copySerial').textContent='Copied';});else window.prompt('Copy device serial',text);});$('wifiForm').addEventListener('submit',e=>{e.preventDefault();post('/wifi/save',e.target,$('message')).then(()=>$('password').value='');});$('keyForm').addEventListener('submit',e=>{e.preventDefault();post('/device/save',e.target,$('keyMessage')).then(()=>$('key').value='');});$('apForm').addEventListener('submit',async e=>{e.preventDefault();const form=e.target,output=$('apMessage'),pw=$('apPasswordInput').value;if(pw!==$('apConfirmInput').value){output.textContent='Passwords do not match.';return;}output.textContent='Saving hotspot credentials...';try{const r=await fetch('/ap/save',{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok){$('apPasswordInput').value='';$('apConfirmInput').value='';}}catch(err){output.textContent='Could not save; check your connection.';}});update();setInterval(update,1000);scanNetworks();
@@ -612,6 +621,10 @@ void handleStatus() {
   result += lastMode == "clock" ? F("Clocking") : lastMode == "register" ? F("Register") : F("");
   result += F("\",\"total_scans\":");
   result += String(totalScans);
+  result += F(",\"rfid_ok\":");
+  result += rfidOk ? F("true") : F("false");
+  result += F(",\"rfid_restarts\":");
+  result += String(rfidRestarts);
   result += F(",\"pending\":");
   result += String(pendingCount);
   result += F(",\"clock_synced\":");
@@ -850,9 +863,58 @@ void sendPending() {
   }
 }
 
+// True when the RC522 answers with a known chip version (0x00 / 0xFF = no answer).
+bool rfidAnswers() {
+  byte version = reader.PCD_ReadRegister(MFRC522::VersionReg);
+  return version != 0x00 && version != 0xFF;
+}
+
+// Hard-resets the RC522 (RST pin), sets it up again and turns the antenna on at
+// full strength. Tries a few times.
+bool startRfidReader(const char *why) {
+  for (int attempt = 0; attempt < 3; attempt++) {
+    pinMode(RFID_RST_PIN, OUTPUT);
+    digitalWrite(RFID_RST_PIN, LOW);
+    delay(10);
+    digitalWrite(RFID_RST_PIN, HIGH);
+    delay(50);
+    reader.PCD_Init();
+    reader.PCD_SetAntennaGain(MFRC522::RxGain_max);
+    reader.PCD_AntennaOn();
+    if (rfidAnswers()) {
+      rfidOk = true;
+      lastRfidActivityMs = millis();
+      if (why && why[0]) { Serial.print(F("RFID reader restarted: ")); Serial.println(why); }
+      return true;
+    }
+    delay(100);
+  }
+  rfidOk = false;
+  Serial.println(F("RFID reader is not answering. Check the RC522 wiring and its 3.3V power."));
+  lastReply = "RFID reader not answering: check the RC522 wiring and 3.3V power";
+  return false;
+}
+
+// Keeps the reader working without restarting the ESP8266.
+void watchRfidReader() {
+  unsigned long now = millis();
+  if ((unsigned long)(now - lastRfidCheckMs) < RFID_CHECK_MS) return;
+  lastRfidCheckMs = now;
+  if (!rfidAnswers()) {
+    rfidRestarts++;
+    startRfidReader("it stopped answering");
+  } else if ((unsigned long)(now - lastRfidActivityMs) >= RFID_REFRESH_MS) {
+    // Answers, but no tag for a minute: refresh it anyway (a stuck antenna still answers).
+    startRfidReader("");
+  } else if (!rfidOk) {
+    rfidOk = true;
+  }
+}
+
 void readRFID() {
   if (!reader.PICC_IsNewCardPresent()) return;
   if (!reader.PICC_ReadCardSerial()) return;
+  lastRfidActivityMs = millis();
 
   String uid;
   for (byte i = 0; i < reader.uid.size; i++) {
@@ -908,11 +970,17 @@ void setup() {
   Serial.begin(115200);
   pinMode(RESET_BUTTON_PIN, INPUT); // needs the external 10k pull-up to 3.3V
   if (USE_STATUS_LED) { pinMode(STATUS_LED_PIN, OUTPUT); digitalWrite(STATUS_LED_PIN, HIGH); }
+  // The RC522 first, before Wi-Fi starts drawing current; retried if it does not answer.
+  SPI.begin();
+  delay(50);
+  startRfidReader("");
   EEPROM.begin(EEPROM_BYTES);
   loadSettings();
   initializeQueue();
 
   WiFi.persistent(false);
+  // No Wi-Fi sleep: steadier current for the RC522 (fewer power dips).
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.mode(WIFI_AP_STA);
   deviceSerial = WiFi.macAddress();
   WiFi.softAPdisconnect(true);
@@ -930,9 +998,8 @@ void setup() {
   beginRtc();
   configTime(0, 0, "pool.ntp.org", "time.google.com");
 
-  SPI.begin();
-  reader.PCD_Init();
-  Serial.println(F("RFID reader ready"));
+  if (!rfidOk) startRfidReader("start-up retry");
+  Serial.println(rfidOk ? F("RFID reader ready") : F("RFID reader NOT ready: it will keep retrying"));
 
   server.on("/", HTTP_GET, []() { server.send_P(200, "text/html", PAGE); });
   server.on("/api/status", HTTP_GET, handleStatus);
@@ -958,6 +1025,7 @@ void loop() {
     return;
   }
   if (restartAfterApChange && (int32_t)(millis() - apChangeRestartAt) >= 0) ESP.restart();
+  watchRfidReader();
   readRFID();
   keepRtcInStep();
   sendPending();
