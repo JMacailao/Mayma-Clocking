@@ -62,7 +62,7 @@ function adminNav(active,canManageAccounts) {
     ['Club directory',[['members','Members','pages/admin/members/index.html','user'],['birds','Bird bonding','pages/admin/birds/index.html','bird']]],
     ['Race setup',[['race-points','Race points','pages/admin/race-points/index.html','target'],['races','Races','pages/admin/races/index.html','clock'],['entries','Race entries','pages/admin/entries/index.html','list'],['remarks','Entry remarks','pages/admin/remarks/index.html','check']]],
     ['Race day operations',[['raceday','Race day','pages/admin/raceday/index.html','raceday'],['clocking','Clocking','pages/admin/clocking/index.html','clocking'],['showup','Show up','pages/admin/showup/index.html','tick'],['readers','RFID readers','pages/admin/readers/index.html','wifi'],['results','Results','pages/admin/results/index.html','trend']]],
-    ['Administration',[['history','Change history','pages/admin/history/index.html','history'],...(canManageAccounts?[['users','Team accounts','pages/admin/users/index.html','users']]:[])]]
+    ['Administration',[['history','Change history','pages/admin/history/index.html','history'],...(canManageAccounts?[['users','Team accounts','pages/admin/users/index.html','users'],['settings','Club settings','pages/admin/settings/index.html','settings']]:[])]]
   ],active);
 }
 function memberNav(active) {
@@ -91,7 +91,7 @@ async function guard(role,active) {
     if(!identity) { location.href=loginUrl(); return null; }
     if(!identity.profile) { await signOutUser(); document.querySelector('#app-shell').innerHTML=`<main class="loading"><strong>This account is not set up yet.</strong><span>Ask your administrator to finish setting up your account.</span><a class="button primary" href="${url('pages/login/index.html')}">Return to sign in</a></main>`; return null; }
     if(identity.profile.is_active===false) { await signOutUser(); document.querySelector('#app-shell').innerHTML=`<main class="loading"><strong>This account is disabled.</strong><span>Ask your club administrator to reactivate it.</span><a class="button primary" href="${url('pages/login/index.html')}">Return to sign in</a></main>`; return null; }
-    const staffOnAdminPage=role==='admin'&&identity.profile.role==='staff'&&body.dataset.view!=='team-users';
+    const staffOnAdminPage=role==='admin'&&identity.profile.role==='staff'&&!['team-users','club-settings'].includes(body.dataset.view);
     if(identity.profile.role!==role&&!staffOnAdminPage) { location.href=homeFor(identity.profile.role); return null; }
     body.classList.toggle('member-body',role==='member');
     body.classList.toggle('admin-body',role==='admin');
@@ -111,6 +111,7 @@ async function renderPage(view,role,identity,page=body.dataset.view,setCleanup=f
   else if(page==='sticker-generate'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/stickers/generate/page.js');await pageModule.render(view);}
   else if(page==='team-users'&&role==='admin'&&identity.profile.role==='admin'){const pageModule=await import('../../pages/admin/users/page.js');await pageModule.render(view,identity);}
   else if(page==='race-day'&&role==='admin'){const pageModule=await import('../../pages/admin/raceday/page.js');await pageModule.render(view,identity,setCleanup);}
+  else if(page==='club-settings'&&role==='admin'&&identity.profile.role==='admin'){const pageModule=await import('../../pages/admin/settings/page.js');await pageModule.render(view,identity);}
   else if(page==='change-history'&&role==='admin'){const pageModule=await import('../../pages/admin/history/page.js');await pageModule.render(view,identity);}
   else if(page==='dashboard'&&role==='admin'){const pageModule=await import('../../pages/admin/dashboard/page.js');await pageModule.render(view);}
   else if(page==='members'){const pageModule=await import('../../pages/admin/members/page.js');await pageModule.render(view,identity.profile.role==='admin');}
@@ -140,6 +141,14 @@ async function main(){
   if(role==='member'&&identity.profile?.member_id)import('./member-results-watch.js').then(module=>module.watchMemberReceipts(identity.profile.member_id)).catch(error=>console.warn('Result pop-ups unavailable:',error));
 }
 const routes=[
+  {
+    "path": "pages/admin/settings/index.html",
+    "documentTitle": "Club settings \u00b7 AvilonX Clocking",
+    "title": "Club settings",
+    "view": "club-settings",
+    "role": "admin",
+    "active": "settings"
+  },
   {
     "path": "pages/admin/raceday/index.html",
     "documentTitle": "Race day \u00b7 AvilonX Clocking",

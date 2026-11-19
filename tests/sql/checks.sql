@@ -59,6 +59,21 @@ DO $$ BEGIN
   EXCEPTION WHEN check_violation OR unique_violation THEN NULL; END;
 END $$;
 
+-- Club setting: the sticker is required by default; optional lets RFID entries
+-- go without it (but never an entry with neither sticker nor tag).
+DO $$ BEGIN
+  BEGIN
+    INSERT INTO public.race_entries (race_id, member_id, pigeon_id, distance_m)
+      SELECT r.id, p.member_id, p.id, 1000 FROM public.races r, public.pigeons p WHERE r.name = 'Race B' AND p.ring_number = 'PH-3';
+    RAISE EXCEPTION 'expected: sticker required';
+  EXCEPTION WHEN check_violation THEN ASSERT SQLERRM LIKE '%requires the sticker%', SQLERRM; END;
+  UPDATE public.clubs SET rfid_entry_sticker = 'optional';
+  INSERT INTO public.race_entries (race_id, member_id, pigeon_id, distance_m)
+    SELECT r.id, p.member_id, p.id, 1000 FROM public.races r, public.pigeons p WHERE r.name = 'Race B' AND p.ring_number = 'PH-3';
+  ASSERT (SELECT nfc_tag FROM public.race_entries WHERE pigeon_id = (SELECT id FROM public.pigeons WHERE ring_number = 'PH-3')) = '6C811F4A', 'RFID entry saved without a sticker';
+  UPDATE public.clubs SET rfid_entry_sticker = 'required';
+END $$;
+
 -- Change history records changes, and skips saves that change nothing.
 DO $$ DECLARE before bigint := (SELECT count(*) FROM public.audit_log); BEGIN
   UPDATE public.races SET name = 'Race B2' WHERE name = 'Race B';

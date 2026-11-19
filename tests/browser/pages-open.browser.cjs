@@ -1,7 +1,7 @@
 // Every page opens for its role (sign-in, menu and page content, no errors).
 const fs = require('node:fs'), path = require('node:path');
 const PAGES = {
-  admin: ['admin/dashboard', 'admin/raceday', 'admin/members', 'admin/birds', 'admin/race-points', 'admin/races', 'admin/entries', 'admin/remarks', 'admin/clocking', 'admin/showup', 'admin/readers', 'admin/results', 'admin/history', 'admin/users'],
+  admin: ['admin/dashboard', 'admin/raceday', 'admin/members', 'admin/birds', 'admin/race-points', 'admin/races', 'admin/entries', 'admin/remarks', 'admin/clocking', 'admin/showup', 'admin/readers', 'admin/results', 'admin/history', 'admin/users', 'admin/settings'],
   member: ['member/dashboard', 'member/history', 'member/clocking', 'member/pigeons', 'member/results', 'member/settings'],
   superadmin: ['superadmin/clubs', 'superadmin/stickers/register', 'superadmin/nfc', 'superadmin/readers', 'superadmin/stickers/generate', 'superadmin/setup']
 };
@@ -15,7 +15,7 @@ module.exports = async (page, { check, sample, BASE }) => {
       await context.route(/^https:\/\/(?!cdn\.jsdelivr\.net)/, route => route.abort());
       await context.addInitScript(`window.FAKE={tables:{},rpc:{}};(function(F){${sample}
         F.session={user:{id:'u'}};F.tables.app_profiles=[${JSON.stringify(profile)}];F.tables.clubs=[{id:1,name:'Club'}];F.tables.race_points=[{id:1,location:'Batangas',latitude:13,longitude:121}];
-        F.tables.members.forEach(m=>{m.latitude=14;m.longitude=121;m.club_id=1;});F.rpc.setup_status={};F.rpc.superadmin_list_rfid_devices=[];F.rpc.member_list_rfid_devices=[];F.rpc.public_result_clubs=[];
+        F.tables.members.forEach(m=>{m.latitude=14;m.longitude=121;m.club_id=1;});F.rpc.setup_status={};F.rpc.superadmin_list_rfid_devices=[];F.rpc.member_list_rfid_devices=[];F.rpc.public_result_clubs=[];F.tables.clubs[0].rfid_entry_sticker='required';
       })(window.FAKE);`);
       const tab = await context.newPage(), errors = [];
       tab.on('pageerror', e => errors.push(e.message)); tab.on('dialog', d => d.dismiss().catch(() => {}));

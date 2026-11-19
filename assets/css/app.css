@@ -1060,3 +1060,14 @@ body.login-page{min-height:100vh;background:#f3f6f9}
 .sheet-align-actions .field{margin:0;width:150px}
 .sheet-align-spacer{flex:1}
 @media (max-width:720px){.sheet-align-actions .button{flex:1 1 45%}.sheet-align-spacer{display:none}}
+
+/* Club settings */
+.settings-panel{display:grid;gap:12px;max-width:820px}
+.settings-panel>h3{margin:0}
+.settings-choice{display:grid;gap:10px;margin:0;padding:0;border:0}
+.settings-choice legend{margin-bottom:8px;font-weight:800;color:#0f2a44}
+.settings-choice label{display:grid;grid-template-columns:22px minmax(0,1fr);gap:12px;align-items:start;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#fff;cursor:pointer}
+.settings-choice label:has(input:checked){border-color:#00345f;background:#eef4fa}
+.settings-choice input{width:18px;height:18px;margin-top:3px}
+.settings-choice span{display:grid;gap:3px;color:var(--muted);font-size:14px}
+.settings-choice strong{color:#0f2a44;font-size:15px}

@@ -16,6 +16,7 @@ const PARTS=[
   ['rfid-tag-in-use','RFID tag once per race'],
   ['bird-ring-only','Ring-number-only birds'],
   ['race-tag-expiry','RFID tag expiry per race'],
+  ['club-settings','Club settings (sticker for RFID entries)'],
   ['race-day','Race day: change history, setup checks'],
   ['realtime','Instant result pop-ups (live updates)']
 ];

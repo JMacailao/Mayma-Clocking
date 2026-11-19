@@ -86,7 +86,10 @@ The separate files, for reference:
   16. `race-tag-expiry.sql` — **RFID tag expiry is set per race** on Race schedules
       (for example 3 days after the official release) and applies to every RFID
       entry of that race; Race entries no longer choose it per pigeon.
-  17. `race-day.sql` — change history (who changed races, entries, clocks and
+  17. `club-settings.sql` — **Club settings** (Administration): the club administrator
+      chooses whether RFID entries need the sticker (required) or not (optional,
+      with a warning before saving without one).
+  18. `race-day.sql` — change history (who changed races, entries, clocks and
       birds, and when), practice races, instant result pop-ups (Supabase
       Realtime) and the Setup checklist. Run it last.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin

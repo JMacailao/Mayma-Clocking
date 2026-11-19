@@ -48,6 +48,7 @@ Admin (`pages/admin/`):
 | Races | `races` | Race schedules: release, dates, status, practice, RFID tag expiry. |
 | Race entries | `entries` | Split by job, below. |
 | Entry remarks, Clocking, Show up, RFID readers, Results, Change history, Team accounts | `remarks`, `clocking`, `showup`, `readers`, `results`, `history`, `users` | |
+| Club settings | `settings` | Club administrator only: whether RFID entries need the sticker. |
 
 Race entries (`pages/admin/entries/`):
 
