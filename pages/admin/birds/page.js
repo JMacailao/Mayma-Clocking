@@ -23,14 +23,14 @@ const friendlyError=error=>{
 // bird name, colour, loft name, its RFID tag and a photo.
 export async function render(view,identity,setPageCleanup=()=>{}) {
   const clubId=identity?.profile?.club_id;
-  const heading='<div class="birds-head"><h2>Bird bonding</h2><button class="button birds-add" type="button" data-bond-new><span aria-hidden="true">＋</span> Bond a bird</button></div>';
+  const heading='<div class="birds-head"><h2>Band Assignments</h2><button class="button birds-add" type="button" data-bond-new><span aria-hidden="true">＋</span> Bond a bird</button></div>';
   const [{data:members,error:memberError},{data:birdsData,error:birdError},{data:entryRows}]=await Promise.all([
     supabase.from('members').select('id,member_no,full_name,loft_name').order('member_no'),
     supabase.from('pigeons').select('*').order('created_at',{ascending:false}),
     supabase.from('race_entries').select('pigeon_id')
   ]);
   if(memberError)throw memberError;
-  if(birdError){if(missingSql(birdError)){view.innerHTML=`${heading}<div class="notice error">Bird bonding is not set up yet. Run bird-bonding.sql in the Supabase SQL Editor, then reload this page.</div>`;return;}throw birdError;}
+  if(birdError){if(missingSql(birdError)){view.innerHTML=`${heading}<div class="notice error">Band Assignments is not set up yet. Run bird-bonding.sql in the Supabase SQL Editor, then reload this page.</div>`;return;}throw birdError;}
   const birds=birdsData||[],raced=new Set((entryRows||[]).map(row=>row.pigeon_id).filter(Boolean));
   const memberById=new Map(members.map(member=>[member.id,member]));
   let photoUrls=await birdPhotoUrls(birds.map(bird=>bird.photo_path)),editing=null;

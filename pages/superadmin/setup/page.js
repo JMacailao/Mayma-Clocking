@@ -11,7 +11,7 @@ const PARTS=[
   ['nfc-tags','RFID / NFC tags'],
   ['rfid-devices','ESP8266 RFID readers'],
   ['entry-remarks','Entry remarks and practice races'],
-  ['bird-bonding','Bird bonding'],
+  ['bird-bonding','Band Assignments'],
   ['show-up','Show up'],
   ['rfid-tag-in-use','RFID tag once per race'],
   ['bird-ring-only','Ring-number-only birds'],

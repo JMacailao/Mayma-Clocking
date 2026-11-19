@@ -45,7 +45,7 @@ Admin (`pages/admin/`):
 | Overview | `dashboard` | |
 | Race day | `raceday` | Timers, live arrivals, reader alerts, show-ups, big screen, export, print. |
 | Members, Race points | `members`, `race-points` | Both built by `crud.js`. |
-| Bird bonding | `birds` | `page.js` (list and Bond a bird form) and `photos.js` (colours, private photo links, photo shrinking; also used by Race entries, Show up and My pigeons). |
+| Band Assignments | `birds` | `page.js` (list and Bond a bird form) and `photos.js` (colours, private photo links, photo shrinking; also used by Race entries, Show up and My pigeons). |
 | Races | `races` | Race schedules: release, dates, status, practice, RFID tag expiry. |
 | Race entries | `entries` | Split by job, below. |
 | Entry remarks, Clocking, Show up, RFID readers, Results, Change history, Team accounts | `remarks`, `clocking`, `showup`, `readers`, `results`, `history`, `users` | |

@@ -60,7 +60,7 @@ function superadminNav(active) {
 function adminNav(active,canManageAccounts) {
   return navGroups([
     ['',[['overview','Overview','pages/admin/dashboard/index.html','home']]],
-    ['Club directory',[['members','Members','pages/admin/members/index.html','user'],['birds','Bird bonding','pages/admin/birds/index.html','bird']]],
+    ['Club directory',[['members','Members','pages/admin/members/index.html','user'],['birds','Band Assignments','pages/admin/birds/index.html','bird']]],
     ['Race setup',[['race-points','Race points','pages/admin/race-points/index.html','target'],['races','Races','pages/admin/races/index.html','clock'],['entries','Race entries','pages/admin/entries/index.html','list'],['remarks','Entry remarks','pages/admin/remarks/index.html','check']]],
     ['Race day operations',[['raceday','Race day','pages/admin/raceday/index.html','raceday'],['clocking','Clocking','pages/admin/clocking/index.html','clocking'],['showup','Show up','pages/admin/showup/index.html','tick'],['readers','RFID readers','pages/admin/readers/index.html','wifi'],['results','Results','pages/admin/results/index.html','trend']]],
     ['Administration',[['history','Change history','pages/admin/history/index.html','history'],...(canManageAccounts?[['users','Team accounts','pages/admin/users/index.html','users'],['settings','Club settings','pages/admin/settings/index.html','settings']]:[])]]
@@ -250,8 +250,8 @@ const routes=[
   },
   {
     "path": "pages/admin/birds/index.html",
-    "documentTitle": "Bird bonding \u00b7 AvilonX Clocking",
-    "title": "Bird bonding",
+    "documentTitle": "Band Assignments \u00b7 AvilonX Clocking",
+    "title": "Band Assignments",
     "view": "bird-bonding",
     "role": "admin",
     "active": "birds"

@@ -13,7 +13,7 @@ export async function entriesPage(view,setPageCleanup=()=>{}) {
   // The club's remarks, ticked per entry (built on Entry remarks). Missing table = no remarks yet.
   let remarkOptions=[];
   try{const {data:options,error:remarkError}=await supabase.from('entry_remark_options').select('label').eq('is_active',true).order('sort_order').order('label');if(!remarkError)remarkOptions=(options||[]).map(option=>option.label);}catch{/* entry-remarks.sql not run yet */}
-  // Bonded birds (Bird bonding). When bonding is set up, entries must use one of them.
+  // Bonded birds (Band Assignments). When bonding is set up, entries must use one of them.
   let birds=null,birdPhotos=new Map();
   try{const {data:bonded,error:birdError}=await supabase.from('pigeons').select('*').order('ring_number');if(!birdError){birds=bonded||[];birdPhotos=await birdPhotoUrls(birds.filter(bird=>bird.status==='active').map(bird=>bird.photo_path));}}catch{/* bird-bonding.sql not run yet */}
   const birdById=new Map((birds||[]).map(bird=>[bird.id,bird]));
@@ -32,7 +32,7 @@ export async function entriesPage(view,setPageCleanup=()=>{}) {
     <section class="entries-card entries-member"><h3>Member &amp; bird</h3>
      <div class="entries-row"><label class="field"><span>Member</span><select name="member_id" required><option value="">Choose a member</option>${members.map(m=>`<option value="${m.id}">${escapeHTML(m.member_no)} · ${escapeHTML(m.full_name)}${readerByMember.has(m.id)?' · RFID reader':''}</option>`).join('')}</select></label><label class="field"><span>Ring number</span><input name="pigeon_ring" maxlength="80" required autocapitalize="characters" ${birds?'placeholder="Filled by the RFID tap"':''}></label></div>
      <small class="small member-reader-note" data-member-reader hidden></small><div class="entry-last-race" data-last-race hidden></div>
-     ${birds?`<div class="field entries-bird"><span id="entry-bird-label">Bird</span><div class="entry-bird-tap rfid-only" data-bird-tap role="status"><strong>Tap the bird's bonded RFID tag</strong><span>on the RFID reader chosen on the right. The bird then appears here.</span></div><div class="entry-bird-tap sticker-only" data-bird-tap role="status"><strong>Type the bonded bird's ring number</strong><span>in Ring number above. The bird then appears here.</span></div><div class="entry-bird-preview" data-bird-preview hidden></div><input type="hidden" name="pigeon_id"><small class="small" data-bird-hint>Only bonded birds can be entered. Bond new birds on <strong>Bird bonding</strong>.</small></div>`:''}
+     ${birds?`<div class="field entries-bird"><span id="entry-bird-label">Bird</span><div class="entry-bird-tap rfid-only" data-bird-tap role="status"><strong>Tap the bird's bonded RFID tag</strong><span>on the RFID reader chosen on the right. The bird then appears here.</span></div><div class="entry-bird-tap sticker-only" data-bird-tap role="status"><strong>Type the bonded bird's ring number</strong><span>in Ring number above. The bird then appears here.</span></div><div class="entry-bird-preview" data-bird-preview hidden></div><input type="hidden" name="pigeon_id"><small class="small" data-bird-hint>Only bonded birds can be entered. Bond new birds on <strong>Band Assignments</strong>.</small></div>`:''}
     </section>
     <section class="entries-card entries-reader"><h3><span class="rfid-only">RFID reader</span><span class="sticker-only">Sticker</span></h3>
      <div class="reader-choice entries-reader-choice rfid-only" role="radiogroup" aria-label="Which RFID reader are you using?"><div class="reader-choice-options"><label><input type="radio" name="nfc_read_with" value="wireless"><span><strong>Wireless</strong> ESP8266</span></label><label><input type="radio" name="nfc_read_with" value="wired"><span><strong>Wired</strong> USB</span></label><label><input type="radio" name="nfc_read_with" value="phone"><span><strong>Android</strong> NFC</span></label></div></div>
@@ -168,7 +168,7 @@ export async function entriesPage(view,setPageCleanup=()=>{}) {
     const label=formatNfcUid(uid),by=from?` by ${from}`:'';
     if(!birds){entryForm.elements.nfc_tag.value=label;message(`NFC tag ${label} read${by}.`,'success');return;}
     const bird=birds.find(item=>item.status==='active'&&item.nfc_tag===uid);
-    if(!bird){tagStatus(false,`Tag ${label} is not bonded to an active bird`);message(`RFID tag ${label} (read${by}) is not bonded to an active bird. Bond the bird on Bird bonding first.`,'error');return;}
+    if(!bird){tagStatus(false,`Tag ${label} is not bonded to an active bird`);message(`RFID tag ${label} (read${by}) is not bonded to an active bird. Bond the bird on Band Assignments first.`,'error');return;}
     if(enteredInRace().has(bird.id)){tagStatus(false,`${bird.ring_number} is already entered in this race`);message(`${bird.ring_number} (${bird.bird_name}) is already entered in this race.`,'error');return;}
     tappedBirdId=bird.id;birdSelect.value=String(bird.id);
     entryForm.elements.member_id.value=String(bird.member_id);entryForm.elements.member_id.dispatchEvent(new Event('change'));

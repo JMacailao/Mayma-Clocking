@@ -60,7 +60,7 @@ The separate files, for reference:
       Race entries. The ticked remarks are shown after the ring number, for
       example `12345 P1/P2/P3`, on entries, clocking, results and public results.
       Safe to re-run; run it again after re-running `public-results.sql`.
-  12. `bird-bonding.sql` — **Bird bonding**: before a bird can be entered in a race,
+  12. `bird-bonding.sql` — **Band Assignments**: before a bird can be entered in a race,
       the club admin or staff bonds it with its ring number, RFID tag, loft name,
       bird name, colour and a photo (stored in the private `pigeon-photos`
       Supabase Storage bucket this file creates). Race entries then choose one of
@@ -79,7 +79,7 @@ The separate files, for reference:
       tag still active in another race (that race is not closed and the tag has
       not expired there) cannot be entered in a new race. Run it after
       `nfc-tags.sql`.
-  15. `bird-ring-only.sql` — Bird bonding gets a **Ring number only (sticker)**
+  15. `bird-ring-only.sql` — Band Assignments gets a **Ring number only (sticker)**
       tab: bond a bird without an RFID tag (ring, loft, name, colour, photo). It
       is entered on Race entries → **Sticker entries** (ring + sticker) and
       clocked with its sticker. Run it after `bird-bonding.sql`.
@@ -194,7 +194,7 @@ Create a club account with exactly that name to hand the old data to that club.
   - **Start ACR122U for AvilonX.cmd** (recommended): nothing to register. It
     hands each tap to the AvilonX page open on the same computer (it listens only
     on 127.0.0.1, port 47321, for AvilonX pages), so it works whatever window is in
-    front. On Race entries, Bird bonding and Show up choose **Wired**; the page shows
+    front. On Race entries, Band Assignments and Show up choose **Wired**; the page shows
     "ACR122U helper connected". The first time, the browser asks to let the site
     access apps and devices on this computer: choose **Allow**. Admin Clocking and
     Register NFC use it too. The download is on RFID readers and Race entries.
@@ -319,7 +319,7 @@ effect after the old app windows are closed; they do not reload an active race.
   by itself; the member's birds from their last race are one click away; a tag
   still active in another race is flagged before saving; Category, Race type and
   Pooling are under *More options*.
-- **Bird bonding** shows bonded birds as a list; click a photo to see it full size.
+- **Band Assignments** shows bonded birds as a list; click a photo to see it full size.
 - **English / Tagalog** switch in the menu.
 - **Updates**: when a new version is published, a notice offers to reload it.
 - **ACR122U on Windows**: in the helper zip, *Install AvilonX ACR122U helper* sets it

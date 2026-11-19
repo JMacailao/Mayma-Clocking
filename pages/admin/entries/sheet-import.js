@@ -46,7 +46,7 @@ export function mountEntrySheetImport(view,races,members,entries,readerByMember=
       if(!ring)errors.push('Ring number is missing.');
       // With bird bonding, each row must be one of the member's active bonded birds.
       row.pigeon_id=null;
-      if(birds&&ring&&row.member){const bird=sheetBird(birds,row.member.id,ring);if(bird){row.pigeon_id=bird.id;row.bondedRing=bird.ring_number;}else errors.push('Ring is not bonded to this member. Bond it on Bird bonding first.');}
+      if(birds&&ring&&row.member){const bird=sheetBird(birds,row.member.id,ring);if(bird){row.pigeon_id=bird.id;row.bondedRing=bird.ring_number;}else errors.push('Ring is not bonded to this member. Bond it on Band Assignments first.');}
       row.remarks=sheetRemarks(row.remarks_text);
       if(remarkLabels.length){const unknown=row.remarks.filter(token=>!remarkLabels.some(label=>label.toUpperCase()===token));if(unknown.length)errors.push(`Remark ${unknown.join(', ')} is not in the club's remarks list (Entry remarks).`);row.remarks=row.remarks.map(token=>remarkLabels.find(label=>label.toUpperCase()===token)||token);}
       // Club settings: an RFID bird may go without a sticker when the club made it optional.

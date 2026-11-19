@@ -1,11 +1,11 @@
-// Bird bonding: list, Bond a bird dialog, ring-number-only birds.
+// Band Assignments: list, Bond a bird dialog, ring-number-only birds.
 module.exports = async (page, { app, check, sample, BASE, toast }) => {
   await app(sample + `F.session={user:{id:'u'}};F.tables.app_profiles=[{id:'u',role:'admin',username:'jmb',club_id:1,is_active:true}];F.tables.clubs=[{id:1,name:'Club'}];F.tables.nfc_tags=[{tag_uid:'843519DB'}];`);
   await page.goto(`${BASE}/repo/pages/admin/birds/index.html`); await page.waitForSelector('.bird-table');
   check((await page.locator('.bird-row').count()) === 3, 'lists the bonded birds');
   check(/Ring only · sticker/.test(await page.locator('.bird-row', { hasText: 'PH-2' }).innerText()), 'marks ring-only birds');
   check(!(await page.locator('[data-bird-dialog]').evaluate(d => d.open)), 'the form starts closed');
-  check((await page.locator('.nav-link.active').innerText()) === 'Bird bonding', 'the menu shows the page');
+  check((await page.locator('.nav-link.active').innerText()) === 'Band Assignments', 'the menu shows the page');
   await page.click('[data-view-photo]');
   check(await page.locator('.photo-viewer').evaluate(d => d.open), 'a photo opens full size'); await page.keyboard.press('Escape');
   check(!(await page.locator('#bird-form [name=photo]').getAttribute('capture')), 'the photo can be chosen from the library (iPhone does not force the camera)');
