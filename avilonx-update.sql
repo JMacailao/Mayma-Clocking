@@ -2581,6 +2581,33 @@ $$;
 REVOKE ALL ON FUNCTION public.admin_update_club_settings(text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.admin_update_club_settings(text) TO authenticated;
 
+-- Loading form (Race entries → Print loading form): how many boxes for the
+-- member ID and for the ring's letters and numbers. The form prints all the
+-- club's remarks as tick boxes.
+ALTER TABLE public.clubs ADD COLUMN IF NOT EXISTS form_member_boxes integer NOT NULL DEFAULT 5;
+ALTER TABLE public.clubs ADD COLUMN IF NOT EXISTS form_prefix_boxes integer NOT NULL DEFAULT 6;
+ALTER TABLE public.clubs ADD COLUMN IF NOT EXISTS form_number_boxes integer NOT NULL DEFAULT 8;
+ALTER TABLE public.clubs DROP CONSTRAINT IF EXISTS clubs_form_boxes_valid;
+ALTER TABLE public.clubs ADD CONSTRAINT clubs_form_boxes_valid CHECK (form_member_boxes BETWEEN 1 AND 8 AND form_prefix_boxes BETWEEN 0 AND 8 AND form_number_boxes BETWEEN 1 AND 10);
+
+CREATE OR REPLACE FUNCTION public.admin_update_form_settings(p_member_boxes integer, p_prefix_boxes integer, p_number_boxes integer)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE
+  v_club bigint := public.current_club_id();
+BEGIN
+  IF NOT public.is_app_admin() OR v_club IS NULL THEN
+    RAISE EXCEPTION 'Only the club administrator can change the club settings.' USING ERRCODE = '42501';
+  END IF;
+  IF p_member_boxes NOT BETWEEN 1 AND 8 OR p_prefix_boxes NOT BETWEEN 0 AND 8 OR p_number_boxes NOT BETWEEN 1 AND 10 THEN
+    RAISE EXCEPTION 'Member ID: 1 to 8 boxes. Ring letters: 0 to 8. Ring numbers: 1 to 10.' USING ERRCODE = '22023';
+  END IF;
+  UPDATE public.clubs SET form_member_boxes = p_member_boxes, form_prefix_boxes = p_prefix_boxes, form_number_boxes = p_number_boxes WHERE id = v_club;
+  RETURN jsonb_build_object('form_member_boxes', p_member_boxes, 'form_prefix_boxes', p_prefix_boxes, 'form_number_boxes', p_number_boxes);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.admin_update_form_settings(integer, integer, integer) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_update_form_settings(integer, integer, integer) TO authenticated;
+
 -- New entries without a sticker, when the club requires it.
 CREATE OR REPLACE FUNCTION public._race_entry_sticker_rule()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$

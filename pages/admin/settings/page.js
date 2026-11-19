@@ -14,6 +14,16 @@ export async function render(view,identity){
     </fieldset>
     <p class="small">Sticker entries and ring-number-only birds always need their sticker.</p>
   </section>
+  <section class="panel settings-panel"><h3>Loading form</h3>
+    <p class="small">Race entries → Scan race sheet → <strong>Print loading form</strong> prints the club's loading form with these boxes, one character per box. All the club's remarks (Entry remarks) are printed as tick boxes.</p>
+    ${club&&!('form_member_boxes' in club)?'<div class="notice error">Loading form settings are not set up yet. Run <strong>avilonx-update.sql</strong> in the Supabase SQL Editor.</div>':''}
+    <div class="settings-boxes" ${club&&'form_member_boxes' in club?'':'hidden'}>
+      <label class="field"><span>Member ID boxes</span><input type="number" min="1" max="8" step="1" inputmode="numeric" name="form_member_boxes" value="${club?.form_member_boxes??5}"></label>
+      <label class="field"><span>Pigeon I.D: letter boxes</span><input type="number" min="0" max="8" step="1" inputmode="numeric" name="form_prefix_boxes" value="${club?.form_prefix_boxes??6}"><small class="small">0 = no letters line</small></label>
+      <label class="field"><span>Pigeon I.D: number boxes</span><input type="number" min="1" max="10" step="1" inputmode="numeric" name="form_number_boxes" value="${club?.form_number_boxes??8}"></label>
+    </div>
+    <p class="small">Changed the boxes or the remarks? Print the forms again: a form is read with the settings it was printed with.</p>
+  </section>
   <section class="panel settings-panel"><h3>Accounts</h3>
     ${club&&!('single_device' in club)?'<div class="notice error">One device per account is not set up yet. Run <strong>avilonx-update.sql</strong> in the Supabase SQL Editor.</div>':''}
     <fieldset class="settings-choice" ${club&&'single_device' in club?'':'disabled'}><legend>Devices per account</legend>
@@ -29,6 +39,12 @@ export async function render(view,identity){
     const button=event.currentTarget,value=view.querySelector('[name=rfid_entry_sticker]:checked')?.value;if(!value)return;
     button.disabled=true;
     let {error:saveError}=await supabase.rpc('admin_update_club_settings',{p_rfid_entry_sticker:value});
+    if(!saveError&&'form_member_boxes' in (club||{})){
+      const count=name=>Number(view.querySelector(`[name=${name}]`).value);
+      const boxes=[count('form_member_boxes'),count('form_prefix_boxes'),count('form_number_boxes')];
+      if(boxes.some(n=>!Number.isInteger(n))||boxes[0]<1||boxes[0]>8||boxes[1]<0||boxes[1]>8||boxes[2]<1||boxes[2]>10){button.disabled=false;message('Member ID: 1 to 8 boxes. Ring letters: 0 to 8. Ring numbers: 1 to 10.','error');return;}
+      ({error:saveError}=await supabase.rpc('admin_update_form_settings',{p_member_boxes:boxes[0],p_prefix_boxes:boxes[1],p_number_boxes:boxes[2]}));
+    }
     const single=view.querySelector('[name=single_device]:checked')?.value;
     if(!saveError&&single&&'single_device' in (club||{})&&(single==='on')!==Boolean(club.single_device)){({error:saveError}=await supabase.rpc('admin_set_single_device',{p_on:single==='on'}));if(!saveError)club.single_device=single==='on';}
     button.disabled=false;

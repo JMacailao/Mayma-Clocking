@@ -6,6 +6,13 @@ module.exports = async (page, { open, check, sample, toast }) => {
   const call = await page.evaluate(() => window.FAKE.ops.filter(o => o[0] === 'rpc' && o[1] === 'admin_update_club_settings').at(-1)?.[2]);
   check(call?.p_rfid_entry_sticker === 'optional', 'saves optional');
   check(/optional/.test(await toast()), 'confirms the save');
+  // Loading form: how many boxes for the member ID and the pigeon I.D.
+  await open('/repo/pages/admin/settings/page.js', `F.tables.clubs=[{id:1,name:'Mayma Club',rfid_entry_sticker:'required',form_member_boxes:5,form_prefix_boxes:6,form_number_boxes:8}];F.rpc.admin_update_club_settings=a=>({rfid_entry_sticker:a.p_rfid_entry_sticker});F.rpc.admin_update_form_settings=a=>({});`);
+  check(await page.inputValue('[name=form_member_boxes]') === '5', 'shows the member ID boxes');
+  await page.fill('[name=form_member_boxes]', '3'); await page.fill('[name=form_prefix_boxes]', '0'); await page.fill('[name=form_number_boxes]', '6');
+  await page.click('[data-save-settings]'); await page.waitForTimeout(300);
+  const formCall = await page.evaluate(() => window.FAKE.ops.filter(o => o[0] === 'rpc' && o[1] === 'admin_update_form_settings').at(-1)?.[2]);
+  check(formCall?.p_member_boxes === 3 && formCall?.p_prefix_boxes === 0 && formCall?.p_number_boxes === 6, `saves the box counts (${JSON.stringify(formCall)})`);
   await open('/repo/pages/admin/settings/page.js', `F.tables.clubs=[{id:1,name:'Mayma Club'}];`);
   check(/not set up yet/.test(await page.locator('.notice.error').first().innerText()), 'explains when club-settings.sql was not run');
 

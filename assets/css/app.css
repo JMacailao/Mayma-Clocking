@@ -1083,3 +1083,6 @@ body.login-page{min-height:100vh;background:#f3f6f9}
 .bird-tag-status[hidden]{display:none}
 .bird-tag-status.is-ok{background:#e7f6ee;color:#11653a}
 .bird-tag-status.is-bad{background:#fdecec;color:#a11d1d}
+.settings-boxes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 18px}
+.settings-boxes[hidden]{display:none}
+@media (max-width:720px){.settings-boxes{grid-template-columns:1fr}}

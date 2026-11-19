@@ -333,7 +333,10 @@ Remarks · Sticker, 15 rows) with the race filled in, boxes for the member ID an
 (letters on top, numbers below, one character per box), tick boxes for the club's remarks
 and four black corner squares. Scan it with a printer or take a photo, upload it, and
 AvilonX finds the corner squares, straightens the page (any way up) and reads each box,
-tick and sticker. If the club changes its Entry remarks, print the forms again.
+tick and sticker. Every saved Entry remark is printed as a tick box (up to 12). The club
+admin sets how many boxes the member ID and the Pigeon I.D (letters and numbers) have on
+**Club settings → Loading form** (0 letter boxes = numbers only). If the club changes its
+remarks or box counts, print the forms again.
 
 
 On Race entries → **Scan race sheet**, upload a photo or PDF of the loading form, or

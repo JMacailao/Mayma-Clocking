@@ -113,6 +113,12 @@ DO $$ DECLARE v_member bigint; v_entry bigint; v_code text; r jsonb; BEGIN
   DELETE FROM public.rfid_devices WHERE serial = 'A1B2C3D4E5F6';
 END $$;
 
+-- Loading form box counts: defaults, and only sensible numbers.
+DO $$ BEGIN
+  ASSERT (SELECT form_member_boxes = 5 AND form_prefix_boxes = 6 AND form_number_boxes = 8 FROM public.clubs LIMIT 1), 'default box counts';
+  BEGIN UPDATE public.clubs SET form_number_boxes = 0; RAISE EXCEPTION 'expected: at least one number box'; EXCEPTION WHEN check_violation THEN NULL; END;
+END $$;
+
 -- Change history records changes, and skips saves that change nothing.
 DO $$ DECLARE before bigint := (SELECT count(*) FROM public.audit_log); BEGIN
   UPDATE public.races SET name = 'Race B2' WHERE name = 'Race B';

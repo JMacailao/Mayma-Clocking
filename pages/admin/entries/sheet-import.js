@@ -1,7 +1,7 @@
 import { supabase, escapeHTML, message, dbError, number, formatDate, ringLabel, tableRows, loadSpreadsheetParser } from '../../../assets/js/shared.js';
 import { formatNfcUid } from '../../../assets/js/nfc.js';
 import { entrySheetRowsFromWorksheet, extractExcelBarcodeImages, decodeExcelBarcodeImages } from './excel-import.js';
-import { FORM_LAYOUT, rowBoxes, PAPERS, printLoadingForm } from './loading-form.js';
+import { formLayout, rowBoxes, PAPERS, printLoadingForm } from './loading-form.js';
 import { findFormMarks, readFormLayout, readFormHandwriting, FORM_GUIDE, tableCorners, quadPoint, straightenTable, entrySheetRowsFromGuide, loadDocumentOCR, loadDocumentBarcodeReader, scanSheetBarcodes, documentFileToCanvas, rotateDocumentCanvas, detectTableGrid, entrySheetRowsFromGrid, entrySheetRowsFromOCR, refineHandwrittenEntryFields } from './sheet-reader.js';
 import { sheetRemarks, sheetMember, sheetBird } from './sheet-parse.js';
 import { tagExpired, clockWays, distanceMeters } from './entry-helpers.js';
@@ -17,15 +17,24 @@ export function mountEntrySheetImport(view,races,members,entries,readerByMember=
   else if(existingForm)existingForm.closest('section').insertAdjacentHTML('beforebegin',importPanel);
   else view.insertAdjacentHTML('afterbegin',importPanel);
   const fileInput=view.querySelector('[data-sheet-file]'),excelFileInput=view.querySelector('[data-entry-excel]'),raceSelect=view.querySelector('[data-sheet-race]'),readButton=view.querySelector('[data-read-sheet]'),rotateButton=view.querySelector('[data-rotate-sheet]'),status=view.querySelector('[data-sheet-status]'),preview=view.querySelector('[data-sheet-preview]'),previewCanvas=view.querySelector('[data-sheet-preview-canvas]'),review=view.querySelector('[data-sheet-review]'),table=view.querySelector('[data-sheet-table]'),count=view.querySelector('[data-sheet-count]'),saveButton=view.querySelector('[data-save-sheet]'),gridNote=view.querySelector('[data-sheet-grid-note]'),cameraButton=view.querySelector('[data-sheet-camera]'),alignButton=view.querySelector('[data-sheet-align]');
+  clubForm().catch(()=>{});
   // Print the AvilonX loading form for the chosen race (reads best when scanned).
   const paperSelect=view.querySelector('[data-form-paper]');
   try{const saved=localStorage.getItem('avilonx.formPaper');if(saved&&PAPERS[saved])paperSelect.value=saved;}catch{/* storage unavailable */}
   view.querySelector('[data-print-form]').onclick=async()=>{
     const race=races.find(item=>item.id===Number(raceSelect.value));
     try{localStorage.setItem('avilonx.formPaper',paperSelect.value);}catch{/* storage unavailable */}
-    let clubName='';try{const {data}=await supabase.from('clubs').select('name').limit(1).maybeSingle();clubName=data?.name||'';}catch{/* name left blank */}
-    try{printLoadingForm({clubName,race,remarks:remarkLabels,paper:paperSelect.value});}catch(error){message(error.message,'error');}
+    const {clubName,layout}=await clubForm();
+    try{printLoadingForm({clubName,race,layout,paper:paperSelect.value});}catch(error){message(error.message,'error');}
   };
+  // The club's loading form: its name, box counts (Club settings) and all its remarks.
+  let clubFormCache=null;
+  async function clubForm(){
+    if(clubFormCache)return clubFormCache;
+    let club={};try{const {data}=await supabase.from('clubs').select('*').limit(1).maybeSingle();club=data||{};}catch{/* defaults */}
+    const layout=formLayout({memberBoxes:club.form_member_boxes,prefixBoxes:club.form_prefix_boxes,numberBoxes:club.form_number_boxes,remarks:remarkLabels});
+    clubFormCache={clubName:club.name||'',layout,boxesOf:index=>rowBoxes(index,layout)};return clubFormCache;
+  }
   // After Align on guide: the straightened table and its row count, used when its lines are not found.
   let alignedGuide=null;
   if(!fileInput)return;
@@ -89,7 +98,7 @@ export function mountEntrySheetImport(view,races,members,entries,readerByMember=
   const drawPreview=()=>{if(!sourceCanvas)return;const rotated=rotateDocumentCanvas(sourceCanvas,rotation);previewCanvas.width=rotated.width;previewCanvas.height=rotated.height;const context=previewCanvas.getContext('2d');context.drawImage(rotated,0,0);preview.hidden=false;rotateButton.disabled=false;readButton.disabled=false;alignButton.disabled=false;
     // An AvilonX loading form (corner squares): shown straightened, with its boxes.
     const marks=findFormMarks(sourceCanvas);
-    if(marks){const form=readFormLayout(sourceCanvas,marks,FORM_LAYOUT,rowBoxes,remarkLabels);previewCanvas.width=form.page.width;previewCanvas.height=form.page.height;const formContext=previewCanvas.getContext('2d');formContext.drawImage(form.page,0,0);drawGridOverlay(formContext,form.rows);
+    if(marks&&clubFormCache){const form=readFormLayout(sourceCanvas,marks,clubFormCache.layout,clubFormCache.boxesOf);previewCanvas.width=form.page.width;previewCanvas.height=form.page.height;const formContext=previewCanvas.getContext('2d');formContext.drawImage(form.page,0,0);drawGridOverlay(formContext,form.rows);
       gridNote.hidden=false;gridNote.className='entry-sheet-grid-note is-ok';gridNote.innerHTML=`<strong>AvilonX loading form found: ${form.rows.length} row${form.rows.length===1?'':'s'} filled in.</strong> It was straightened using its 4 corner squares; no rotating or aligning needed.`;return;}
     let found=[];try{const grid=detectTableGrid(rotated);found=grid?entrySheetRowsFromGrid(grid,rotated):[];}catch(error){console.warn('Table check failed:',error);}
     if(!found.length&&alignedGuide&&!rotation)found=entrySheetRowsFromGuide(rotated,alignedGuide);
@@ -200,7 +209,7 @@ export function mountEntrySheetImport(view,races,members,entries,readerByMember=
   rotateButton.onclick=()=>{rotation=(rotation+90)%360;drawPreview();status.textContent=`Preview rotated ${rotation}°. Read it when the text is upright.`;};
   // Reading an AvilonX loading form: boxes, ticks and stickers at known places.
   async function readAvilonxForm(worker,marks){
-    const form=readFormLayout(sourceCanvas,marks,FORM_LAYOUT,rowBoxes,remarkLabels);cellSource=form.page;rows=form.rows;
+    const club=await clubForm(),form=readFormLayout(sourceCanvas,marks,club.layout,club.boxesOf);cellSource=form.page;rows=form.rows;
     if(!rows.length){status.textContent='This AvilonX loading form has no rows filled in.';review.hidden=true;return;}
     status.textContent=`AvilonX loading form: ${rows.length} row${rows.length===1?'':'s'}. Scanning the stickers…`;
     try{const barcodeReader=await loadDocumentBarcodeReader();await scanSheetBarcodes(form.page,rows,barcodeReader,(current,total)=>{status.textContent=`Scanning stickers… ${current} of ${total}`;});}

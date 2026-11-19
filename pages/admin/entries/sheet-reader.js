@@ -357,9 +357,9 @@ export function findFormMarks(canvas){
 }
 
 // Straightens an AvilonX form and lists its rows, with every box as a region
-// (pixels) and the remarks that are ticked. pageLayout = FORM_LAYOUT, boxesOf =
-// rowBoxes (from loading-form.js).
-export function readFormLayout(canvas,marks,pageLayout,boxesOf,remarkLabels=[]){
+// (pixels) and the remarks that are ticked. pageLayout = formLayout(...) and
+// boxesOf = index => rowBoxes(index, pageLayout) (from loading-form.js).
+export function readFormLayout(canvas,marks,pageLayout,boxesOf){
   const page=straightenTable(canvas,marks,1400,0),W=page.width,H=page.height;
   const px=b=>({left:b.x0*W,right:b.x1*W,top:b.y0*H,bottom:b.y1*H});
   const inner=(r,inset)=>{const dx=(r.right-r.left)*inset,dy=(r.bottom-r.top)*inset;return {left:r.left+dx,right:r.right-dx,top:r.top+dy,bottom:r.bottom-dy};};
@@ -368,12 +368,11 @@ export function readFormLayout(canvas,marks,pageLayout,boxesOf,remarkLabels=[]){
   const inkShare=r=>{const g=inner(r,.18),x=Math.floor(g.left),y=Math.floor(g.top),w=Math.max(1,Math.floor(g.right-g.left)),h=Math.max(1,Math.floor(g.bottom-g.top)),d=context.getImageData(x,y,w,h).data;let dark=0;for(let i=0;i<d.length;i+=4)if(d[i]*.299+d[i+1]*.587+d[i+2]*.114<paper-70)dark++;return dark/(w*h);};
   const sample=context.getImageData(0,0,W,H).data,levels=[];for(let i=0;i<sample.length;i+=4*97)levels.push(sample[i]*.299+sample[i+1]*.587+sample[i+2]*.114);levels.sort((a,b)=>a-b);
   const paper=levels[Math.floor(levels.length*.7)]||255;
-  const labels=[...remarkLabels,'P1','P2','P3','OCP'].filter((v,i,a)=>v&&a.indexOf(v)===i).slice(0,pageLayout.remarks.count);
   const rows=[];
   for(let index=0;index<pageLayout.rows;index++){
     const b=boxesOf(index),member=b.member.map(px),prefix=b.prefix.map(px),number=b.number.map(px);
     const used=box=>inkShare(box)>.012;
-    const ticked=b.remarks.map(px).map((box,i)=>inkShare(box)>.08?labels[i]:null).filter(Boolean);
+    const ticked=b.remarks.filter(box=>inkShare(px(box))>.08).map(box=>box.label);
     const sticker=px(b.cells.sticker);
     const hasSticker=barcodeGraphicPresent(page,sticker.left,sticker.right,sticker.top,sticker.bottom);
     const memberUsed=member.filter(used),ringUsed=[...prefix,...number].filter(used);
