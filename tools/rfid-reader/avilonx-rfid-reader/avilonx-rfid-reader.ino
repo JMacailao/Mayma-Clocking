@@ -117,15 +117,13 @@ String lastReply = "No tags sent yet";
 String lastMode = "";
 String lastSeenUID = "";
 unsigned long lastSeenMs = 0;
-// RC522 watchdog: the reader can stop answering after a power dip (Wi-Fi
-// sending draws current) and would then need a restart. It is checked every few
-// seconds and restarted on its own when needed.
+// RC522 watchdog: if the reader stops answering (power dip), it is reset on its
+// own every few seconds until it answers again; the ESP8266 keeps running.
 unsigned long lastRfidCheckMs = 0;
 unsigned long lastRfidActivityMs = 0;
 uint32_t rfidRestarts = 0;
 bool rfidOk = false;
 const unsigned long RFID_CHECK_MS = 5000UL;      // check the reader every 5 seconds
-const unsigned long RFID_REFRESH_MS = 60000UL;   // and refresh it after 1 quiet minute
 unsigned long buttonPressedAt = 0;
 bool resetAlreadyHandled = false;
 bool restartAfterResetBlinks = false;
@@ -869,8 +867,8 @@ bool rfidAnswers() {
   return version != 0x00 && version != 0xFF;
 }
 
-// Hard-resets the RC522 (RST pin), sets it up again and turns the antenna on at
-// full strength. Tries a few times.
+// Hard-resets the RC522 (RST pin) and sets it up again, with the library's
+// normal settings. Tries a few times.
 bool startRfidReader(const char *why) {
   for (int attempt = 0; attempt < 3; attempt++) {
     pinMode(RFID_RST_PIN, OUTPUT);
@@ -879,8 +877,6 @@ bool startRfidReader(const char *why) {
     digitalWrite(RFID_RST_PIN, HIGH);
     delay(50);
     reader.PCD_Init();
-    reader.PCD_SetAntennaGain(MFRC522::RxGain_max);
-    reader.PCD_AntennaOn();
     if (rfidAnswers()) {
       rfidOk = true;
       lastRfidActivityMs = millis();
@@ -900,12 +896,10 @@ void watchRfidReader() {
   unsigned long now = millis();
   if ((unsigned long)(now - lastRfidCheckMs) < RFID_CHECK_MS) return;
   lastRfidCheckMs = now;
+  // Only when the reader stopped answering: reset it (the ESP8266 keeps running).
   if (!rfidAnswers()) {
     rfidRestarts++;
     startRfidReader("it stopped answering");
-  } else if ((unsigned long)(now - lastRfidActivityMs) >= RFID_REFRESH_MS) {
-    // Answers, but no tag for a minute: refresh it anyway (a stuck antenna still answers).
-    startRfidReader("");
   } else if (!rfidOk) {
     rfidOk = true;
   }
@@ -970,17 +964,11 @@ void setup() {
   Serial.begin(115200);
   pinMode(RESET_BUTTON_PIN, INPUT); // needs the external 10k pull-up to 3.3V
   if (USE_STATUS_LED) { pinMode(STATUS_LED_PIN, OUTPUT); digitalWrite(STATUS_LED_PIN, HIGH); }
-  // The RC522 first, before Wi-Fi starts drawing current; retried if it does not answer.
-  SPI.begin();
-  delay(50);
-  startRfidReader("");
   EEPROM.begin(EEPROM_BYTES);
   loadSettings();
   initializeQueue();
 
   WiFi.persistent(false);
-  // No Wi-Fi sleep: steadier current for the RC522 (fewer power dips).
-  WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.mode(WIFI_AP_STA);
   deviceSerial = WiFi.macAddress();
   WiFi.softAPdisconnect(true);
@@ -998,8 +986,17 @@ void setup() {
   beginRtc();
   configTime(0, 0, "pool.ntp.org", "time.google.com");
 
-  if (!rfidOk) startRfidReader("start-up retry");
-  Serial.println(rfidOk ? F("RFID reader ready") : F("RFID reader NOT ready: it will keep retrying"));
+  SPI.begin();
+  reader.PCD_Init();
+  delay(10);
+  {
+    // Shows which RC522 chip answered (0x91 or 0x92 = genuine, 0x88/0x12/0xB2 = common copies).
+    byte version = reader.PCD_ReadRegister(MFRC522::VersionReg);
+    rfidOk = version != 0x00 && version != 0xFF;
+    lastRfidActivityMs = millis();
+    Serial.print(F("RC522 version: 0x")); Serial.println(version, HEX);
+    Serial.println(rfidOk ? F("RFID reader ready") : F("RFID reader NOT answering: check the wiring (SDA D2, SCK D5, MOSI D7, MISO D6, RST D1, 3.3V, GND)"));
+  }
 
   server.on("/", HTTP_GET, []() { server.send_P(200, "text/html", PAGE); });
   server.on("/api/status", HTTP_GET, handleStatus);
