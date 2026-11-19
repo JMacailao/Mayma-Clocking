@@ -338,6 +338,11 @@ admin sets how many boxes the member ID and the Pigeon I.D (letters and numbers)
 **Club settings → Loading form** (0 letter boxes = numbers only). If the club changes its
 remarks or box counts, print the forms again.
 
+Photos work too, even taken at an angle, slightly bent or with a shadow: AvilonX lines
+each row up with its printed boxes before reading. Member ID and ring numbers are read
+by a handwritten-digit reader built into AvilonX; ring letters by the text reader. Write
+one clear digit per box, inside the box.
+
 
 On Race entries → **Scan race sheet**, upload a photo or PDF of the loading form, or
 press **Take photo with guide** to use the camera with a frame to line the form up.

@@ -60,6 +60,7 @@ Race entries (`pages/admin/entries/`):
 | `sheet-reader.js` | Reading a photo or PDF: rotation, finding the loading form's table, **Align on guide** (the form's layout `FORM_GUIDE`, straightening the table from 4 corners, rows from the guide), reading handwriting cell by cell (Tesseract), decoding sticker barcodes (ZXing). |
 | `sheet-parse.js` | Pure rules with no browser code: remarks (P1/P2/P3), member IDs, matching rings to bonded birds, sticker numbers. |
 | `loading-form.js` | The **AvilonX loading form**: its layout (`formLayout(settings)`: the club's box counts from Club settings and all its remarks, shared by printing and reading) and the printable page (Print loading form). |
+| `digit-reader.js`, `digit-model.js` | The **handwritten digit reader** for the form's member ID and ring number boxes: a small neural network trained on handwritten digits (MNIST), run in the browser. `digit-model.js` holds its weights, made by `tools/digit-model` (`train.py`, then `export.py`). |
 | `excel-import.js` | Reading Excel files, including barcode pictures inside cells. |
 | `entry-helpers.js` | Small helpers: tag expiry, ways to clock, distance. |
 

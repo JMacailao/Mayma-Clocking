@@ -1,3 +1,4 @@
+import { readDigitBox } from './digit-reader.js';
 import { sheetRemarks, stickerFromText } from './sheet-parse.js';
 
 let documentOcrPromise=null;
@@ -348,9 +349,13 @@ export function findFormMarks(canvas){
   // The square nearest each corner of the picture.
   const corners=[[0,0],[canvas.width,0],[canvas.width,canvas.height],[0,canvas.height]].map(([cx,cy])=>candidates.reduce((best,c)=>{const d=Math.hypot(c.x-cx,c.y-cy);return !best||d<best.d?{...c,d}:best;},null));
   if(new Set(corners).size<4||corners.some((c,i)=>corners.findIndex(o=>o.x===c.x&&o.y===c.y)!==i))return null;
-  const order=corners.map((c,i)=>i).sort((a,b)=>corners[b].area-corners[a].area),big=order[0];
-  const others=corners.filter((c,i)=>i!==big).map(c=>c.area);
-  if(corners[big].area<Math.max(...others)*1.5)return null;// the top-left square is bigger
+  // The top-left square is bigger. A photo taken at an angle makes the near
+  // corners look bigger, so each square is measured against the page around
+  // it (the two sides of the page that meet at that corner).
+  const side=(a,b)=>Math.hypot(corners[a].x-corners[b].x,corners[a].y-corners[b].y);
+  const relative=corners.map((c,i)=>c.area/(side(i,(i+1)%4)*side(i,(i+3)%4)));
+  const order=[0,1,2,3].sort((a,b)=>relative[b]-relative[a]),big=order[0];
+  if(relative[big]<relative[order[1]]*1.3)return null;
   const span=Math.hypot(corners[0].x-corners[2].x,corners[0].y-corners[2].y);
   if(span<Math.hypot(canvas.width,canvas.height)*.35)return null;
   return [0,1,2,3].map(k=>{const c=corners[(big+k)%4];return [c.x,c.y];});
@@ -363,16 +368,43 @@ export function readFormLayout(canvas,marks,pageLayout,boxesOf){
   const page=straightenTable(canvas,marks,1400,0),W=page.width,H=page.height;
   const px=b=>({left:b.x0*W,right:b.x1*W,top:b.y0*H,bottom:b.y1*H});
   const inner=(r,inset)=>{const dx=(r.right-r.left)*inset,dy=(r.bottom-r.top)*inset;return {left:r.left+dx,right:r.right-dx,top:r.top+dy,bottom:r.bottom-dy};};
-  const context=page.getContext('2d',{willReadFrequently:true});
-  // Share of clearly dark pixels inside a box (its printed border left out).
-  const inkShare=r=>{const g=inner(r,.18),x=Math.floor(g.left),y=Math.floor(g.top),w=Math.max(1,Math.floor(g.right-g.left)),h=Math.max(1,Math.floor(g.bottom-g.top)),d=context.getImageData(x,y,w,h).data;let dark=0;for(let i=0;i<d.length;i+=4)if(d[i]*.299+d[i+1]*.587+d[i+2]*.114<paper-70)dark++;return dark/(w*h);};
-  const sample=context.getImageData(0,0,W,H).data,levels=[];for(let i=0;i<sample.length;i+=4*97)levels.push(sample[i]*.299+sample[i+1]*.587+sample[i+2]*.114);levels.sort((a,b)=>a-b);
-  const paper=levels[Math.floor(levels.length*.7)]||255;
+  const context=page.getContext('2d',{willReadFrequently:true}),data=context.getImageData(0,0,W,H).data;
+  // Ink map judged against the paper around each spot (shadows on a photo
+  // make one part of the page darker than another).
+  const gray=new Float32Array(W*H);for(let i=0;i<W*H;i++)gray[i]=data[i*4]*.299+data[i*4+1]*.587+data[i*4+2]*.114;
+  const tile=48,tw=Math.ceil(W/tile),th=Math.ceil(H/tile),paperAt=new Float32Array(tw*th);
+  for(let ty=0;ty<th;ty++)for(let tx=0;tx<tw;tx++){const v=[];for(let y=ty*tile;y<Math.min(H,(ty+1)*tile);y+=3)for(let x=tx*tile;x<Math.min(W,(tx+1)*tile);x+=3)v.push(gray[y*W+x]);v.sort((a,b)=>a-b);paperAt[ty*tw+tx]=v[Math.floor(v.length*.85)]||255;}
+  const ink=new Uint8Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const tx=Math.min(tw-1,Math.floor(x/tile)),ty=Math.min(th-1,Math.floor(y/tile)),bg=paperAt[ty*tw+tx];ink[y*W+x]=gray[y*W+x]<bg*.7&&gray[y*W+x]<bg-35?1:0;}
+  const inkAt=(x,y)=>{x=Math.round(x);y=Math.round(y);return x>=0&&y>=0&&x<W&&y<H?ink[y*W+x]:0;};
+  // Printed outlines are thin and grey: a lighter test, made a pixel thicker so the search can't step over them.
+  const line=new Uint8Array(W*H),thick=new Uint8Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const bg=paperAt[Math.min(th-1,Math.floor(y/tile))*tw+Math.min(tw-1,Math.floor(x/tile))];line[y*W+x]=gray[y*W+x]<bg*.86?1:0;}
+  for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x;thick[i]=line[i]|line[i-1]|line[i+1]|line[i-W]|line[i+W];}
+  const lineAt=(map,x,y)=>{x=Math.round(x);y=Math.round(y);return x>=0&&y>=0&&x<W&&y<H?map[y*W+x]:0;};
+  // A bent page or a photo at an angle leaves the boxes a little off from
+  // where the corners put them, so each group of boxes in a row is moved to
+  // where its printed outlines really are.
+  const outline=boxes=>{const points=[];boxes.forEach(r=>{const w=r.right-r.left,h=r.bottom-r.top,n=Math.max(6,Math.round(Math.max(w,h)/3));for(let k=0;k<=n;k++){const fx=r.left+w*k/n,fy=r.top+h*k/n;points.push([fx,r.top],[fx,r.bottom],[r.left,fy],[r.right,fy]);}});return points;};
+  const snap=boxes=>{
+    if(!boxes.length)return boxes;
+    const points=outline(boxes),reach=Math.round(Math.min(40,Math.max(...boxes.map(r=>r.bottom-r.top))*.75));
+    const score=(map,dx,dy)=>{let n=0;for(const [x,y] of points)n+=lineAt(map,x+dx,y+dy);return n;};
+    let best={dx:0,dy:0,n:score(thick,0,0)};
+    for(let dy=-reach;dy<=reach;dy+=2)for(let dx=-reach;dx<=reach;dx+=2){const n=score(thick,dx,dy);if(n>best.n)best={dx,dy,n};}
+    const coarse=best;best={...coarse,n:-1};
+    for(let dy=coarse.dy-2;dy<=coarse.dy+2;dy++)for(let dx=coarse.dx-2;dx<=coarse.dx+2;dx++){const n=score(line,dx,dy);if(n>best.n)best={dx,dy,n};}
+    if(best.n<points.length*.25)return boxes;// outlines not found: keep the boxes where they were
+    return boxes.map(r=>({...r,left:r.left+best.dx,right:r.right+best.dx,top:r.top+best.dy,bottom:r.bottom+best.dy}));
+  };
+  // Share of ink inside a box (its printed border left out).
+  const inkShare=r=>{const g=inner(r,.2);let dark=0,all=0;for(let y=Math.floor(g.top);y<g.bottom;y++)for(let x=Math.floor(g.left);x<g.right;x++){all++;dark+=inkAt(x,y);}return all?dark/all:0;};
   const rows=[];
   for(let index=0;index<pageLayout.rows;index++){
-    const b=boxesOf(index),member=b.member.map(px),prefix=b.prefix.map(px),number=b.number.map(px);
-    const used=box=>inkShare(box)>.012;
-    const ticked=b.remarks.filter(box=>inkShare(px(box))>.08).map(box=>box.label);
+    const b=boxesOf(index),member=snap(b.member.map(px)),ring=snap([...b.prefix,...b.number].map(px)),prefix=ring.slice(0,b.prefix.length),number=ring.slice(b.prefix.length);
+    const remarkBoxes=snap(b.remarks.map(px));
+    const used=box=>inkShare(box)>.035;
+    const ticked=b.remarks.filter((box,i)=>inkShare(remarkBoxes[i])>.08).map(box=>box.label);
     const sticker=px(b.cells.sticker);
     const hasSticker=barcodeGraphicPresent(page,sticker.left,sticker.right,sticker.top,sticker.bottom);
     const memberUsed=member.filter(used),ringUsed=[...prefix,...number].filter(used);
@@ -384,23 +416,47 @@ export function readFormLayout(canvas,marks,pageLayout,boxesOf){
       stickerTextRegion:{...sticker,top:sticker.top+(sticker.bottom-sticker.top)*.62},
       barcode:'',printedBarcode:'',barcodeDetected:false,barcodeScanError:'',errors:[],member:null,saved:false});
   }
-  return {page,rows};
+  // The handwriting on clean paper: ink black, everything else white.
+  const inkPage=document.createElement('canvas');inkPage.width=W;inkPage.height=H;
+  const inkContext=inkPage.getContext('2d'),inkImage=inkContext.createImageData(W,H);
+  for(let i=0;i<W*H;i++){const v=ink[i]?0:255;inkImage.data[i*4]=inkImage.data[i*4+1]=inkImage.data[i*4+2]=v;inkImage.data[i*4+3]=255;}
+  inkContext.putImageData(inkImage,0,0);
+  return {page,inkPage,rows};
 }
 
 // Reads the handwritten boxes of AvilonX form rows: each field's boxes are put
 // side by side as one word, the words of all rows stacked, and read at once
 // with only the characters that field can hold.
-export async function readFormHandwriting(worker,page,rows,onProgress=()=>{}){
-  if(!worker?.recognize)return;
-  const fields=[['member_no','memberBoxes','0123456789','Member ID'],['ring_prefix','prefixBoxes','ABCDEFGHIJKLMNOPQRSTUVWXYZ','Ring letters'],['ring_number','numberBoxes','0123456789','Ring numbers']];
-  for(const [field,key,allowed,label] of fields){
+export async function readFormHandwriting(worker,page,rows,onProgress=()=>{},inkPage=page){
+  // Digits: the handwritten digit reader, box by box, on the photo itself.
+  for(const [field,key,label,confidence] of [['member_no','memberBoxes','Member ID','memberConfidence'],['ring_number','numberBoxes','Ring numbers','ringConfidence']]){
+    rows.forEach(row=>{
+      const read=(row[key]||[]).map(box=>readDigitBox(page,box)).filter(Boolean);
+      row[field]=read.map(r=>r.digit).join('');
+      row[confidence]=read.length?Math.round(Math.min(...read.map(r=>r.confidence))*100):0;
+    });
+    onProgress(label);
+  }
+  // Letters: Tesseract, on clean paper (ink only).
+  if(worker?.recognize)for(const [field,key,allowed,label] of [['ring_prefix','prefixBoxes','ABCDEFGHIJKLMNOPQRSTUVWXYZ','Ring letters']]){
     const items=rows.filter(row=>row[key]?.length);if(!items.length)continue;
     try{await worker.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:allowed});}catch{/* keep the previous settings */}
-    const charH=64,gap=22,lineGap=36,strips=items.map(row=>{const boxes=row[key];return {row,width:boxes.length*(charH*.8+gap)+gap};});
+    // Each box trimmed to its handwriting and set like normal text (Tesseract
+    // reads digits far apart badly).
+    const source=inkPage.getContext('2d',{willReadFrequently:true});
+    const glyph=box=>{
+      const dx=(box.right-box.left)*.17,dy=(box.bottom-box.top)*.14,x0=Math.floor(box.left+dx),y0=Math.floor(box.top+dy),w=Math.max(1,Math.floor(box.right-box.left-2*dx)),h=Math.max(1,Math.floor(box.bottom-box.top-2*dy));
+      const d=source.getImageData(x0,y0,w,h).data,levels=[];for(let i=0;i<d.length;i+=8)levels.push(d[i]*.299+d[i+1]*.587+d[i+2]*.114);levels.sort((a,b)=>a-b);
+      const paper=levels[Math.floor(levels.length*.7)]||255,cut=paper-Math.max(30,paper*.22);let left=w,right=-1,top=h,bottom=-1;
+      for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4;if(d[i]*.299+d[i+1]*.587+d[i+2]*.114<cut){if(x<left)left=x;if(x>right)right=x;if(y<top)top=y;if(y>bottom)bottom=y;}}
+      if(right<0)return null;
+      return {sx:x0+left-1,sy:y0+top-1,sw:right-left+3,sh:bottom-top+3};
+    };
+    const charH=56,gap=12,lineGap=40,strips=items.map(row=>{const glyphs=row[key].map(glyph).filter(Boolean);return {row,glyphs,width:glyphs.reduce((sum,g)=>sum+Math.max(charH*.3,g.sw*charH/g.sh)+gap,0)+3*gap};});
     const width=Math.max(...strips.map(s=>s.width)),canvas=document.createElement('canvas');canvas.width=Math.ceil(width);canvas.height=items.length*(charH+lineGap)+lineGap;
     const c=canvas.getContext('2d',{willReadFrequently:true});c.fillStyle='#fff';c.fillRect(0,0,canvas.width,canvas.height);
-    strips.forEach((strip,i)=>{const y=lineGap+i*(charH+lineGap);strip.top=y;strip.bottom=y+charH;let x=gap;
-      strip.row[key].forEach(box=>{const dx=(box.right-box.left)*.14,dy=(box.bottom-box.top)*.14,w=box.right-box.left-2*dx,h=box.bottom-box.top-2*dy,dw=charH*.8;c.drawImage(page,box.left+dx,box.top+dy,w,h,x,y,dw,charH);x+=dw+gap;});});
+    strips.forEach((strip,i)=>{const y=lineGap+i*(charH+lineGap);strip.top=y;strip.bottom=y+charH;let x=2*gap;
+      strip.glyphs.forEach(g=>{const dw=g.sw*charH/g.sh,slot=Math.max(charH*.3,dw);c.drawImage(inkPage,g.sx,g.sy,g.sw,g.sh,x+(slot-dw)/2,y,dw,charH);x+=slot+gap;});});
     // Ink black, paper white (per strip).
     const image=c.getImageData(0,0,canvas.width,canvas.height),d=image.data;
     strips.forEach(strip=>{const levels=[];for(let y=strip.top;y<strip.bottom;y+=2)for(let x=0;x<strip.width;x+=2){const i=(y*canvas.width+x)*4;levels.push(d[i]*.299+d[i+1]*.587+d[i+2]*.114);}levels.sort((a,b)=>a-b);const paper=levels[Math.floor(levels.length*.7)]||255,cut=paper-Math.max(30,paper*.22);

@@ -1,0 +1,6 @@
+{
+  "name": "avilonx-digit-model",
+  "private": true,
+  "description": "Training data for the loading form's handwritten digit reader",
+  "dependencies": { "mnist": "1.1.0" }
+}

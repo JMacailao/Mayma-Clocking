@@ -215,7 +215,7 @@ export function mountEntrySheetImport(view,races,members,entries,readerByMember=
     try{const barcodeReader=await loadDocumentBarcodeReader();await scanSheetBarcodes(form.page,rows,barcodeReader,(current,total)=>{status.textContent=`Scanning stickers… ${current} of ${total}`;});}
     catch(error){console.warn('Barcode decoding is unavailable:',error);}
     status.textContent='Reading the boxes…';
-    try{await readFormHandwriting(worker,form.page,rows,label=>{status.textContent=`Reading ${label.toLowerCase()}…`;});}catch(error){console.warn('Box reading failed:',error);}
+    try{await readFormHandwriting(worker,form.page,rows,label=>{status.textContent=`Reading ${label.toLowerCase()}…`;},form.inkPage);}catch(error){console.warn('Box reading failed:',error);}
     try{await refineHandwrittenEntryFields(worker,form.page,rows,members,()=>{},['barcode']);}catch(error){console.warn('Sticker number reading failed:',error);}
     rows.forEach(row=>{if(!row.barcode&&!row.barcodeScanError)row.barcodeScanError='Sticker not read. Type the number printed on it.';});
     redrawRows();status.textContent=`Read ${rows.length} row${rows.length===1?'':'s'} from the AvilonX loading form. Check the red rows, then save.`;await validateRows();review.scrollIntoView({behavior:'smooth',block:'start'});

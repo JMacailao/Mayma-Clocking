@@ -1,0 +1,4 @@
+node_modules/
+model.npz
+real.npy
+real.txt
