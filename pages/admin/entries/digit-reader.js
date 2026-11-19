@@ -6,7 +6,7 @@
 // tools/digit-model/train.py. Everything runs in the browser, offline.
 //
 // The steps below must match tools/digit-model/prep.py exactly.
-import { DIGIT_MODEL } from './digit-model.js';
+import { DIGIT_MODELS } from './digit-model.js';
 
 // Ink weights (0..1) of a box: its inner part, judged against its own paper.
 function boxInk(canvas,box){
@@ -17,7 +17,20 @@ function boxInk(canvas,box){
   const gray=new Float32Array(iw*ih);for(let i=0;i<gray.length;i++)gray[i]=data[i*4]*.299+data[i*4+1]*.587+data[i*4+2]*.114;
   const sorted=Float32Array.from(gray).sort(),paper=percentile(sorted,80);
   const ink=new Float32Array(iw*ih);for(let i=0;i<ink.length;i++)ink[i]=Math.min(1,Math.max(0,(paper*.8-gray[i])/(paper*.35)));
+  removeBorderLines(ink,iw,ih,canvas,box,side,top,paper);
   return {ink,w:iw,h:ih};
+}
+// A box a little off its print has part of its border inside: a straight line
+// along the whole box, near an edge. Handwriting never runs the box's full
+// height (or width), so such lines are wiped before reading.
+function removeBorderLines(ink,w,h,canvas,box,side,top,paper){
+  const fw=Math.round(box.right-box.left),fh=Math.round(box.bottom-box.top),x0=Math.round(box.left),y0=Math.round(box.top);
+  const d=canvas.getContext('2d',{willReadFrequently:true}).getImageData(x0,y0,fw,fh).data,cut=paper*.8-paper*.35*.35;
+  const dark=(x,y)=>x>=0&&y>=0&&x<fw&&y<fh&&(d[(y*fw+x)*4]*.299+d[(y*fw+x)*4+1]*.587+d[(y*fw+x)*4+2]*.114)<cut?1:0;
+  for(let x=0;x<w;x++){if(x>=w*.3&&x<w*.7)continue;const fx=x+side;let n=0;for(let y=0;y<fh;y++)n+=dark(fx-1,y)|dark(fx,y)|dark(fx+1,y);
+    if(n>fh*.88)for(const dx of [-1,0,1])if(x+dx>=0&&x+dx<w)for(let y=0;y<h;y++)ink[y*w+x+dx]=0;}
+  for(let y=0;y<h;y++){if(y>=h*.3&&y<h*.7)continue;const fy=y+top;let n=0;for(let x=0;x<fw;x++)n+=dark(x,fy-1)|dark(x,fy)|dark(x,fy+1);
+    if(n>fw*.88)for(const dy of [-1,0,1])if(y+dy>=0&&y+dy<h)for(let x=0;x<w;x++)ink[(y+dy)*w+x]=0;}
 }
 // numpy's default (linear) percentile.
 function percentile(sorted,p){const k=(sorted.length-1)*p/100,f=Math.floor(k),c=Math.min(sorted.length-1,f+1);return sorted[f]+(sorted[c]-sorted[f])*(k-f);}
@@ -51,14 +64,16 @@ export function boxTo28(canvas,box){
   return out;
 }
 
-// The network's numbers, unpacked once (stored as bytes with a scale per layer).
-let weights=null;
-function model(){
-  if(weights)return weights;
-  const bytes=Uint8Array.from(atob(DIGIT_MODEL.data),ch=>ch.charCodeAt(0)),signed=new Int8Array(bytes.buffer);
-  weights={};let offset=0;
-  for(const [name,size,scale] of DIGIT_MODEL.layers){const values=new Float32Array(size);for(let i=0;i<size;i++)values[i]=signed[offset+i]*scale;weights[name]=values;offset+=size;}
-  return weights;
+// The networks' numbers, unpacked once (stored as bytes with a scale per layer).
+let unpacked=null;
+function models(){
+  if(unpacked)return unpacked;
+  unpacked=DIGIT_MODELS.map(model=>{
+    const bytes=Uint8Array.from(atob(model.data),ch=>ch.charCodeAt(0)),signed=new Int8Array(bytes.buffer),weights={channels:model.channels};let offset=0;
+    for(const [name,size,scale] of model.layers){const values=new Float32Array(size);for(let i=0;i<size;i++)values[i]=signed[offset+i]*scale;weights[name]=values;offset+=size;}
+    return weights;
+  });
+  return unpacked;
 }
 
 // conv (k×k, same padding) + ReLU + 2×2 max pool. x: [cin][n][n].
@@ -77,18 +92,41 @@ function convPool(x,cin,n,w,b,cout,k){
   return out;
 }
 
-// {digit, confidence 0..1} for a 28×28 picture.
-export function classifyDigit(picture){
-  const W=model(),[c1,c2]=DIGIT_MODEL.channels;
-  const p1=convPool(picture,1,28,W.w1,W.b1,c1,5),p2=convPool(p1,c1,14,W.w2,W.b2,c2,3);
-  const scores=new Float32Array(10);
-  for(let o=0;o<10;o++){let s=W.b3[o];for(let i=0;i<p2.length;i++)s+=W.w3[o*p2.length+i]*p2[i];scores[o]=s;}
-  const top=Math.max(...scores),e=scores.map(v=>Math.exp(v-top)),sum=e.reduce((a,b)=>a+b,0);
-  let digit=0;for(let i=1;i<10;i++)if(e[i]>e[digit])digit=i;
-  return {digit,confidence:e[digit]/sum};
+// Chances (0..1) of each digit 0–9 for a 28×28 picture.
+// (Each network's chances, averaged.)
+export function digitChances(picture){
+  const all=models(),chances=new Array(10).fill(0);
+  for(const W of all){
+    const [c1,c2]=W.channels,p1=convPool(picture,1,28,W.w1,W.b1,c1,5),p2=convPool(p1,c1,14,W.w2,W.b2,c2,3),scores=new Float32Array(10);
+    for(let o=0;o<10;o++){let s=W.b3[o];for(let i=0;i<p2.length;i++)s+=W.w3[o*p2.length+i]*p2[i];scores[o]=s;}
+    const top=Math.max(...scores),e=scores.map(v=>Math.exp(v-top)),sum=e.reduce((a,b)=>a+b,0);
+    for(let i=0;i<10;i++)chances[i]+=e[i]/sum/all.length;
+  }
+  return chances;
 }
 
-// Reads a box: {digit, confidence} or null when the box is empty.
+// The picture moved by (dx, dy) pixels and turned by `angle` degrees (bilinear).
+export function movePicture(picture,dx,dy,angle=0){
+  const out=new Float32Array(784),a=angle*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+  for(let y=0;y<28;y++)for(let x=0;x<28;x++){
+    const ux=x-13.5-dx,uy=y-13.5-dy,sx=c*ux+s*uy+13.5,sy=-s*ux+c*uy+13.5,x0=Math.floor(sx),y0=Math.floor(sy),fx=sx-x0,fy=sy-y0;
+    const at=(xx,yy)=>xx<0||yy<0||xx>27||yy>27?0:picture[yy*28+xx];
+    out[y*28+x]=at(x0,y0)*(1-fx)*(1-fy)+at(x0+1,y0)*fx*(1-fy)+at(x0,y0+1)*(1-fx)*fy+at(x0+1,y0+1)*fx*fy;
+  }
+  return out;
+}
+
+// The picture read several times (as written, moved a pixel each way, turned a
+// little) and the chances averaged: steadier than one reading.
+const VARIANTS=[[0,0,0],[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,7],[0,0,-7]];
+export function classifyDigit(picture){
+  const chances=new Array(10).fill(0);
+  for(const [dx,dy,angle] of VARIANTS){const one=digitChances(dx||dy||angle?movePicture(picture,dx,dy,angle):picture);for(let i=0;i<10;i++)chances[i]+=one[i]/VARIANTS.length;}
+  let digit=0;for(let i=1;i<10;i++)if(chances[i]>chances[digit])digit=i;
+  return {digit,confidence:chances[digit],chances};
+}
+
+// Reads a box: {digit, confidence, chances} or null when the box is empty.
 export function readDigitBox(canvas,box){
   const picture=boxTo28(canvas,box);
   return picture?classifyDigit(picture):null;

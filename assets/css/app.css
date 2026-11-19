@@ -274,6 +274,12 @@ video#camera[hidden]{display:none}
 .entry-sheet-input{width:100%;min-width:130px;min-height:40px;padding:0 9px;border:1px solid #dce5ed;border-radius:7px;background:#fff;color:var(--ink);font-size:12px}
 .entry-sheet-input:focus{outline:none;border-color:#009fa8;box-shadow:0 0 0 3px #009fa817}
 .entry-sheet-row-number{color:#68746c;font-weight:700;font-variant-numeric:tabular-nums}
+.sheet-digits{display:flex;flex-wrap:wrap;align-items:center;gap:2px;margin-top:4px;font:600 12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#3b4a42}
+.sheet-digits>span:not(.sheet-digits-label):not(.sheet-match):not(.sheet-unsure){min-width:1.15em;text-align:center;border-radius:3px;background:#eef3ef}
+.sheet-digits .is-unsure{background:#fde68a!important;color:#7c2d12}
+.sheet-digits-label{font:600 11px/1.4 system-ui,sans-serif;color:#68746c;margin-right:3px}
+.sheet-match,.sheet-unsure{flex-basis:100%;font:500 11px/1.35 system-ui,sans-serif}
+.sheet-match{color:#166534}.sheet-unsure{color:#9a3412}
 .entry-sheet-row-status{display:block;min-width:140px;color:#9f4e41;font-size:11px;line-height:1.45}
 .entry-sheet-row-status.is-ready{color:var(--green);font-weight:700}
 .entry-sheet-row-status.is-saved{color:#006c73;font-weight:700}

@@ -46,6 +46,41 @@ export function formLayout({memberBoxes,prefixBoxes,numberBoxes,remarks=[]}={}){
 }
 export const FORM_LAYOUT=formLayout();
 
+// The form code: two rows of 26 squares at the bottom right, black or white.
+// It tells the reader which race the form is for and how it was laid out, so
+// a form still reads right after Club settings change. The first and last
+// square of each row are always black (to find it); then 48 bits: race id 22,
+// member boxes−1 3, letter boxes 4, number boxes−1 4, remarks count 4,
+// remarks check 5, and a 6-bit check of all of that.
+export const FORM_CODE={cols:26,rows:2,left:.605,right:.965,top:.9745,height:.0095,gap:.002};
+export function formCodeCells(){
+  const C=FORM_CODE,w=(C.right-C.left)/C.cols,cells=[];
+  for(let r=0;r<C.rows;r++)for(let c=0;c<C.cols;c++){const y0=C.top+r*(C.height+C.gap);cells.push({row:r,col:c,x0:C.left+c*w,x1:C.left+(c+1)*w,y0,y1:y0+C.height});}
+  return cells;
+}
+const toBits=(value,size)=>Array.from({length:size},(_,i)=>(value>>(size-1-i))&1);
+const fromBits=bits=>bits.reduce((value,bit)=>value*2+bit,0);
+const check6=bits=>{let crc=0;for(const bit of bits){const top=((crc>>5)&1)^bit;crc=(crc<<1)&63;if(top)crc^=3;}return toBits(crc,6);};// x^6+x+1
+export const remarksCheck=labels=>{let h=0;for(const ch of labels.join('|').toUpperCase())h=(h*31+ch.charCodeAt(0))>>>0;return h%32;};
+// The 52 squares (1 = black), row by row.
+export function formCodeBits({raceId=0,layout=FORM_LAYOUT}={}){
+  const S=layout.settings,labels=layout.remarks.labels;
+  const data=[...toBits(Math.max(0,Number(raceId)||0)%(1<<22),22),...toBits(S.memberBoxes-1,3),...toBits(S.prefixBoxes,4),...toBits(S.numberBoxes-1,4),...toBits(labels.length,4),...toBits(remarksCheck(labels),5)];
+  const all=[...data,...check6(data)],C=FORM_CODE,inner=C.cols-2,bits=[];
+  for(let r=0;r<C.rows;r++)bits.push(1,...all.slice(r*inner,(r+1)*inner),1);
+  return bits;
+}
+// The squares read back: the form's race and layout, or null when it doesn't check out.
+export function readFormCodeBits(bits){
+  const C=FORM_CODE,inner=C.cols-2;if(bits.length!==C.cols*C.rows)return null;
+  const all=[];for(let r=0;r<C.rows;r++){const line=bits.slice(r*C.cols,(r+1)*C.cols);if(!line[0]||!line[C.cols-1])return null;all.push(...line.slice(1,-1));}
+  const data=all.slice(0,42);if(check6(data).join('')!==all.slice(42).join(''))return null;
+  let at=0;const take=size=>fromBits(data.slice(at,at+=size));
+  const raceId=take(22),memberBoxes=take(3)+1,prefixBoxes=take(4),numberBoxes=take(4)+1,remarksCount=take(4),remarksHash=take(5);
+  if(prefixBoxes>8||numberBoxes>10||remarksCount>12)return null;
+  return {raceId:raceId||null,memberBoxes,prefixBoxes,numberBoxes,remarksCount,remarksHash};
+}
+
 export const PAPERS={
   long:{label:'Long bond paper (8.5 × 13 in)',width:215.9,height:330.2},
   a4:{label:'A4',width:210,height:297},
@@ -92,7 +127,9 @@ export function loadingFormHtml({clubName='',race=null,layout=FORM_LAYOUT,paper=
       html+=b.member.map(x=>box(x)).join('')+b.prefix.map(x=>box(x,'box letter')).join('')+b.number.map(x=>box(x)).join('');
       b.remarks.forEach(x=>{html+=box(x,'tick')+`<div class="tick-label" style="${at(x.x1+.004,x.y0)};width:${(x.labelWidth*FW).toFixed(2)}mm;height:${((x.y1-x.y0)*FH).toFixed(2)}mm;font-size:${[3.4,3.4,3,2.6,2.3][L.remarks.lines]||2.3}mm">${escapeHTML(x.label)}</div>`;});
     }
-    html+=`<div class="foot" style="${at(.05,.976)};width:${(.9*FW).toFixed(2)}mm">AvilonX loading form · Loft name: member ID · Pigeon I.D: letters on top, numbers below · one character per box, in capitals · tick the remarks · keep the 4 black squares visible when scanning</div>`;
+    const bits=formCodeBits({raceId:race?.id,layout:L});
+    formCodeCells().forEach((cell,i)=>{if(bits[i])html+=`<div class="code" style="${at(cell.x0,cell.y0)};${size(cell.x1-cell.x0,cell.y1-cell.y0)}"></div>`;});
+    html+=`<div class="foot" style="${at(.03,.975)};width:${(.56*FW).toFixed(2)}mm">AvilonX loading form · Loft name: member ID · Pigeon I.D: ${L.settings.prefixBoxes?'letters on top, numbers below':'numbers'} · one character per box, inside the box · tick the remarks · keep the 4 black squares and the code on the right visible when scanning</div>`;
     return `<section class="page">${html}</section>`;
   };
   return `<!doctype html><html><head><meta charset="utf-8"><title>Loading form${race?` · ${escapeHTML(race.name)}`:''}</title><style>
@@ -111,7 +148,8 @@ export function loadingFormHtml({clubName='',race=null,layout=FORM_LAYOUT,paper=
   .tick{border:.35mm solid #000;border-radius:.4mm}
   .tick-label{display:flex;align-items:center;font-size:3.4mm;font-weight:700;white-space:nowrap;overflow:hidden}
   .hint{font-size:2mm;color:#666}
-  .foot{font-size:2.3mm;color:#555;text-align:center}
+  .foot{font-size:2.1mm;line-height:1.25;color:#555;text-align:left}
+  .code{background:#000}
   @media screen{body{background:#e9edf2}.page{margin:8mm auto;background:#fff;box-shadow:0 2px 12px #0003}}
   </style></head><body>${Array.from({length:Math.max(1,copies)},page).join('')}</body></html>`;
 }

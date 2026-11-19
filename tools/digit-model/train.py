@@ -1,9 +1,12 @@
 # Trains the handwritten digit reader of the AvilonX loading form.
-#   cd tools/digit-model && npm install && python3 train.py . 12 && python3 export.py .
-# Writes model.npz; export.py turns it into pages/admin/entries/digit-model.js.
-import numpy as np, json, sys, time
-from PIL import Image
-D=sys.argv[1]; rng=np.random.default_rng(7)
+#   cd tools/digit-model && npm install
+#   python3 train.py . 12 7 model.npz && python3 train.py . 14 11 model2.npz
+#   python3 export.py . model.npz model2.npz
+# Arguments: folder, epochs, seed, output. export.py turns the models into
+# pages/admin/entries/digit-model.js; the reader averages them.
+import numpy as np, json, sys, time, os
+from PIL import Image, ImageDraw
+D=sys.argv[1]; SEED=int(sys.argv[3]) if len(sys.argv)>3 else 7; OUT=sys.argv[4] if len(sys.argv)>4 else 'model.npz'; rng=np.random.default_rng(SEED)
 X=[];Y=[]
 # The files hold one flat list per digit (784 values per sample).
 for d in range(10):
@@ -12,6 +15,24 @@ for d in range(10):
     X.append(arr);Y+= [d]*len(arr)
 X=np.concatenate(X);Y=np.array(Y);print('samples',X.shape)
 idx=rng.permutation(len(X));X=X[idx];Y=Y[idx];Xt,Yt=X[:1000],Y[:1000];X,Y=X[1000:],Y[1000:]
+# Digits drawn in the fonts on this computer, so neat print-like writing reads
+# too. (Liberation Sans is left out: the browser test writes its digits in it.)
+import glob
+from PIL import ImageFont
+sys.path.insert(0,D);from prep import to28
+fonts=[f for f in glob.glob('/usr/share/fonts/**/*.[ot]tf',recursive=True) if 'LiberationSans' not in os.path.basename(f)]
+FX,FY=[],[]
+for f in fonts:
+    try:font=ImageFont.truetype(f,40)
+    except Exception:continue
+    for d in range(10):
+        im=Image.new('L',(64,64),0);ImageDraw.Draw(im).text((12,4),str(d),fill=255,font=font)
+        p=to28(np.asarray(im,dtype=np.float32)/255)
+        if p is not None:FX.append(p.astype(np.float32));FY.append(d)
+if FX:
+    FX=np.stack(FX);FY=np.array(FY);reps=max(1,int(len(X)*.12/len(FX)))
+    X=np.concatenate([X]+[FX]*reps);Y=np.concatenate([Y]+[FY]*reps)
+print('font digits',len(FX),'training samples',len(X))
 import os
 # Optional check: boxes cut from a real photo (real.npy: N×28×28 made with prep.py, real.txt: their digits).
 real=np.load(f'{D}/real.npy').astype(np.float32) if os.path.exists(f'{D}/real.npy') else None
@@ -20,6 +41,19 @@ def maxf(a):
     p=np.pad(a,1);return np.max([p[i:i+28,j:j+28] for i in range(3) for j in range(3)],0)
 def minf(a):
     p=np.pad(a,1);return np.min([p[i:i+28,j:j+28] for i in range(3) for j in range(3)],0)
+def styles(img, digit):
+    """Ways of writing common here but rare in MNIST: a 1 with a flag at the top, a 7 with a bar."""
+    if digit not in (1, 7) or rng.random() > .5: return img
+    ys, xs = np.nonzero(img > .5)
+    if not len(ys): return img
+    im = Image.fromarray((img * 255).astype(np.uint8)); d = ImageDraw.Draw(im); w = int(rng.integers(2, 4))
+    if digit == 1:
+        top = ys.argmin(); x, y = int(xs[top]), int(ys[top])
+        d.line([(x, y), (x - int(rng.integers(3, 7)), y + int(rng.integers(2, 6)))], fill=255, width=w)
+    else:
+        mid = (ys.min() + ys.max()) // 2; row = xs[np.abs(ys - mid) <= 1]
+        if len(row): c = int(row.mean()); d.line([(c - int(rng.integers(3, 6)), mid), (c + int(rng.integers(3, 6)), mid)], fill=255, width=w)
+    return np.asarray(im, dtype=np.float32) / 255
 def aug(img):
     a=rng.uniform(-14,14)*np.pi/180;sc=rng.uniform(.8,1.12);sh=rng.uniform(-.25,.25);sx=rng.uniform(.8,1.15)
     c,s=np.cos(a),np.sin(a);M=np.array([[c*sx,-s+sh],[s,c]])/sc;Mi=M
@@ -70,7 +104,7 @@ EP=int(sys.argv[2]) if len(sys.argv)>2 else 12
 for ep in range(EP):
     t0=time.time();lr=2e-3*(.5**(ep//4));order=rng.permutation(len(X));L=0
     for b in range(0,len(X),64):
-        ids=order[b:b+64];xb=np.stack([aug(X[i]) for i in ids])[:,None].astype(np.float32)
+        ids=order[b:b+64];xb=np.stack([aug(styles(X[i],Y[i])) for i in ids])[:,None].astype(np.float32)
         loss,G=step(xb,Y[ids]);L+=loss;t+=1
         for k in P:
             M[k]=.9*M[k]+.1*G[k];V[k]=.999*V[k]+.001*G[k]**2
@@ -78,4 +112,4 @@ for ep in range(EP):
     check=''
     if real is not None:pr=forward(real[:,None]).argmax(1);check=f' real {"".join(map(str,pr))} ({(pr==realY).sum()}/{len(realY)})'
     print(f'epoch {ep} loss {L/(len(X)/64):.3f} test {acc(Xt,Yt):.3f}{check} {time.time()-t0:.0f}s',flush=True)
-np.savez(f'{D}/model.npz',**P)
+np.savez(f'{D}/{OUT}',**P)

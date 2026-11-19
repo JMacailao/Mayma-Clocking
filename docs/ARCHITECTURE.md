@@ -57,10 +57,11 @@ Race entries (`pages/admin/entries/`):
 |---|---|
 | `page.js` | The entry form: RFID entries and Sticker entries, readers, bonded birds, last-race birds, rules shown before saving. |
 | `sheet-import.js` | The Scan race sheet and Import Excel tabs: preview with the found grid, camera with guide, review table with cell pictures, saving. |
-| `sheet-reader.js` | Reading a photo or PDF: rotation, finding the loading form's table, **Align on guide** (the form's layout `FORM_GUIDE`, straightening the table from 4 corners, rows from the guide), reading handwriting cell by cell (Tesseract), decoding sticker barcodes (ZXing). |
+| `sheet-reader.js` | Reading a photo or PDF: AvilonX forms (corner squares, `orientForm`, the form code, boxes snapped onto their print, ink judged against nearby paper, `formSharpness`), rotation, finding the loading form's table, **Align on guide** (the form's layout `FORM_GUIDE`, straightening the table from 4 corners, rows from the guide), reading handwriting cell by cell (Tesseract), decoding sticker barcodes (ZXing). |
 | `sheet-parse.js` | Pure rules with no browser code: remarks (P1/P2/P3), member IDs, matching rings to bonded birds, sticker numbers. |
-| `loading-form.js` | The **AvilonX loading form**: its layout (`formLayout(settings)`: the club's box counts from Club settings and all its remarks, shared by printing and reading) and the printable page (Print loading form). |
-| `digit-reader.js`, `digit-model.js` | The **handwritten digit reader** for the form's member ID and ring number boxes: a small neural network trained on handwritten digits (MNIST), run in the browser. `digit-model.js` holds its weights, made by `tools/digit-model` (`train.py`, then `export.py`). |
+| `loading-form.js` | The **AvilonX loading form**: its layout (`formLayout(settings)`: the club's box counts from Club settings and all its remarks, shared by printing and reading) the printable page (Print loading form) and the **form code** (`formCodeBits` / `readFormCodeBits`: race, box counts and remarks check as black and white squares). |
+| `digit-reader.js`, `digit-model.js` | The **handwritten digit reader** for the form's member ID and ring number boxes: two small neural networks trained on handwritten digits (MNIST) and font digits, averaged; each box is read several times (moved, turned) and printed border lines in it are wiped first. `digit-model.js` holds the weights, made by `tools/digit-model` (`train.py`, then `export.py`). |
+| `form-match.js` | **Matching** a read row to the club: the registered member and the member's bonded ring that fit the boxes' digit chances best (only when one clearly does). |
 | `excel-import.js` | Reading Excel files, including barcode pictures inside cells. |
 | `entry-helpers.js` | Small helpers: tag expiry, ways to clock, distance. |
 

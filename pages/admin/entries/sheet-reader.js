@@ -355,17 +355,89 @@ export function findFormMarks(canvas){
   const side=(a,b)=>Math.hypot(corners[a].x-corners[b].x,corners[a].y-corners[b].y);
   const relative=corners.map((c,i)=>c.area/(side(i,(i+1)%4)*side(i,(i+3)%4)));
   const order=[0,1,2,3].sort((a,b)=>relative[b]-relative[a]),big=order[0];
-  if(relative[big]<relative[order[1]]*1.3)return null;
+  // When the bigger square is unclear (a blurry photo), the corners are still
+  // returned, marked unsure: orientForm then tries the four ways up.
+  const sure=relative[big]>=relative[order[1]]*1.3;
   const span=Math.hypot(corners[0].x-corners[2].x,corners[0].y-corners[2].y);
   if(span<Math.hypot(canvas.width,canvas.height)*.35)return null;
-  return [0,1,2,3].map(k=>{const c=corners[(big+k)%4];return [c.x,c.y];});
+  const marks=[0,1,2,3].map(k=>{const c=corners[(big+k)%4];return [c.x,c.y];});
+  marks.sure=sure;
+  return marks;
+}
+
+// The form straightened the right way up: {corners, page, code}. With unsure
+// corners, each of the four ways is tried: the one whose form code reads wins,
+// else the one where the printed boxes line up best with the layout.
+export function orientForm(canvas,marks,{layout,boxesOf,codeCells,decode}){
+  const straight=corners=>({corners,page:straightenForm(canvas,corners)});
+  if(marks.sure!==false){const one=straight(marks);return {...one,code:codeCells?readFormCode(one.page,codeCells,decode):null};}
+  let best=null;
+  for(let k=0;k<4;k++){
+    const corners=[0,1,2,3].map(i=>marks[(i+k)%4]),one=straight(corners);
+    if(one.page.width>one.page.height)continue;// the form is always upright (portrait)
+    const code=codeCells?readFormCode(one.page,codeCells,decode):null;
+    if(code)return {...one,code};
+    const score=layout?boxOutlineScore(one.page,layout,boxesOf):0;
+    if(!best||score>best.score)best={...one,code:null,score};
+  }
+  return best;
+}
+// Share of the layout's box outlines that fall on printed lines (a pixel of slack).
+function boxOutlineScore(page,layout,boxesOf){
+  const W=page.width,H=page.height,data=page.getContext('2d',{willReadFrequently:true}).getImageData(0,0,W,H).data;
+  const levels=[];for(let i=0;i<data.length;i+=4*101)levels.push(data[i]*.299+data[i+1]*.587+data[i+2]*.114);levels.sort((a,b)=>a-b);
+  const cut=(levels[Math.floor(levels.length*.85)]||255)*.82,dark=(x,y)=>{x=Math.round(x);y=Math.round(y);if(x<0||y<0||x>=W||y>=H)return 0;const i=(y*W+x)*4;return data[i]*.299+data[i+1]*.587+data[i+2]*.114<cut?1:0;};
+  // Outlines dark and box centres light (blur and the table lines make dark
+  // pixels common, so the centres keep the score honest).
+  let hits=0,all=0,inside=0,centres=0;
+  for(let r=0;r<layout.rows;r++){const b=boxesOf(r);for(const box of [...b.member,...b.prefix,...b.number]){const x0=box.x0*W,x1=box.x1*W,y0=box.y0*H,y1=box.y1*H;
+    for(let k=0;k<=8;k++){const fx=x0+(x1-x0)*k/8,fy=y0+(y1-y0)*k/8;for(const [x,y] of [[fx,y0],[fx,y1],[x0,fy],[x1,fy]]){all++;let on=0;for(let dy=-1;dy<=1&&!on;dy++)for(let dx=-1;dx<=1&&!on;dx++)on=dark(x+dx,y+dy);hits+=on;}}
+    for(let k=1;k<=3;k++)for(let j=1;j<=3;j++){centres++;inside+=dark(x0+(x1-x0)*(.25+k*.125),y0+(y1-y0)*(.25+j*.125));}}}
+  return (all?hits/all:0)-(centres?inside/centres:0);
 }
 
 // Straightens an AvilonX form and lists its rows, with every box as a region
 // (pixels) and the remarks that are ticked. pageLayout = formLayout(...) and
 // boxesOf = index => rowBoxes(index, pageLayout) (from loading-form.js).
-export function readFormLayout(canvas,marks,pageLayout,boxesOf){
-  const page=straightenTable(canvas,marks,1400,0),W=page.width,H=page.height;
+export const straightenForm=(canvas,marks)=>straightenTable(canvas,marks,1400,0);
+
+// How sharp the straightened form is: the strength of its edges (box lines,
+// writing) against its contrast. Blurry or far-away photos score low.
+export function formSharpness(page){
+  const W=page.width,H=page.height,x0=Math.round(W*.05),x1=Math.round(W*.6),y0=Math.round(H*.15),y1=Math.round(H*.6);
+  const d=page.getContext('2d',{willReadFrequently:true}).getImageData(x0,y0,x1-x0,y1-y0).data,w=x1-x0,h=y1-y0,g=i=>d[i*4]*.299+d[i*4+1]*.587+d[i*4+2]*.114;
+  const edges=[];let lo=255,hi=0;
+  for(let y=1;y<h-1;y+=2)for(let x=1;x<w-1;x+=2){const i=y*w+x,v=g(i);if(v<lo)lo=v;if(v>hi)hi=v;edges.push(Math.abs(4*v-g(i-1)-g(i+1)-g(i-w)-g(i+w)));}
+  edges.sort((a,b)=>b-a);
+  const strong=edges.slice(0,Math.max(1,Math.floor(edges.length*.01)));
+  return strong.reduce((a,b)=>a+b,0)/strong.length/Math.max(1,hi-lo);
+}
+
+// The form code at the bottom right (see FORM_CODE in loading-form.js): its
+// squares as 0/1 on the straightened page, tried at small shifts. Returns what
+// readFormCodeBits makes of them, or null (forms printed before the code).
+export function readFormCode(page,cells,decode){
+  const W=page.width,H=page.height,context=page.getContext('2d',{willReadFrequently:true});
+  const xs=cells.map(c=>c.x0),ys=cells.map(c=>c.y0);
+  const left=Math.max(0,Math.floor((Math.min(...xs)-.01)*W)),top=Math.max(0,Math.floor((Math.min(...ys)-.01)*H)),right=Math.min(W,Math.ceil((Math.max(...cells.map(c=>c.x1))+.01)*W)),bottom=Math.min(H,Math.ceil((Math.max(...cells.map(c=>c.y1))+.01)*H));
+  if(right-left<10||bottom-top<4)return null;
+  const data=context.getImageData(left,top,right-left,bottom-top).data,w=right-left,gray=(x,y)=>{const i=((y-top)*w+(x-left))*4;return data[i]*.299+data[i+1]*.587+data[i+2]*.114;};
+  const levels=[];for(let i=0;i<data.length;i+=12)levels.push(data[i]*.299+data[i+1]*.587+data[i+2]*.114);levels.sort((a,b)=>a-b);
+  const paper=levels[Math.floor(levels.length*.9)]||255;
+  const cellW=(cells[0].x1-cells[0].x0)*W,cellH=(cells[0].y1-cells[0].y0)*H;
+  for(const dy of [0,-.3,.3,-.6,.6])for(const dx of [0,-.3,.3]){
+    const bits=cells.map(cell=>{
+      const x0=Math.round(cell.x0*W+dx*cellW+cellW*.25),x1=Math.round(cell.x1*W+dx*cellW-cellW*.25),y0=Math.round(cell.y0*H+dy*cellH+cellH*.25),y1=Math.round(cell.y1*H+dy*cellH-cellH*.25);
+      let sum=0,n=0;for(let y=Math.max(top,y0);y<=Math.min(bottom-1,y1);y++)for(let x=Math.max(left,x0);x<=Math.min(right-1,x1);x++){sum+=gray(x,y);n++;}
+      return n&&sum/n<paper*.6?1:0;
+    });
+    const found=decode(bits);if(found)return found;
+  }
+  return null;
+}
+
+export function readFormLayout(canvas,marks,pageLayout,boxesOf,straightened=null){
+  const page=straightened||straightenForm(canvas,marks),W=page.width,H=page.height;
   const px=b=>({left:b.x0*W,right:b.x1*W,top:b.y0*H,bottom:b.y1*H});
   const inner=(r,inset)=>{const dx=(r.right-r.left)*inset,dy=(r.bottom-r.top)*inset;return {left:r.left+dx,right:r.right-dx,top:r.top+dy,bottom:r.bottom-dy};};
   const context=page.getContext('2d',{willReadFrequently:true}),data=context.getImageData(0,0,W,H).data;
@@ -395,16 +467,50 @@ export function readFormLayout(canvas,marks,pageLayout,boxesOf){
     const coarse=best;best={...coarse,n:-1};
     for(let dy=coarse.dy-2;dy<=coarse.dy+2;dy++)for(let dx=coarse.dx-2;dx<=coarse.dx+2;dx++){const n=score(line,dx,dy);if(n>best.n)best={dx,dy,n};}
     if(best.n<points.length*.25)return boxes;// outlines not found: keep the boxes where they were
-    return boxes.map(r=>({...r,left:r.left+best.dx,right:r.right+best.dx,top:r.top+best.dy,bottom:r.bottom+best.dy}));
+    // Then each box on its own, a few pixels at most (the print and the photo never line up perfectly).
+    return boxes.map(r=>{
+      const moved={...r,left:r.left+best.dx,right:r.right+best.dx,top:r.top+best.dy,bottom:r.bottom+best.dy},own=outline([moved]);
+      const fit=(dx,dy)=>{let n=0;for(const [x,y] of own)n+=lineAt(line,x+dx,y+dy);return n;};
+      let mine={dx:0,dy:0,n:fit(0,0)};
+      for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){const n=fit(dx,dy);if(n>mine.n)mine={dx,dy,n};}
+      return {...moved,left:moved.left+mine.dx,right:moved.right+mine.dx,top:moved.top+mine.dy,bottom:moved.bottom+mine.dy};
+    });
   };
-  // Share of ink inside a box (its printed border left out).
-  const inkShare=r=>{const g=inner(r,.2);let dark=0,all=0;for(let y=Math.floor(g.top);y<g.bottom;y++)for(let x=Math.floor(g.left);x<g.right;x++){all++;dark+=inkAt(x,y);}return all?dark/all:0;};
+  // Share of ink inside a box. Straight lines near its edges are its printed
+  // border (when the box sits a little off), not writing, and are left out.
+  const inkShare=r=>{
+    const g=inner(r,.14),x0=Math.floor(g.left),y0=Math.floor(g.top),w=Math.max(1,Math.floor(g.right-g.left)),h=Math.max(1,Math.floor(g.bottom-g.top));
+    const cell=new Uint8Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++)cell[y*w+x]=inkAt(x0+x,y0+y);
+    // A border runs the box's whole height (or width); handwriting does not.
+    const edgeW=Math.ceil(w*.25),edgeH=Math.ceil(h*.25),fullTop=Math.floor(r.top),fullH=Math.max(1,Math.floor(r.bottom-r.top)),fullLeft=Math.floor(r.left),fullW=Math.max(1,Math.floor(r.right-r.left));
+    // (A pixel either side is allowed: on a bent page the lines slant a little.)
+    const lineCols=[],lineRows=[];
+    for(let x=0;x<w;x++){if(x>=edgeW&&x<w-edgeW)continue;let n=0;for(let y=0;y<fullH;y++)n+=inkAt(x0+x-1,fullTop+y)|inkAt(x0+x,fullTop+y)|inkAt(x0+x+1,fullTop+y);if(n>fullH*.88)lineCols.push(x);}
+    for(let y=0;y<h;y++){if(y>=edgeH&&y<h-edgeH)continue;let n=0;for(let x=0;x<fullW;x++)n+=inkAt(fullLeft+x,y0+y-1)|inkAt(fullLeft+x,y0+y)|inkAt(fullLeft+x,y0+y+1);if(n>fullW*.88)lineRows.push(y);}
+    for(const x of lineCols)for(const dx of [-1,0,1])if(x+dx>=0&&x+dx<w)for(let y=0;y<h;y++)cell[y*w+x+dx]=0;
+    for(const y of lineRows)for(const dy of [-1,0,1])if(y+dy>=0&&y+dy<h)for(let x=0;x<w;x++)cell[(y+dy)*w+x]=0;
+    let dark=0;for(let i=0;i<cell.length;i++)dark+=cell[i];
+    // The biggest connected stroke: writing is one stroke covering much of the box; specks are not.
+    const seen=new Uint8Array(cell.length),stack=[];let tallest=0;
+    for(let start=0;start<cell.length;start++){if(!cell[start]||seen[start])continue;seen[start]=1;stack.push(start);let top=h,bottom=-1,left=w,right=-1;
+      while(stack.length){const p=stack.pop(),x=p%w,y=(p-x)/w;if(y<top)top=y;if(y>bottom)bottom=y;if(x<left)left=x;if(x>right)right=x;
+        for(const q of [p-1,p+1,p-w,p+w]){if(q<0||q>=cell.length||seen[q]||!cell[q])continue;if((q===p-1&&x===0)||(q===p+1&&x===w-1))continue;seen[q]=1;stack.push(q);}}
+      tallest=Math.max(tallest,Math.max((bottom-top+1)/h,(right-left+1)/w));}
+    return {share:dark/cell.length,stroke:tallest};
+  };
+  // A box has writing with enough ink, or a long thin stroke (a 1).
+  const isWritten=ink=>ink.share>.03||(ink.share>.012&&ink.stroke>.45);
   const rows=[];
   for(let index=0;index<pageLayout.rows;index++){
     const b=boxesOf(index),member=snap(b.member.map(px)),ring=snap([...b.prefix,...b.number].map(px)),prefix=ring.slice(0,b.prefix.length),number=ring.slice(b.prefix.length);
     const remarkBoxes=snap(b.remarks.map(px));
-    const used=box=>inkShare(box)>.035;
-    const ticked=b.remarks.filter((box,i)=>inkShare(remarkBoxes[i])>.08).map(box=>box.label);
+    // A row is filled when several boxes have writing, or one has plenty of
+    // ink: a lone faint mark is a smudge or a bit of a printed line.
+    const inks=new Map([...member,...prefix,...number].map(box=>[box,inkShare(box)]));
+    const writtenBoxes=[...inks.values()].filter(isWritten);
+    const filled=writtenBoxes.length>=2||writtenBoxes.some(ink=>ink.share>.06);
+    const used=box=>filled&&isWritten(inks.get(box));
+    const ticked=b.remarks.filter((box,i)=>inkShare(remarkBoxes[i]).share>.08).map(box=>box.label);
     const sticker=px(b.cells.sticker);
     const hasSticker=barcodeGraphicPresent(page,sticker.left,sticker.right,sticker.top,sticker.bottom);
     const memberUsed=member.filter(used),ringUsed=[...prefix,...number].filter(used);
@@ -433,6 +539,7 @@ export async function readFormHandwriting(worker,page,rows,onProgress=()=>{},ink
     rows.forEach(row=>{
       const read=(row[key]||[]).map(box=>readDigitBox(page,box)).filter(Boolean);
       row[field]=read.map(r=>r.digit).join('');
+      row[`${field}_digits`]=read;// each box: {digit, confidence, chances} (for matching and the review)
       row[confidence]=read.length?Math.round(Math.min(...read.map(r=>r.confidence))*100):0;
     });
     onProgress(label);

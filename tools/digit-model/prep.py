@@ -33,9 +33,20 @@ def to28(ink):
     out = np.zeros((28, 28)); out[oy:oy+nh, ox:ox+nw] = small
     return np.clip(out, 0, 1)
 def box_ink(gray):
-    """gray: 2-D 0..255 crop of one box (border included). Inner part, ink weights."""
-    h, w = gray.shape
-    g = gray[int(h*.12):h-int(h*.12), int(w*.15):w-int(w*.15)].astype(float)
+    """gray: 2-D 0..255 crop of one box (border included). Inner part, ink weights,
+    with border lines that run the whole box wiped (as removeBorderLines in digit-reader.js)."""
+    fh, fw = gray.shape; top, side = int(fh*.12), int(fw*.15)
+    g = gray[top:fh-top, side:fw-side].astype(float)
     paper = np.percentile(g, 80)
     ink = np.clip((paper*.8 - g) / (paper*.35), 0, 1)
+    h, w = ink.shape; dark = gray.astype(float) < paper*.8 - paper*.35*.35
+    pad = np.pad(dark, 1)
+    cols = (pad[1:-1, :-2] | pad[1:-1, 1:-1] | pad[1:-1, 2:]).sum(0)   # per column, a pixel of slack
+    rows = (pad[:-2, 1:-1] | pad[1:-1, 1:-1] | pad[2:, 1:-1]).sum(1)
+    for x in range(w):
+        if w*.3 <= x < w*.7: continue
+        if cols[x+side] > fh*.88: ink[:, max(0, x-1):x+2] = 0
+    for y in range(h):
+        if h*.3 <= y < h*.7: continue
+        if rows[y+top] > fw*.88: ink[max(0, y-1):y+2, :] = 0
     return ink

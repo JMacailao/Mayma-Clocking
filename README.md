@@ -340,8 +340,18 @@ remarks or box counts, print the forms again.
 
 Photos work too, even taken at an angle, slightly bent or with a shadow: AvilonX lines
 each row up with its printed boxes before reading. Member ID and ring numbers are read
-by a handwritten-digit reader built into AvilonX; ring letters by the text reader. Write
-one clear digit per box, inside the box.
+by a handwritten-digit reader built into AvilonX; ring letters by the text reader. Each
+member ID is then matched to the registered members, and each ring to that member's
+bonded rings, so one unclear digit does not spoil the row. In the review, the digits as
+read are shown under each field; orange ones were unclear. Write one clear digit per
+box, inside the box.
+
+Forms printed now carry a **form code** (the black and white squares at the bottom
+right): it tells AvilonX the race and how the form was laid out, so the right race is
+chosen and a form still reads after Club settings change. A blurry photo gets a warning.
+
+To check reading accuracy on real photos, see `tools/form-accuracy/README.md`
+(`npm run test:forms`).
 
 
 On Race entries → **Scan race sheet**, upload a photo or PDF of the loading form, or
