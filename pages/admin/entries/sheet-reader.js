@@ -234,7 +234,7 @@ export function handwritingOCRBatch(source,rows,regionKey){
     for(let y=y0;y<y1;y++)for(let x=xa;x<xb;x++){const i=(y*width+x)*4,gray=data[i]*.299+data[i+1]*.587+data[i+2]*.114,value=gray<cut?0:255;data[i]=data[i+1]=data[i+2]=value;}}
   context.putImageData(pixels,0,0);return {canvas,placements};
 }
-export async function refineHandwrittenEntryFields(worker,source,rows,members,onProgress=()=>{}){
+export async function refineHandwrittenEntryFields(worker,source,rows,members,onProgress=()=>{},onlyFields=null){
   if(!worker?.setParameters||!worker?.recognize)return;
   const ALNUM='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_/.';
   const numericMembers=members.length&&members.every(member=>/^\d+$/.test(String(member.member_no).trim()));
@@ -243,6 +243,7 @@ export async function refineHandwrittenEntryFields(worker,source,rows,members,on
   try{await worker.setParameters(settings.member_no);}catch{return;}
   const fields=[['member_no','memberRegion','memberConfidence','Member ID'],['pigeon_ring','ringRegion','ringConfidence','Ring number'],['remarks_text','remarksRegion','remarksConfidence','Remarks'],['barcode','stickerTextRegion','barcodeConfidence','Sticker number']],batchSize=24;
   for(const [field,regionKey,confidenceKey,label] of fields){
+    if(onlyFields&&!onlyFields.includes(field))continue;
     try{await worker.setParameters(settings[field]);}catch{/* keep the previous settings */}
     // The sticker's printed number only where its barcode could not be decoded.
     const candidates=rows.filter(row=>row[regionKey]&&!(field==='barcode'&&row.barcodeDetected)),total=candidates.length;if(!total)continue;
@@ -317,4 +318,98 @@ export function entrySheetRowsFromGuide(canvas,guide=FORM_GUIDE){
     results.push({id:`sheet-${Date.now()}-${index}-${Math.random().toString(36).slice(2,7)}`,sheetRow:String(index+1),member_no:'',memberConfidence:0,pigeon_ring:'',ringConfidence:0,remarks_text:'',remarksConfidence:0,memberRegion:region(1),ringRegion:region(2),remarksRegion:region(3),stickerTextRegion:{...region(4),top:rowTop+rowHeight*.62},barcode:'',printedBarcode:'',barcodeDetected:false,barcodeScanError:'',barcodeRegion:region(4),errors:[],member:null,saved:false});
   }
   return results;
+}
+
+// ---- AvilonX loading form (printed by loading-form.js) -----------------------
+// Finds the 4 black corner squares; the biggest is the top-left one, so the
+// page's way up is known whatever way the photo or scan was taken. Returns the
+// squares' centres in page order (top-left, top-right, bottom-right,
+// bottom-left), or null when this is not an AvilonX form.
+export function findFormMarks(canvas){
+  const scale=Math.min(1,1000/Math.max(canvas.width,canvas.height)),W=Math.max(1,Math.round(canvas.width*scale)),H=Math.max(1,Math.round(canvas.height*scale));
+  const small=document.createElement('canvas');small.width=W;small.height=H;const context=small.getContext('2d',{willReadFrequently:true});context.drawImage(canvas,0,0,W,H);
+  const rgba=context.getImageData(0,0,W,H).data,dark=new Uint8Array(W*H);
+  const levels=[];for(let i=0;i<W*H;i+=7)levels.push(rgba[i*4]*.299+rgba[i*4+1]*.587+rgba[i*4+2]*.114);levels.sort((a,b)=>a-b);
+  const paper=levels[Math.floor(levels.length*.75)]||255,cut=Math.min(110,paper*.45);
+  for(let i=0;i<W*H;i++)dark[i]=(rgba[i*4]*.299+rgba[i*4+1]*.587+rgba[i*4+2]*.114)<cut?1:0;
+  // Solid dark blobs that are about square.
+  const label=new Int32Array(W*H),candidates=[],stack=[];let next=0;
+  for(let start=0;start<W*H;start++){
+    if(!dark[start]||label[start])continue;
+    next++;label[start]=next;stack.push(start);let count=0,x0=W,x1=0,y0=H,y1=0,sx=0,sy=0,edge=false;
+    while(stack.length){const p=stack.pop(),x=p%W,y=(p-x)/W;count++;sx+=x;sy+=y;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;if(x===0||y===0||x===W-1||y===H-1)edge=true;
+      for(const q of [p-1,p+1,p-W,p+W]){if(q<0||q>=W*H||label[q]||!dark[q])continue;if((q===p-1&&x===0)||(q===p+1&&x===W-1))continue;label[q]=next;stack.push(q);}}
+    const w=x1-x0+1,h=y1-y0+1;
+    if(edge||w<6||h<6||w>Math.min(W,H)*.12||h>Math.min(W,H)*.12)continue;
+    if(w/h<.6||w/h>1.65||count/(w*h)<.78)continue;
+    candidates.push({x:sx/count/scale,y:sy/count/scale,area:count/(scale*scale)});
+  }
+  if(candidates.length<4)return null;
+  // The square nearest each corner of the picture.
+  const corners=[[0,0],[canvas.width,0],[canvas.width,canvas.height],[0,canvas.height]].map(([cx,cy])=>candidates.reduce((best,c)=>{const d=Math.hypot(c.x-cx,c.y-cy);return !best||d<best.d?{...c,d}:best;},null));
+  if(new Set(corners).size<4||corners.some((c,i)=>corners.findIndex(o=>o.x===c.x&&o.y===c.y)!==i))return null;
+  const order=corners.map((c,i)=>i).sort((a,b)=>corners[b].area-corners[a].area),big=order[0];
+  const others=corners.filter((c,i)=>i!==big).map(c=>c.area);
+  if(corners[big].area<Math.max(...others)*1.5)return null;// the top-left square is bigger
+  const span=Math.hypot(corners[0].x-corners[2].x,corners[0].y-corners[2].y);
+  if(span<Math.hypot(canvas.width,canvas.height)*.35)return null;
+  return [0,1,2,3].map(k=>{const c=corners[(big+k)%4];return [c.x,c.y];});
+}
+
+// Straightens an AvilonX form and lists its rows, with every box as a region
+// (pixels) and the remarks that are ticked. pageLayout = FORM_LAYOUT, boxesOf =
+// rowBoxes (from loading-form.js).
+export function readFormLayout(canvas,marks,pageLayout,boxesOf,remarkLabels=[]){
+  const page=straightenTable(canvas,marks,1400,0),W=page.width,H=page.height;
+  const px=b=>({left:b.x0*W,right:b.x1*W,top:b.y0*H,bottom:b.y1*H});
+  const inner=(r,inset)=>{const dx=(r.right-r.left)*inset,dy=(r.bottom-r.top)*inset;return {left:r.left+dx,right:r.right-dx,top:r.top+dy,bottom:r.bottom-dy};};
+  const context=page.getContext('2d',{willReadFrequently:true});
+  // Share of clearly dark pixels inside a box (its printed border left out).
+  const inkShare=r=>{const g=inner(r,.18),x=Math.floor(g.left),y=Math.floor(g.top),w=Math.max(1,Math.floor(g.right-g.left)),h=Math.max(1,Math.floor(g.bottom-g.top)),d=context.getImageData(x,y,w,h).data;let dark=0;for(let i=0;i<d.length;i+=4)if(d[i]*.299+d[i+1]*.587+d[i+2]*.114<paper-70)dark++;return dark/(w*h);};
+  const sample=context.getImageData(0,0,W,H).data,levels=[];for(let i=0;i<sample.length;i+=4*97)levels.push(sample[i]*.299+sample[i+1]*.587+sample[i+2]*.114);levels.sort((a,b)=>a-b);
+  const paper=levels[Math.floor(levels.length*.7)]||255;
+  const labels=[...remarkLabels,'P1','P2','P3','OCP'].filter((v,i,a)=>v&&a.indexOf(v)===i).slice(0,pageLayout.remarks.count);
+  const rows=[];
+  for(let index=0;index<pageLayout.rows;index++){
+    const b=boxesOf(index),member=b.member.map(px),prefix=b.prefix.map(px),number=b.number.map(px);
+    const used=box=>inkShare(box)>.012;
+    const ticked=b.remarks.map(px).map((box,i)=>inkShare(box)>.08?labels[i]:null).filter(Boolean);
+    const sticker=px(b.cells.sticker);
+    const hasSticker=barcodeGraphicPresent(page,sticker.left,sticker.right,sticker.top,sticker.bottom);
+    const memberUsed=member.filter(used),ringUsed=[...prefix,...number].filter(used);
+    if(!memberUsed.length&&!ringUsed.length&&!hasSticker)continue;// empty row
+    rows.push({id:`sheet-${Date.now()}-${index}-${Math.random().toString(36).slice(2,7)}`,sheetRow:String(index+1),form:true,
+      memberBoxes:member.filter(used),prefixBoxes:prefix.filter(used),numberBoxes:number.filter(used),
+      member_no:'',memberConfidence:0,pigeon_ring:'',ringConfidence:0,remarks_text:ticked.join('/'),remarksConfidence:100,
+      memberRegion:px(b.cells.member),ringRegion:px(b.cells.ring),remarksRegion:px(b.cells.remarks),barcodeRegion:sticker,
+      stickerTextRegion:{...sticker,top:sticker.top+(sticker.bottom-sticker.top)*.62},
+      barcode:'',printedBarcode:'',barcodeDetected:false,barcodeScanError:'',errors:[],member:null,saved:false});
+  }
+  return {page,rows};
+}
+
+// Reads the handwritten boxes of AvilonX form rows: each field's boxes are put
+// side by side as one word, the words of all rows stacked, and read at once
+// with only the characters that field can hold.
+export async function readFormHandwriting(worker,page,rows,onProgress=()=>{}){
+  if(!worker?.recognize)return;
+  const fields=[['member_no','memberBoxes','0123456789','Member ID'],['ring_prefix','prefixBoxes','ABCDEFGHIJKLMNOPQRSTUVWXYZ','Ring letters'],['ring_number','numberBoxes','0123456789','Ring numbers']];
+  for(const [field,key,allowed,label] of fields){
+    const items=rows.filter(row=>row[key]?.length);if(!items.length)continue;
+    try{await worker.setParameters({tessedit_pageseg_mode:'6',tessedit_char_whitelist:allowed});}catch{/* keep the previous settings */}
+    const charH=64,gap=22,lineGap=36,strips=items.map(row=>{const boxes=row[key];return {row,width:boxes.length*(charH*.8+gap)+gap};});
+    const width=Math.max(...strips.map(s=>s.width)),canvas=document.createElement('canvas');canvas.width=Math.ceil(width);canvas.height=items.length*(charH+lineGap)+lineGap;
+    const c=canvas.getContext('2d',{willReadFrequently:true});c.fillStyle='#fff';c.fillRect(0,0,canvas.width,canvas.height);
+    strips.forEach((strip,i)=>{const y=lineGap+i*(charH+lineGap);strip.top=y;strip.bottom=y+charH;let x=gap;
+      strip.row[key].forEach(box=>{const dx=(box.right-box.left)*.14,dy=(box.bottom-box.top)*.14,w=box.right-box.left-2*dx,h=box.bottom-box.top-2*dy,dw=charH*.8;c.drawImage(page,box.left+dx,box.top+dy,w,h,x,y,dw,charH);x+=dw+gap;});});
+    // Ink black, paper white (per strip).
+    const image=c.getImageData(0,0,canvas.width,canvas.height),d=image.data;
+    strips.forEach(strip=>{const levels=[];for(let y=strip.top;y<strip.bottom;y+=2)for(let x=0;x<strip.width;x+=2){const i=(y*canvas.width+x)*4;levels.push(d[i]*.299+d[i+1]*.587+d[i+2]*.114);}levels.sort((a,b)=>a-b);const paper=levels[Math.floor(levels.length*.7)]||255,cut=paper-Math.max(30,paper*.22);
+      for(let y=strip.top;y<strip.bottom;y++)for(let x=0;x<canvas.width;x++){const i=(y*canvas.width+x)*4,v=(d[i]*.299+d[i+1]*.587+d[i+2]*.114)<cut?0:255;d[i]=d[i+1]=d[i+2]=v;}});
+    c.putImageData(image,0,0);
+    const {data}=await worker.recognize(canvas),words=data.words?.length?data.words:(data.lines||[]).flatMap(line=>line.words||[]);
+    strips.forEach(strip=>{const text=words.filter(word=>{const cy=(word.bbox.y0+word.bbox.y1)/2;return cy>=strip.top-12&&cy<=strip.bottom+12;}).sort((a,b)=>a.bbox.x0-b.bbox.x0).map(word=>String(word.text||'')).join('').replace(new RegExp(`[^${allowed}]`,'g'),'');strip.row[field]=text;});
+    onProgress(label);
+  }
+  rows.forEach(row=>{row.member_no=row.member_no||'';row.pigeon_ring=[row.ring_prefix,row.ring_number].filter(Boolean).join(' ');});
 }

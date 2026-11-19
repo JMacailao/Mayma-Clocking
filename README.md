@@ -327,6 +327,15 @@ effect after the old app windows are closed; they do not reload an active race.
 
 ## Scanning the loading form
 
+**Best: the AvilonX loading form.** On Race entries → Scan race sheet choose the paper
+size and press **Print loading form**: the club's loading form (Loft name · Pigeon I.D ·
+Remarks · Sticker, 15 rows) with the race filled in, boxes for the member ID and the ring
+(letters on top, numbers below, one character per box), tick boxes for the club's remarks
+and four black corner squares. Scan it with a printer or take a photo, upload it, and
+AvilonX finds the corner squares, straightens the page (any way up) and reads each box,
+tick and sticker. If the club changes its Entry remarks, print the forms again.
+
+
 On Race entries → **Scan race sheet**, upload a photo or PDF of the loading form, or
 press **Take photo with guide** to use the camera with a frame to line the form up.
 The preview shows the table the reader found: coloured boxes on the **Member ID**
