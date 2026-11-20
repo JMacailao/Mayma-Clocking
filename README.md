@@ -250,7 +250,8 @@ Create a club account with exactly that name to hand the old data to that club.
   and is corrected whenever the reader is online. Once on your Wi-Fi, open the
   reader's page at the address on its OLED or `http://avilonx-XXXX.local`; its own
   hotspot switches off after 10 minutes (a short press of the board's button
-  turns it on again).
+  turns it on again). To start again with no Wi-Fi: **Forget Wi-Fi** on the
+  reader's page, or hold the board's button 20 seconds.
 - Each sticker has a visible number (for example `12345`) and a hidden scratch code
   (for example `4567`). Each code prints as two pieces: on the left a number piece (logo, label text and the sticker number) for registering the race entry, and on the right, after a solid divider line, a barcode piece (barcode of the secret code with the decoded secret code underneath) for clocking. Keep the barcode piece hidden until clocking. Cover that box
   with scratch-off foil before handing stickers out. Race entries use the visible

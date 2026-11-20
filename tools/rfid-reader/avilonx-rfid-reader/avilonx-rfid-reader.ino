@@ -80,10 +80,12 @@
   wires) or a DS1302. The blue LED blinks once for a clocked tap and 3 times
   for a refusal; the buzzer beeps once for each tap and twice for a refusal.
 
-  Holding the button 10 seconds restores ONLY the reader's own hotspot
-  name/password to RFID-READER / RFID12345 and restarts. The saved router
-  Wi-Fi, device key and saved taps are kept. A short press turns the hotspot
-  on for 10 minutes.
+  The board's button: a short press turns the hotspot on for 10 minutes.
+  Hold 10 seconds and let go: the reader's own hotspot name/password go back
+  to RFID-READER / RFID12345 and it restarts (the router Wi-Fi is kept).
+  Hold 20 seconds: the router Wi-Fi is forgotten too; it restarts with only
+  its hotspot. "Forget Wi-Fi" on the reader's page does the same. The device
+  key and saved taps are always kept.
 
   On your Wi-Fi: once the reader is connected to your router, open its page
   from any phone or computer on the same Wi-Fi at the address on the OLED
@@ -192,7 +194,8 @@
 #define USE_OLED (I2C_SDA_PIN != NO_PIN)
 #define HAS_DS1302 (RTC_CLK_PIN != NO_PIN)
 #define RESET_BUTTON_PULLUP (RESET_BUTTON_PIN != 16)  // GPIO16 has no pull-up: it needs the resistor
-#define RESET_HOLD_MS 10000UL
+#define RESET_HOLD_MS 10000UL      // hold: hotspot name/password back to the defaults
+#define FORGET_WIFI_HOLD_MS 20000UL  // hold longer: also forget the router Wi-Fi
 
 #if USE_OLED
   #include <Wire.h>
@@ -317,7 +320,7 @@ const char PAGE[] PROGMEM = R"HTML(
 </div><div>
 <section class="card"><div class="cardbody"><div class="taginfo"><div><span class="smalllabel">RFID READER: <b id="rfidState">Checking...</b></span><br><span class="smalllabel">LAST TAG (UID)</span><div class="uid" id="uid">Waiting for card</div></div><div><span class="smalllabel">AVILONX REPLY</span><div class="reply" id="reply">No tags sent yet</div></div></div><div class="stats"><div class="stat"><span class="smalllabel">MODE</span><strong class="orange" id="mode">—</strong></div><div class="stat"><span class="smalllabel">TOTAL SCANS</span><strong id="count">0</strong></div><div class="stat"><span class="smalllabel">WAITING TO SEND</span><strong id="pending">0</strong></div></div></div></section>
 <section class="card" id="registration"><div class="cardhead">◇ &nbsp; Device Registration</div><div class="cardbody"><div class="panelrow"><span class="smalllabel">DEVICE SERIAL</span><button class="btn alt" type="button" id="copySerial">Copy serial</button></div><div class="deviceid" id="serial">—</div><div class="divider"></div><div class="panelrow"><b style="font-size:13px">Device Key</b><span class="status" id="keyStatus">Checking...</span></div><form id="keyForm"><div class="field"><label for="key">Device key from the AvilonX Super Admin</label><input id="key" name="key" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Paste 32-character device key" required></div><div class="buttons"><button class="btn" type="submit">Save Device Key</button></div></form><div id="keyMessage" class="message" role="status"></div><p class="notice">Send this device serial to the AvilonX Super Admin first. They register it for your club and give you the device key, which is saved inside the reader.</p></div></section>
-<section class="card" id="wifi"><div class="cardhead"><span>◉ &nbsp; Wi-Fi Connection</span><span class="status" id="wifiStatus">Checking...</span></div><div class="cardbody"><div class="info"><b>Current network:</b> <span id="ssid">—</span><br><b>Router IP:</b> <span id="ip">—</span><br><b>Open on your Wi-Fi:</b> <span id="lan">—</span><br><b>AvilonX:</b> <span id="avilonxState">—</span><br><b>Device AP:</b> <span id="apName">RFID-READER</span> · 192.168.4.1</div><form id="wifiForm"><div class="field"><label for="network">Select a 2.4 GHz Wi-Fi network</label><select id="network" name="ssid" required><option value="">Scanning networks...</option></select></div><div class="field"><label for="password">Wi-Fi password</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="Password (blank for open Wi-Fi)"></div><div class="buttons"><button class="btn alt" type="button" id="scanBtn">↻ Scan Networks</button><button class="btn" type="submit">Save &amp; Connect</button></div></form><div class="message" id="message" role="status"></div><div class="divider"></div><h3 style="margin:12px 0 4px;font-size:16px">Reader hotspot settings</h3><p class="notice">Change the reader's own Wi-Fi name and password. This does not change the internet router connection or AvilonX registration.</p><form id="apForm"><div class="field"><label for="apSsidInput">Reader Wi-Fi name (SSID)</label><input id="apSsidInput" name="ap_ssid" maxlength="32" required placeholder="RFID-READER"></div><div class="field"><label for="apPasswordInput">New reader Wi-Fi password</label><input id="apPasswordInput" name="ap_password" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="8–63 characters"></div><div class="field"><label for="apConfirmInput">Confirm new password</label><input id="apConfirmInput" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="Repeat new password"></div><div class="buttons"><button class="btn" type="submit">Update Reader Hotspot</button></div></form><div class="message" id="apMessage" role="status"></div><p class="notice">After saving, the reader will restart. Reconnect your phone to the new hotspot name; the website address stays 192.168.4.1.</p><p class="notice">Forgot the reader hotspot name or password? Hold the reset button on D0 for 10 seconds. The reader restarts and the hotspot returns to RFID-READER / RFID12345. The saved router connection, AvilonX key and saved taps are kept.</p></div></section>
+<section class="card" id="wifi"><div class="cardhead"><span>◉ &nbsp; Wi-Fi Connection</span><span class="status" id="wifiStatus">Checking...</span></div><div class="cardbody"><div class="info"><b>Current network:</b> <span id="ssid">—</span><br><b>Router IP:</b> <span id="ip">—</span><br><b>Open on your Wi-Fi:</b> <span id="lan">—</span><br><b>AvilonX:</b> <span id="avilonxState">—</span><br><b>Device AP:</b> <span id="apName">RFID-READER</span> · 192.168.4.1</div><form id="wifiForm"><div class="field"><label for="network">Select a 2.4 GHz Wi-Fi network</label><select id="network" name="ssid" required><option value="">Scanning networks...</option></select></div><div class="field"><label for="password">Wi-Fi password</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="Password (blank for open Wi-Fi)"></div><div class="buttons"><button class="btn alt" type="button" id="scanBtn">↻ Scan Networks</button><button class="btn" type="submit">Save &amp; Connect</button><button class="btn alt" type="button" id="forgetWifi">Forget Wi-Fi</button></div></form><div class="message" id="message" role="status"></div><div class="divider"></div><h3 style="margin:12px 0 4px;font-size:16px">Reader hotspot settings</h3><p class="notice">Change the reader's own Wi-Fi name and password. This does not change the internet router connection or AvilonX registration.</p><form id="apForm"><div class="field"><label for="apSsidInput">Reader Wi-Fi name (SSID)</label><input id="apSsidInput" name="ap_ssid" maxlength="32" required placeholder="RFID-READER"></div><div class="field"><label for="apPasswordInput">New reader Wi-Fi password</label><input id="apPasswordInput" name="ap_password" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="8–63 characters"></div><div class="field"><label for="apConfirmInput">Confirm new password</label><input id="apConfirmInput" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="Repeat new password"></div><div class="buttons"><button class="btn" type="submit">Update Reader Hotspot</button></div></form><div class="message" id="apMessage" role="status"></div><p class="notice">After saving, the reader will restart. Reconnect your phone to the new hotspot name; the website address stays 192.168.4.1.</p><p class="notice">Forgot the reader hotspot name or password? Hold the board's button (FLASH or BOOT) for 10 seconds, then let go: the hotspot returns to RFID-READER / RFID12345. Hold it 20 seconds to also forget the router Wi-Fi. The AvilonX key and saved taps are always kept. A short press turns the hotspot on for 10 minutes.</p></div></section>
 </div></div></main></div></div>
 <script>
 const $=id=>document.getElementById(id);let previousUID='',updating=false,scanning=false;
@@ -326,7 +329,7 @@ function statusBadge(el,label,good){el.textContent=label;el.className='status '+
 async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;if($('rfidState')){$('rfidState').textContent=s.rfid_ok?('OK'+(s.rfid_restarts?' (restarted '+s.rfid_restarts+'x)':'')):'Not answering: check RC522 wiring and 3.3V';$('rfidState').className=s.rfid_ok?'ok':'bad';}$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=(s.clock_synced?'clock is set from '+(/^ds/.test(s.clock_source)?'the '+s.clock_source.slice(0,6).toUpperCase()+' battery clock':'internet time')+', Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)')+(/_unset$/.test(s.clock_source)?'. The '+s.clock_source.slice(0,6).toUpperCase()+' needs internet once to set its time':'')+(s.clock_source==='internet'?'. No DS3231 or DS1302 found: the time is lost if the reader is switched off':'');statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=(s.ap_ssid||'RFID-READER')+(s.ap_on?'':' (off while on your Wi-Fi: press the board button once to turn it on)');$('lan').textContent=s.router_ip?('http://'+s.router_ip+'  or  http://'+s.hostname+'.local'):'Connect the reader to your Wi-Fi first';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';$('avilonxState').textContent=s.avilonx_online?'Online (the club can see this reader)':(s.wifi_connected?'Not reachable yet':'Offline (no internet)');statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const wb=$('waiting');if(wb){const w=s.waiting||[];$('waitingBox').hidden=!w.length;wb.replaceChildren();w.forEach((x,i)=>{const tr=document.createElement('tr');[String(i+1),x.uid,x.time].forEach((v,k)=>{const td=document.createElement('td');td.textContent=v;if(k===1)td.className='tagcode';tr.appendChild(td);});wb.appendChild(tr);});}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
 async function scanNetworks(){if(scanning)return;scanning=true;const btn=$('scanBtn'),select=$('network');btn.disabled=true;select.replaceChildren(new Option('Scanning networks...',''));try{let items=null;for(let i=0;i<15&&!items;i++){const r=await fetch('/api/networks',{cache:'no-store'});if(r.status===202){await wait(1000);continue;}if(!r.ok)throw Error('scan failed');items=await r.json();}if(!items)throw Error('scan timed out');select.replaceChildren(new Option('Choose a Wi-Fi network',''));items.forEach(n=>select.add(new Option(n.ssid+' ('+n.rssi+' dBm)'+(n.open?' - Open':''),n.ssid)));$('message').textContent=items.length?'':'No Wi-Fi networks found. Try again.';}catch(e){select.replaceChildren(new Option('Could not scan',''));$('message').textContent='Wi-Fi scan failed. Try again.';}finally{scanning=false;btn.disabled=false;}}
 async function post(url,form,output){output.textContent='Saving...';try{const r=await fetch(url,{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok)update();}catch(e){output.textContent='Could not save. Check that you are connected to the reader hotspot.';}}
-$('scanBtn').addEventListener('click',scanNetworks);$('copySerial').addEventListener('click',()=>{const text=$('serial').textContent;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>{$('copySerial').textContent='Copied';});else window.prompt('Copy device serial',text);});$('wifiForm').addEventListener('submit',e=>{e.preventDefault();post('/wifi/save',e.target,$('message')).then(()=>$('password').value='');});$('keyForm').addEventListener('submit',e=>{e.preventDefault();post('/device/save',e.target,$('keyMessage')).then(()=>$('key').value='');});$('apForm').addEventListener('submit',async e=>{e.preventDefault();const form=e.target,output=$('apMessage'),pw=$('apPasswordInput').value;if(pw!==$('apConfirmInput').value){output.textContent='Passwords do not match.';return;}output.textContent='Saving hotspot credentials...';try{const r=await fetch('/ap/save',{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok){$('apPasswordInput').value='';$('apConfirmInput').value='';}}catch(err){output.textContent='Could not save; check your connection.';}});update();setInterval(update,1000);scanNetworks();
+$('scanBtn').addEventListener('click',scanNetworks);$('forgetWifi').addEventListener('click',async()=>{if(!confirm('Forget the saved Wi-Fi? The reader restarts with only its own hotspot ('+($('apName').textContent.split(' (')[0]||'RFID-READER')+', http://192.168.4.1). The device key and saved taps are kept.'))return;$('message').textContent='Forgetting...';try{const r=await fetch('/wifi/forget',{method:'POST'});$('message').textContent=await r.text();}catch(e){$('message').textContent='Could not reach the reader.';}});$('copySerial').addEventListener('click',()=>{const text=$('serial').textContent;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>{$('copySerial').textContent='Copied';});else window.prompt('Copy device serial',text);});$('wifiForm').addEventListener('submit',e=>{e.preventDefault();post('/wifi/save',e.target,$('message')).then(()=>$('password').value='');});$('keyForm').addEventListener('submit',e=>{e.preventDefault();post('/device/save',e.target,$('keyMessage')).then(()=>$('key').value='');});$('apForm').addEventListener('submit',async e=>{e.preventDefault();const form=e.target,output=$('apMessage'),pw=$('apPasswordInput').value;if(pw!==$('apConfirmInput').value){output.textContent='Passwords do not match.';return;}output.textContent='Saving hotspot credentials...';try{const r=await fetch('/ap/save',{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok){$('apPasswordInput').value='';$('apConfirmInput').value='';}}catch(err){output.textContent='Could not save; check your connection.';}});update();setInterval(update,1000);scanNetworks();
 </script></body></html>
 )HTML";
 
@@ -997,6 +1000,15 @@ void storeSettings() {
   if (!EEPROM.commit()) Serial.println(F("ERROR: Could not save settings"));
 }
 
+// Forgets the router Wi-Fi (name and password). Keeps the device key,
+// the hotspot settings and the saved taps.
+void forgetRouterWifi() {
+  memset(config.ssid, 0, sizeof(config.ssid));
+  memset(config.password, 0, sizeof(config.password));
+  storeSettings();
+  WiFi.disconnect();
+}
+
 void restoreDefaultApOnly() {
   // Does not touch config.ssid, config.password or config.deviceKey.
   setDefaultApCredentials();
@@ -1188,6 +1200,14 @@ void handleWifiSave() {
   storeSettings();
   server.send(200, "text/plain", "Wi-Fi saved. Connecting to " + ssid + ". Check the status in a few seconds.");
   beginRouterConnection();
+}
+
+void handleWifiForget() {
+  if (!config.ssid[0]) { server.send(200, "text/plain", "No Wi-Fi is saved."); return; }
+  forgetRouterWifi();
+  server.send(200, "text/plain", String("Wi-Fi forgotten. The reader restarts with only its hotspot: join ") + config.apSsid + " and open http://192.168.4.1 to choose a Wi-Fi. The device key and saved taps are kept.");
+  restartAfterApChange = true;   // restart in 2 seconds (after this reply is sent)
+  apChangeRestartAt = millis() + 2000UL;
 }
 
 void handleApSave() {
@@ -1508,21 +1528,40 @@ bool buttonDown() {
 }
 
 // Short press (under 3 s): the reader's hotspot on for 10 minutes.
-// Hold 10 s: the hotspot's name and password back to RFID-READER / RFID12345.
+// Hold 10 s, then let go: the hotspot's name and password back to
+//   RFID-READER / RFID12345, and restart.
+// Hold 20 s: that, and the router Wi-Fi is forgotten too (restart with only
+//   the hotspot on). The device key and saved taps are always kept.
+bool tenSecondsSignalled = false;
 void checkResetButton() {
   if (buttonDown()) {
     if (buttonPressedAt == 0) buttonPressedAt = millis();
-    if (!resetAlreadyHandled && (unsigned long)(millis() - buttonPressedAt) >= RESET_HOLD_MS) {
+    unsigned long held = millis() - buttonPressedAt;
+    if (!resetAlreadyHandled && !tenSecondsSignalled && held >= RESET_HOLD_MS) {
+      tenSecondsSignalled = true;   // decided when the button is let go (or at 20 s)
+      beep(1);
+      showReply(F("Let go now: reset the hotspot. Keep holding 10 s more: also forget the Wi-Fi."), true);
+    }
+    if (!resetAlreadyHandled && held >= FORGET_WIFI_HOLD_MS) {
       resetAlreadyHandled = true;
-      Serial.println(F("10-second hold: restoring the default reader hotspot."));
-      restoreDefaultApOnly();        // keeps router Wi-Fi, device key and saved taps
+      Serial.println(F("20-second hold: forgetting the router Wi-Fi and restoring the default reader hotspot."));
+      forgetRouterWifi();
+      restoreDefaultApOnly();        // keeps the device key and saved taps
+      showReply(F("Wi-Fi forgotten. Restarting: join RFID-READER, open 192.168.4.1"), true);
       restartAfterResetBlinks = true;
       blink(3);
       beep(3);
     }
   } else {
-    if (buttonPressedAt != 0 && !resetAlreadyHandled) {
-      unsigned long held = millis() - buttonPressedAt;
+    unsigned long held = buttonPressedAt ? millis() - buttonPressedAt : 0;
+    if (buttonPressedAt != 0 && !resetAlreadyHandled && held >= RESET_HOLD_MS) {
+      Serial.println(F("10-second hold: restoring the default reader hotspot."));
+      restoreDefaultApOnly();        // keeps router Wi-Fi, device key and saved taps
+      showReply(F("Hotspot reset to RFID-READER / RFID12345. Restarting."), true);
+      restartAfterResetBlinks = true;
+      blink(3);
+      beep(3);
+    } else if (buttonPressedAt != 0 && !resetAlreadyHandled) {
       if (held >= 50UL && held < 3000UL) {
         hotspotKeepUntilMs = millis() + HOTSPOT_BUTTON_MS;
         Serial.println(F("Button: reader hotspot on for 10 minutes."));
@@ -1532,6 +1571,7 @@ void checkResetButton() {
     }
     buttonPressedAt = 0;
     resetAlreadyHandled = false;
+    tenSecondsSignalled = false;
   }
 }
 
@@ -1595,6 +1635,7 @@ void setup() {
   server.on("/api/status", HTTP_GET, handleStatus);
   server.on("/api/networks", HTTP_GET, handleNetworks);
   server.on("/wifi/save", HTTP_POST, handleWifiSave);
+  server.on("/wifi/forget", HTTP_POST, handleWifiForget);
   server.on("/ap/save", HTTP_POST, handleApSave);
   server.on("/device/save", HTTP_POST, handleDeviceSave);
   server.onNotFound([]() { server.sendHeader("Location", "/"); server.send(302, "text/plain", ""); });
@@ -1610,6 +1651,8 @@ void loop() {
   checkResetButton();
   updateLED();
   if (restartAfterResetBlinks) {
+    updateDisplay();   // shows what is happening
+    updateBuzzer();
     // Wait for all three blinks to finish before restarting.
     if (ledTogglesRemaining == 0 && (int32_t)(millis() - ledNextMs) >= 0) {
       Serial.println(F("Hotspot defaults restored. Restarting; router and AvilonX settings are kept."));

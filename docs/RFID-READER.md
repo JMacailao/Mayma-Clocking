@@ -93,10 +93,25 @@ rechargeable LIR2032 cell. At 3.3 V it hardly charges, so a normal CR2032 is fin
 | Action | What happens |
 |---|---|
 | Short press (under 3 s) | The reader's hotspot turns on for 10 minutes |
-| Hold 10 s | Hotspot name/password back to RFID-READER / RFID12345, restart (Wi-Fi, device key and saved taps are kept) |
+| Hold 10 s, then let go (1 beep at 10 s) | Hotspot name/password back to RFID-READER / RFID12345, restart. The router Wi-Fi is kept |
+| Hold 20 s | **Forget the router Wi-Fi** too, restart with only the hotspot on |
 | Each tap | 1 beep |
 | AvilonX refuses a tap | 2 beeps, LED blinks 3 times |
 | AvilonX clocks it | LED blinks once |
+
+The device key and saved taps are always kept.
+
+## Forget the Wi-Fi (start again with no Wi-Fi)
+
+Either:
+
+- on the reader's page, **Wi-Fi Connection → Forget Wi-Fi**, or
+- hold the board's **FLASH** (ESP8266) or **BOOT** (ESP32) button **20 seconds**.
+
+The reader restarts with only its hotspot. Join **RFID-READER** (password
+RFID12345), open **http://192.168.4.1** and choose a Wi-Fi. The device key and the
+taps not yet sent are kept. (A full wipe, which also deletes the device key and the
+saved taps: upload again with *Tools → Erase Flash → All Flash Contents*.)
 
 ## Opening the reader's page
 
