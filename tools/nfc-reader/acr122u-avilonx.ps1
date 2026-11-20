@@ -11,6 +11,9 @@
      If the browser asks to allow access to devices on your network, choose Allow.
   3. Tap tags on the reader. Press Ctrl+C or close this window to stop.
 
+  Two tags on the reader at the same time are both read (the reader's chip is
+  asked for up to 2 tags); each tag counts once until it is lifted off.
+
   Taps are shared only on this computer (127.0.0.1) and only with AvilonX pages.
 #>
 
@@ -56,25 +59,55 @@ public static class AvilonXPcsc {
     return new string(buffer, 0, length).Split(new[] { '\0' }, StringSplitOptions.RemoveEmptyEntries);
   }
 
-  // The UID of the tag on the reader as uppercase hex, or null when no tag is present.
-  public static string ReadUid(string reader) {
+  // The UIDs of the tags on the reader (uppercase hex): up to 2 at once, or an
+  // empty list when none is present.
+  public static string[] ReadUids(string reader) {
     Open();
     IntPtr card; uint protocol;
     int rc = SCardConnectW(context, reader, 2 /* shared */, 3 /* T0 | T1 */, out card, out protocol);
-    if (rc != 0) return null;
+    if (rc != 0) return new string[0];
     try {
       IoRequest pci = new IoRequest { Protocol = protocol, PciLength = 8 };
-      byte[] getUid = { 0xFF, 0xCA, 0x00, 0x00, 0x00 };
+      // The reader's chip (PN532) lists up to 2 tags: InListPassiveTarget, 106 kbps type A.
+      byte[] listTwo = { 0xFF, 0x00, 0x00, 0x00, 0x04, 0xD4, 0x4A, 0x02, 0x00 };
       byte[] response = new byte[258];
       int responseLength = response.Length;
+      rc = SCardTransmit(card, ref pci, listTwo, listTwo.Length, IntPtr.Zero, response, ref responseLength);
+      string[] both = rc == 0 ? ParseTargets(response, responseLength) : new string[0];
+      if (both.Length > 0) return both;
+      // Not supported here: the one tag the reader chose, as before.
+      byte[] getUid = { 0xFF, 0xCA, 0x00, 0x00, 0x00 };
+      responseLength = response.Length;
       rc = SCardTransmit(card, ref pci, getUid, getUid.Length, IntPtr.Zero, response, ref responseLength);
-      if (rc != 0 || responseLength < 3 || response[responseLength - 2] != 0x90 || response[responseLength - 1] != 0x00) return null;
+      if (rc != 0 || responseLength < 3 || response[responseLength - 2] != 0x90 || response[responseLength - 1] != 0x00) return new string[0];
       StringBuilder hex = new StringBuilder();
       for (int i = 0; i < responseLength - 2; i++) hex.Append(response[i].ToString("X2"));
-      return hex.ToString();
+      return new[] { hex.ToString() };
     } finally {
       SCardDisconnect(card, 0 /* leave card */);
     }
+  }
+
+  // The tags in an InListPassiveTarget answer: D5 4B count, then for each tag
+  // its number, SENS_RES (2), SEL_RES (1), UID length, UID, and an ATS when
+  // SEL_RES says so; then 90 00. Anything unexpected gives an empty list.
+  public static string[] ParseTargets(byte[] r, int length) {
+    var found = new System.Collections.Generic.List<string>();
+    if (length < 5 || r[length - 2] != 0x90 || r[length - 1] != 0x00 || r[0] != 0xD5 || r[1] != 0x4B) return new string[0];
+    int end = length - 2, count = r[2], at = 3;
+    for (int t = 0; t < count; t++) {
+      if (at + 5 > end) return new string[0];
+      int selRes = r[at + 3], uidLength = r[at + 4];
+      at += 5;
+      if (uidLength != 4 && uidLength != 7 && uidLength != 10) return new string[0];
+      if (at + uidLength > end) return new string[0];
+      StringBuilder hex = new StringBuilder();
+      for (int i = 0; i < uidLength; i++) hex.Append(r[at + i].ToString("X2"));
+      at += uidLength;
+      if ((selRes & 0x20) != 0) { if (at >= end) return new string[0]; at += Math.Max(1, (int)r[at]); }
+      if (!found.Contains(hex.ToString())) found.Add(hex.ToString());
+    }
+    return found.ToArray();
   }
 }
 '@
@@ -177,7 +210,8 @@ Write-Host 'Keep this window open. In AvilonX choose "Wired" as the reader, then
 Write-Host 'Nothing to register. Press Ctrl+C or close this window to stop.'
 Write-Host ''
 
-$lastUid = $null
+$onReader = New-Object 'System.Collections.Generic.HashSet[string]'   # tags on the reader now
+$lastSeen = @{}                                                        # tag -> when last seen
 $reader = $null
 $warned = $false
 $nextRead = [DateTime]::MinValue
@@ -198,29 +232,36 @@ try {
           elseif (-not $warned) { Write-Host 'No NFC reader found. Plug in the ACR122U; this window will pick it up.' -ForegroundColor Yellow; $warned = $true; $script:readerName = '' }
         }
         if ($reader) {
-          $uid = [AvilonXPcsc]::ReadUid($reader)
-          if ($uid -and $uid -ne $lastUid) {
+          $uids = @([AvilonXPcsc]::ReadUids($reader))
+          $now = Get-Date
+          foreach ($uid in $uids) {
+            # Each tag counts once: not again while it stays on the reader, nor
+            # for 1.5 seconds after it was last seen (a moment the reader loses it).
+            $fresh = -not $onReader.Contains($uid) -and (-not $lastSeen.ContainsKey($uid) -or ($now - $lastSeen[$uid]).TotalMilliseconds -gt 1500)
+            $lastSeen[$uid] = $now
+            if (-not $fresh) { continue }
             if (@(8, 14, 20) -contains $uid.Length) {
               $script:seq++
               [void]$script:tags.Add(@{ seq = $script:seq; uid = $uid })
               while ($script:tags.Count -gt 20) { $script:tags.RemoveAt(0) }
               Update-Waiters
-              Write-Host ("{0}  Tag {1}" -f (Get-Date -Format 'HH:mm:ss'), $uid) -ForegroundColor Cyan
+              Write-Host ("{0}  Tag {1}{2}" -f (Get-Date -Format 'HH:mm:ss'), $uid, $(if ($uids.Count -gt 1) { '  (2 tags on the reader)' } else { '' })) -ForegroundColor Cyan
             } else { Write-Host "Tag $uid has an unusual ID length and was ignored." -ForegroundColor Yellow }
           }
-          # Remember the tag until it is lifted off, so each tap counts once.
-          $lastUid = $uid
+          $onReader = New-Object 'System.Collections.Generic.HashSet[string]'
+          foreach ($uid in $uids) { [void]$onReader.Add($uid) }
+          foreach ($old in @($lastSeen.Keys)) { if (($now - $lastSeen[$old]).TotalSeconds -gt 10) { $lastSeen.Remove($old) } }
           # Unplugged? Checked every 2 seconds (listing readers is slow).
           if ((Get-Date) -ge $nextReaderCheck) { $nextReaderCheck = (Get-Date).AddSeconds(2); $present = [AvilonXPcsc]::Readers() -contains $reader } else { $present = $true }
           if (-not $present) {
             Write-Host 'Reader unplugged. Waiting for it to come back...' -ForegroundColor Yellow
-            $reader = $null; $lastUid = $null; $script:readerName = ''
+            $reader = $null; $onReader.Clear(); $script:readerName = ''
           }
         }
       } catch {
         Write-Host $_.Exception.Message -ForegroundColor Red
         [AvilonXPcsc]::Close()
-        $reader = $null; $lastUid = $null; $script:readerName = ''
+        $reader = $null; $onReader.Clear(); $script:readerName = ''
         $nextRead = (Get-Date).AddSeconds(2)
       }
     }

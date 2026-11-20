@@ -39,13 +39,15 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     return {ok:true,duplicate:data?.status==='duplicate',text:`${entryLabel(entry)}: ${data?.message||'Clocking received.'}`};
   };
 
-  let nfcBusy=false;
-  const clockTag=async uid=>{
-    if(nfcBusy)return;
+  // Tags are clocked one after another, in the order read (two tags read
+  // together by the ACR122U both count; none is dropped while one is sending).
+  let nfcQueue=Promise.resolve();
+  const clockTag=uid=>(nfcQueue=nfcQueue.then(()=>clockOneTag(uid)).catch(error=>message(error.message,'error')));
+  const clockOneTag=async uid=>{
     const raceId=Number(nfcRace.value),matches=openEntries.filter(entry=>entry.nfc_tag===uid&&(!raceId||entry.race_id===raceId));
     if(!matches.length){const text=`Tag ${formatNfcUid(uid)} is not registered to a pigeon in ${raceId?'this race':'an open race'}.`;addLog(text,'error');message(text,'error');return;}
     if(matches.length>1){const text=`Tag ${formatNfcUid(uid)} is entered in more than one open race. Choose the race first.`;addLog(text,'error');message(text,'error');nfcRace.focus();return;}
-    nfcBusy=true;try{const result=await clockEntry(matches[0]);addLog(result.text,result.ok&&!result.duplicate?'success':'error');message(result.text,result.ok?(result.duplicate?'info':'success'):'error');}finally{nfcBusy=false;}
+    const result=await clockEntry(matches[0]);addLog(result.text,result.ok&&!result.duplicate?'success':'error');message(result.text,result.ok?(result.duplicate?'info':'success'):'error');
   };
   nfcInput.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();const uid=normalizeNfcUid(nfcInput.value);nfcInput.value='';if(uid)clockTag(uid);else if(uid===null)message(NFC_HELP,'error');});
   const stopReaderKeys=listenForReaderKeys(clockTag,{helper:true});

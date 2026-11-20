@@ -57,10 +57,11 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   };
   raceSelect.onchange=drawTable;drawTable();
 
-  let busy=false;
-  const tap=async(uid,from,candidates=[uid])=>{
-    if(busy)return;busy=true;
-    try{
+  // Tags are handled one after another (two read together both count).
+  let tapQueue=Promise.resolve();
+  const tap=(uid,from,candidates=[uid])=>(tapQueue=tapQueue.then(()=>tapOne(uid,from,candidates)).catch(()=>{}));
+  const tapOne=async(uid,from,candidates)=>{
+    {
       // A USB reader may type the ID in another form: prefer the one entered in a race.
       uid=candidates.find(item=>state.entries.some(entry=>entry.nfc_tag===item))||uid;
       const {data,error}=await supabase.rpc('admin_show_up_tap',{p_tag:uid,p_race_id:Number(raceSelect.value)||null,p_reader:readerChoice()||null});
@@ -71,7 +72,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
       const entry=state.entries.find(item=>item.id===data.entry_id),clock=entry&&state.clocks.find(item=>item.race_entry_id===entry.id),race=entry&&state.races.find(item=>item.id===entry.race_id),bird=entry&&state.birds.find(item=>item.id===entry.pigeon_id),member=entry&&state.members.find(item=>item.id===entry.member_id),show=showUpState(clock,entry,race),photo=bird&&photos.get(bird.photo_path);
       prompt.hidden=true;resultBox.hidden=false;resultBox.className=`showup-result is-${entry?show.key:'error'}`;
       resultBox.innerHTML=entry?`${photo?`<img src="${escapeHTML(photo)}" alt="Photo of ${escapeHTML(bird.bird_name)}">`:''}<div><strong>${escapeHTML(ringLabel(entry.pigeon_ring,entry.remarks))}${bird?` · ${escapeHTML(bird.bird_name)}`:''}</strong><span>${escapeHTML(member?.full_name||'')}${data.race?` · ${escapeHTML(data.race)}`:''} · NFC ${escapeHTML(formatNfcUid(uid))}</span><span class="showup-status is-${show.key}">${escapeHTML(show.label)}</span></div>`:`<div><strong>NFC ${escapeHTML(formatNfcUid(uid))}</strong><span>${escapeHTML(data.message)}</span></div>`;
-    }finally{busy=false;}
+    }
   };
   input.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();const uid=normalizeNfcUid(input.value);input.value='';if(uid)tap(uid,'');else if(uid===null)message(NFC_HELP,'error');});
   const usbStatus=view.querySelector('[data-usb-status]');

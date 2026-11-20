@@ -11,6 +11,8 @@ EASIEST: install it once
    The page shows "ACR122U helper connected".
    If the browser asks to allow access to devices on your network, choose Allow.
 4. Tap tags on the ACR122U.
+   Two tags on the reader at the same time are both read. More than two: lift
+   them off and tap again. Each tag counts once while it stays on the reader.
 To remove it: "Uninstall AvilonX ACR122U helper.cmd".
 
 Without installing: double-click "Start ACR122U for AvilonX.cmd" and keep its
