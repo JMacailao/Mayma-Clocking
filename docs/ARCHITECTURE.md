@@ -16,7 +16,7 @@ photos and Realtime for live updates.
 | `pages/login/` | Sign-in page with the public results. |
 | `pages/results/public.js` | Public race results (login page and member Results). |
 | `*.sql` | Database setup, one file per feature; `avilonx-update.sql` is all of them in one file. See [DATABASE.md](DATABASE.md). |
-| `tools/rfid-reader/` | ESP8266 + RC522 loft reader sketch (Arduino). |
+| `tools/rfid-reader/` | ESP8266 or ESP32 + RC522 loft reader sketch (Arduino), with an optional OLED display; wiring in `docs/RFID-READER.md`. |
 | `tools/nfc-reader/` | Windows helper for the ACS ACR122U USB reader, with installer. |
 | `tools/build-update-sql.sh` | Builds `avilonx-update.sql` from the separate SQL files. |
 | `tests/` | Automatic tests. See [TESTING.md](TESTING.md). |

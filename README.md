@@ -200,7 +200,9 @@ Create a club account with exactly that name to hand the old data to that club.
     Register NFC use it too. The download is on RFID readers and Race entries.
   - **Start ACR122U keyboard helper.cmd**: types each tag's ID and Enter into the
     window in front (choose **Wired**). Click the browser page after starting it.
-- **ESP8266 + RC522 RFID reader** (`tools/rfid-reader/avilonx-rfid-reader/`). The
+- **ESP8266 or ESP32 + RC522 RFID reader, with an OLED display**
+  (`tools/rfid-reader/avilonx-rfid-reader/`; wiring for both boards and what the
+  OLED shows: **docs/RFID-READER.md**). The
   reader sends every tag over Wi-Fi straight to AvilonX, so no phone or computer is
   needed beside it. Upload the sketch, join the reader's Wi-Fi `RFID-READER`
   (password `RFID12345`; change it in the sketch), open `http://192.168.4.1` and copy
@@ -243,12 +245,10 @@ Create a club account with exactly that name to hand the old data to that club.
   is ahead of the server, are not trusted. Receipts timed this way say
   **Reader tap time**.
   Add a **DS1302** clock module (CLK/DAT/RST pins, with a CR2032 coin cell) so
-  tap times stay accurate even after the reader is switched off: DS1302 CLK → D3,
-  DAT → D4, RST → D8, VCC → 3V3, GND → GND (the RC522 stays on D1/D2 and the
-  reset button on D0). If the board sometimes fails to start, add 4.7 kΩ
-  pull-ups from D3 and D4 to 3.3V. Power the reader on with internet once to
-  set the DS1302; after that it keeps the time on its own and is corrected
-  whenever the reader is online.
+  tap times stay accurate even after the reader is switched off (wiring in
+  docs/RFID-READER.md). Power the reader on with internet once to set the
+  DS1302; after that it keeps the time on its own and is corrected whenever the
+  reader is online.
 - Each sticker has a visible number (for example `12345`) and a hidden scratch code
   (for example `4567`). Each code prints as two pieces: on the left a number piece (logo, label text and the sticker number) for registering the race entry, and on the right, after a solid divider line, a barcode piece (barcode of the secret code with the decoded secret code underneath) for clocking. Keep the barcode piece hidden until clocking. Cover that box
   with scratch-off foil before handing stickers out. Race entries use the visible
@@ -377,3 +377,4 @@ next to what was read, so misread values can be corrected before saving.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): folders, shared code, pages and how to add one.
 - [docs/DATABASE.md](docs/DATABASE.md): the database setup files.
 - [docs/TESTING.md](docs/TESTING.md): the automatic tests and how to run them (`npm test`, `npm run test:browser`, `npm run test:sql`).
+- [docs/RFID-READER.md](docs/RFID-READER.md): the loft RFID reader (ESP8266 or ESP32): parts, wiring, OLED screens.
