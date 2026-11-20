@@ -33,6 +33,8 @@ export function watchMemberReceipts(memberId){
   const queue=[];let dialog=null,busy=false;
   const showNext=()=>{
     if(!queue.length||dialog?.open)return;
+    // Scanning on the radar screen: show it when that closes.
+    if(document.documentElement.classList.contains('radar-is-open')){setTimeout(showNext,1500);return;}
     const item=queue.shift();
     if(!dialog){dialog=document.createElement('dialog');dialog.className='result-popup';document.body.append(dialog);dialog.addEventListener('close',()=>setTimeout(showNext,300));}
     const rows=[['Race',item.race?.name],['Ring',ringLabel(item.entry.pigeon_ring,item.entry.remarks)],['Bird',item.bird?`${item.bird.bird_name} · ${item.bird.color}`:null],['Clocked at',formatDateSeconds(item.clock.received_at_utc)],['Release',item.race?.release_at_utc?`${item.race.release_location||''}${item.race.release_location?' · ':''}${formatDateSeconds(item.race.release_at_utc)}`:null],['Flight time',flightText(item.seconds)],['Distance',item.entry.distance_m?`${number(item.entry.distance_m/1000)} km`:null],['Speed',item.speed?`${number(item.speed)} m/min`:'—'],['Clocked with',howText(item.clock)],['Show up',item.clock.verification==='verified'?'Verified':item.race?.status==='closed'?'Race closed':'Bring the pigeon to the club before the race is closed']].filter(([,value])=>value);

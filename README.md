@@ -324,6 +324,12 @@ effect after the old app windows are closed; they do not reload an active race.
 - **Updates**: when a new version is published, a notice offers to reload it.
 - **ACR122U on Windows**: in the helper zip, *Install AvilonX ACR122U helper* sets it
   to start with Windows; nothing to keep open.
+  Two tags on the reader at once are both read.
+- **Start scanning** (Clocking, club and member): a full-screen radar while birds
+  arrive. Each tag read shows as a blip (green clocked, amber already clocked, red
+  not clocked), a big card with the ring, member and time, and the arrivals list.
+  Works with the ACR122U, keyboard-type USB readers and phone NFC; the screen stays
+  on. **Back** (or Esc) returns to the page.
 
 ## Scanning the loading form
 

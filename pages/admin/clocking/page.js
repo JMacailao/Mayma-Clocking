@@ -1,6 +1,7 @@
 import { supabase, escapeHTML, formatDate, stateTag, tableRows, message, ringLabel, pageUrl as url } from '../../../assets/js/shared.js';
 import { normalizeNfcUid, formatNfcUid, phoneNfcSupported, startPhoneNfc, nfcSetupGuideHtml, listenForReaderKeys, NFC_HELP } from '../../../assets/js/nfc.js';
 import { bindStickerScanner, stickerScannerDialogHtml } from '../../superadmin/stickers/shared.js';
+import { createRadarScan } from '../../../assets/js/radar-scan.js';
 
 // Club clocking: record an arriving pigeon by its NFC tag, its sticker
 // reference number or its ring number. Supabase stamps the receipt time.
@@ -19,7 +20,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">CLUB CLOCKING</span><h2>Record an arrival</h2><p>Tap the pigeon's NFC tag, or enter its sticker reference number or ring number.</p></div></div>
   ${races.length?'':'<div class="notice error">No race is open right now. Open a race on Race schedules before clocking.</div>'}
   <section class="panel narrow nfc-clock-panel"><h3>Clock with NFC tag</h3><div class="callout"><span class="callout-icon">◉</span><span>${phoneNfcSupported()?'Press Start, then hold each arriving pigeon\'s tag against the back of this phone, or tap it on your USB NFC reader. Each tap is sent straight away.':'Click in the NFC reader field below, then tap each arriving pigeon\'s tag on your USB NFC reader. Each tap is sent straight away.'}</span></div>
-  <div class="form-grid"><label class="field"><span>Race</span><select data-nfc-race><option value="">Any open race</option>${raceOptions}</select></label>${phoneNfcSupported()?'<div class="form-actions"><button class="button primary" type="button" data-nfc-start aria-pressed="false">Start phone NFC</button></div>':''}<label class="field"><span>USB NFC reader</span><input data-nfc-input maxlength="40" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Click here, then tap the tag on the reader"><small class="small">The reader types the tag ID and presses Enter; the clocking is sent automatically. With a keyboard-type reader connected you can tap tags without clicking this field first.</small></label></div>
+  <div class="form-grid"><label class="field"><span>Race</span><select data-nfc-race><option value="">Any open race</option>${raceOptions}</select></label><div class="form-actions"><button class="button primary radar-open" type="button" data-radar-open><span aria-hidden="true">📡</span> Start scanning</button></div>${phoneNfcSupported()?'<div class="form-actions"><button class="button primary" type="button" data-nfc-start aria-pressed="false">Start phone NFC</button></div>':''}<label class="field"><span>USB NFC reader</span><input data-nfc-input maxlength="40" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Click here, then tap the tag on the reader"><small class="small">The reader types the tag ID and presses Enter; the clocking is sent automatically. With a keyboard-type reader connected you can tap tags without clicking this field first.</small></label></div>
   <ol class="nfc-log" data-nfc-log></ol>${nfcSetupGuideHtml()}</section>
   <section class="panel narrow"><h3>Clock with sticker or ring number</h3><div class="callout"><span class="callout-icon">◷</span><span>The receipt time comes from Supabase when the submission reaches the server. Clockings are provisional until verified.</span></div>
   <form id="admin-clock-form" class="form-grid"><label class="field"><span>Open race</span><select name="race_id" required><option value="">Choose a race</option>${raceOptions}</select></label><div class="field barcode-field"><label for="admin-clock-code">Sticker reference or ring number</label><div class="barcode-entry"><input id="admin-clock-code" name="code" required maxlength="120" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Scan the sticker stub or type the number" list="admin-clock-rings"><button class="barcode-scan-button" type="button" data-sticker-scan-for="code" aria-label="Scan the sticker's reference barcode with camera" title="Scan reference barcode"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3M8 12h8M10 9v6M14 9v6"/></svg></button></div><datalist id="admin-clock-rings"></datalist></div><div class="form-actions"><button class="button primary">Submit clocking</button></div></form></section>
@@ -36,7 +37,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     const {data,error}=await supabase.rpc('admin_record_clock',{p_entry_id:entry.id});
     if(error)return {ok:false,text:error.message};
     await loadClocks();
-    return {ok:true,duplicate:data?.status==='duplicate',text:`${entryLabel(entry)}: ${data?.message||'Clocking received.'}`};
+    return {ok:true,duplicate:data?.status==='duplicate',text:`${entryLabel(entry)}: ${data?.message||'Clocking received.'}`,message:data?.message||'',time:data?.received_at_utc||null};
   };
 
   // Tags are clocked one after another, in the order read (two tags read
@@ -45,12 +46,18 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
   const clockTag=uid=>(nfcQueue=nfcQueue.then(()=>clockOneTag(uid)).catch(error=>message(error.message,'error')));
   const clockOneTag=async uid=>{
     const raceId=Number(nfcRace.value),matches=openEntries.filter(entry=>entry.nfc_tag===uid&&(!raceId||entry.race_id===raceId));
-    if(!matches.length){const text=`Tag ${formatNfcUid(uid)} is not registered to a pigeon in ${raceId?'this race':'an open race'}.`;addLog(text,'error');message(text,'error');return;}
-    if(matches.length>1){const text=`Tag ${formatNfcUid(uid)} is entered in more than one open race. Choose the race first.`;addLog(text,'error');message(text,'error');nfcRace.focus();return;}
-    const result=await clockEntry(matches[0]);addLog(result.text,result.ok&&!result.duplicate?'success':'error');message(result.text,result.ok?(result.duplicate?'info':'success'):'error');
+    if(!matches.length){const text=`Tag ${formatNfcUid(uid)} is not registered to a pigeon in ${raceId?'this race':'an open race'}.`;addLog(text,'error');say(text,'error');radar.report({kind:'error',ring:formatNfcUid(uid),detail:text});return;}
+    if(matches.length>1){const text=`Tag ${formatNfcUid(uid)} is entered in more than one open race. Choose the race first.`;addLog(text,'error');say(text,'error');radar.report({kind:'error',ring:formatNfcUid(uid),detail:text});if(!radar.isOpen())nfcRace.focus();return;}
+    const entry=matches[0],result=await clockEntry(entry),kind=result.ok?(result.duplicate?'info':'success'):'error';
+    addLog(result.text,result.ok&&!result.duplicate?'success':'error');say(result.text,kind);
+    radar.report({kind,ring:ringLabel(entry.pigeon_ring,entry.remarks),name:memberName(entry),detail:kind==='error'?result.text:(result.message||''),time:result.time});
   };
   nfcInput.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();const uid=normalizeNfcUid(nfcInput.value);nfcInput.value='';if(uid)clockTag(uid);else if(uid===null)message(NFC_HELP,'error');});
-  const stopReaderKeys=listenForReaderKeys(clockTag,{helper:true});
+  // Start scanning: the full-screen radar shows each tag as it is clocked.
+  const radar=createRadarScan({title:'Scanning',raceLabel:()=>nfcRace.selectedOptions[0]?.textContent||'',phoneButton:startButton});
+  view.querySelector('[data-radar-open]').onclick=()=>radar.open();
+  const say=(text,kind)=>{if(!radar.isOpen())message(text,kind);};// the radar shows (and sounds) results itself
+  const stopReaderKeys=listenForReaderKeys(clockTag,{helper:true,onBurst:state=>radar.readerState(state)});
   let stopPhoneNfc=()=>{};
   if(startButton)startButton.onclick=async()=>{
     if(startButton.getAttribute('aria-pressed')==='true'){stopPhoneNfc();stopPhoneNfc=()=>{};startButton.setAttribute('aria-pressed','false');startButton.textContent='Start phone NFC';return;}
@@ -58,7 +65,7 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     catch(error){message(error.message,'error');}
   };
   const stopScanner=bindStickerScanner(view,form);
-  setPageCleanup(()=>{stopReaderKeys();stopPhoneNfc();stopScanner?.();});
+  setPageCleanup(()=>{stopReaderKeys();stopPhoneNfc();stopScanner?.();radar.destroy();});
 
   form.onsubmit=async event=>{
     event.preventDefault();

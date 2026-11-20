@@ -26,7 +26,9 @@ const TL={
   'Your pigeon was clocked':'Na-clock ang iyong kalapati','Clocked at':'Oras ng clock','Release':'Release','Flight time':'Tagal ng lipad','Distance':'Layo','Speed':'Bilis','Results are provisional until the club verifies them.':'Pansamantala ang resulta hanggang ma-verify ng club.','OK':'OK','Verified':'Verified','Bring the pigeon to the club before the race is closed':'Dalhin ang kalapati sa club bago isara ang karera','Race closed':'Sarado na ang karera',
   // Common
   'Save':'I-save','Cancel':'Kanselahin','Edit':'I-edit','Delete':'Burahin','Search':'Hanapin','Member':'Miyembro','Open':'Bukas','Closed':'Sarado','Draft':'Draft','Not clocked':'Hindi pa na-clock','Waiting':'Naghihintay','Disqualified':'Diskwalipikado','Rank':'Ranggo','Arrival':'Dating','Practice':'Praktis',
-  'AvilonX was updated.':'Na-update ang AvilonX.','Reload':'I-reload','Later':'Mamaya'
+  'AvilonX was updated.':'Na-update ang AvilonX.','Reload':'I-reload','Later':'Mamaya',
+  // Start scanning (radar)
+  'Start scanning':'Simulan ang pag-scan','Scanning':'Nag-i-scan','Back':'Bumalik','Arrivals':'Mga dumating','Waiting for a tag…':'Naghihintay ng tag…','Already clocked':'Na-clock na','Tap each arriving pigeon\'s tag on the reader.':'I-tap sa reader ang tag ng bawat dumarating na kalapati.','Tag read. Sending…':'Nabasa ang tag. Ipinapadala…','ACR122U reader connected':'Nakakonekta ang ACR122U reader','ACR122U helper not found. Keyboard-type USB readers and phone NFC still work.':'Hindi makita ang ACR122U helper. Gumagana pa rin ang keyboard-type na USB reader at NFC ng telepono.','Stop phone NFC':'Ihinto ang NFC ng telepono'
 };
 
 export const t=text=>getLang()==='tl'&&Object.prototype.hasOwnProperty.call(TL,text)?TL[text]:text;

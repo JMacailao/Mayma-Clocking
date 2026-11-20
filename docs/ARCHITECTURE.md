@@ -29,6 +29,7 @@ photos and Realtime for live updates.
 | `supabase.js` | The Supabase client (publishable key; row-level security protects the data). |
 | `shared.js` | Helpers: messages (toasts with sound), dates in Philippine time, numbers, tables, `ringLabel`, database error texts. |
 | `nfc.js` | RFID/NFC: tag IDs, phone NFC (Web NFC), keyboard-type USB readers, the ACR122U helper, ESP8266 register-mode taps. |
+| `radar-scan.js` | **Start scanning** on the Clocking pages: a full-screen radar pop-up (Back or Esc closes it). The page still reads the tags; the radar shows each one as a blip, a big card (ring, member, time) and the arrivals list, keeps the screen awake, and holds back other pop-ups while open. |
 | `race-export.js` | Race ranking (speed, show-up, disqualification) shared by Race day, Results and My pigeons, and the Excel export. |
 | `member-results-watch.js` | Members: the result pop-up and phone notification when a pigeon is clocked (live, plus a check every 15 seconds). |
 | `i18n.js` | English / Tagalog switch. |
