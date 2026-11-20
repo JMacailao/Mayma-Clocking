@@ -244,11 +244,13 @@ Create a club account with exactly that name to hand the old data to that club.
   race and keep it powered. Taps more than 3 days old, or from a reader clock that
   is ahead of the server, are not trusted. Receipts timed this way say
   **Reader tap time**.
-  Add a **DS1302** clock module (CLK/DAT/RST pins, with a CR2032 coin cell) so
-  tap times stay accurate even after the reader is switched off (wiring in
-  docs/RFID-READER.md). Power the reader on with internet once to set the
-  DS1302; after that it keeps the time on its own and is corrected whenever the
-  reader is online.
+  Add a **DS3231** clock module (or the older DS1302) so tap times stay accurate
+  even after the reader is switched off (wiring in docs/RFID-READER.md). Power the
+  reader on with internet once to set it; after that it keeps the time on its own
+  and is corrected whenever the reader is online. Once on your Wi-Fi, open the
+  reader's page at the address on its OLED or `http://avilonx-XXXX.local`; its own
+  hotspot switches off after 10 minutes (a short press of the board's button
+  turns it on again).
 - Each sticker has a visible number (for example `12345`) and a hidden scratch code
   (for example `4567`). Each code prints as two pieces: on the left a number piece (logo, label text and the sticker number) for registering the race entry, and on the right, after a solid divider line, a barcode piece (barcode of the secret code with the decoded secret code underneath) for clocking. Keep the barcode piece hidden until clocking. Cover that box
   with scratch-off foil before handing stickers out. Race entries use the visible

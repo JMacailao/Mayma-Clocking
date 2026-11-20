@@ -13,7 +13,7 @@
   right pins and libraries by itself.
 
   OLED display (optional, 0.96" SSD1306 or 1.3" SH1106, 128x64, I2C):
-    at start-up  which modules were found: RFID reader, DS1302 clock, storage,
+    at start-up  which modules were found: RFID reader, clock module, storage,
                  Wi-Fi and device key ("NOT FOUND" when one is missing)
     on a tap     the tag and whether it was saved
     then         AvilonX's reply (clocked, already clocked, refused...)
@@ -32,7 +32,7 @@
               (taps sent late, after being offline, are not filled in).
     Clocking  each tap clocks that tag's pigeon in an open race.
 
-  Tap times come from a DS1302 clock module (CLK/DAT/RST pins, with its
+  Tap times come from a DS3231 or DS1302 clock module (with its
   coin-cell battery), so they stay accurate even when the board is switched
   off or has no internet. Whenever the reader is online it corrects the DS1302
   from internet time (a DS1302 drifts a few seconds a day on its own).
@@ -53,60 +53,68 @@
        AvilonX's reply.
 
   Wiring - everything runs on 3.3 V (never 5 V on the RC522)
+  (tables and pictures of the screens: docs/RFID-READER.md)
 
-  ESP8266 (NodeMCU / Wemos D1 mini)
-    RC522:   SDA->D8(GPIO15)  SCK->D5(GPIO14)  MOSI->D7(GPIO13)
-             MISO->D6(GPIO12) RST->3V3 (not to a pin)  IRQ not connected
-             3.3V->3V3  GND->GND
-    OLED:    SDA->D2(GPIO4)  SCL->D1(GPIO5)  VCC->3V3  GND->GND
-    DS1302:  CLK->D3(GPIO0)  DAT->D4(GPIO2)  RST->D0(GPIO16)
-             VCC->3V3  GND->GND, with a CR2032 coin cell in the module
-    Reset button: RX(GPIO3) -> button -> GND (no resistor needed). The Serial
-             Monitor still works (it only uses TX).
-    D3 and D4 must be high while the board starts, and the DS1302 inputs pull
-    down a little. If the reader sometimes does not start, add a 4.7k resistor
-    from D3 to 3.3V and one from D4 to 3.3V. Do not press the board's FLASH
-    button while it runs (it shares D3 with the DS1302 clock line).
-    The ESP8266 has no free pin for the RC522's RST: the reader is reset with a
-    command instead (and checked every 5 seconds, as before).
-    Built before the OLED (RC522 SDA on D2, RST on D1, DS1302 RST on D8, button
-    on D0)? Set LEGACY_WIRING to 1 below: the old wiring works, without OLED.
+  ESP8266 (NodeMCU / Wemos D1 mini), recommended (ESP8266_WIRING 3):
+    RC522:   SDA->D8  SCK->D5  MOSI->D7  MISO->D6  RST->D0  3.3V  GND
+    OLED:    SDA->D2  SCL->D1  VCC->3V3  GND
+    DS3231:  SDA->D2  SCL->D1 (same wires as the OLED)  VCC->3V3  GND
+    Button:  the board's own FLASH button (hold 10 s), nothing to wire
+    Buzzer:  optional active 3.3 V buzzer module, signal->RX
+    LED:     the board's blue LED (D4) blinks on each tap
+  ESP8266_WIRING 2: OLED + DS1302 (RC522 SDA D8, RST->3V3; OLED D2/D1; DS1302
+    CLK D3, DAT D4, RST D0; button RX->GND).
+  ESP8266_WIRING 1: the first wiring, without OLED (RC522 SDA D2, RST D1;
+    DS1302 CLK D3, DAT D4, RST D8; button D0 with a 10k pull-up to 3.3V).
 
   ESP32 (ESP32 DevKit, 30 or 38 pins)
     RC522:   SDA->GPIO5  SCK->GPIO18  MOSI->GPIO23  MISO->GPIO19  RST->GPIO27
-             3.3V->3V3  GND->GND
-    OLED:    SDA->GPIO21  SCL->GPIO22  VCC->3V3  GND->GND
-    DS1302:  CLK->GPIO25  DAT->GPIO26  RST->GPIO33  VCC->3V3  GND->GND
-    Reset button: GPIO32 -> button -> GND (no resistor needed)
-    The blue LED on GPIO2 blinks once for a clocked tap, 3 times for a refusal.
+    OLED:    SDA->GPIO21  SCL->GPIO22
+    DS3231:  SDA->GPIO21  SCL->GPIO22 (same wires as the OLED)
+             (or a DS1302: CLK->GPIO25  DAT->GPIO26  RST->GPIO33)
+    Button:  the board's own BOOT button (or one from GPIO32 to GND)
+    Buzzer:  optional active 3.3 V buzzer module, signal->GPIO4
+    LED:     the board's blue LED (GPIO2)
 
-  Holding the reset button 10 seconds restores ONLY the reader's own hotspot
+  The clock is found by itself: a DS3231 (more accurate, shares the OLED's two
+  wires) or a DS1302. The blue LED blinks once for a clocked tap and 3 times
+  for a refusal; the buzzer beeps once for each tap and twice for a refusal.
+
+  Holding the button 10 seconds restores ONLY the reader's own hotspot
   name/password to RFID-READER / RFID12345 and restarts. The saved router
-  Wi-Fi, device key and saved taps are kept.
+  Wi-Fi, device key and saved taps are kept. A short press turns the hotspot
+  on for 10 minutes.
+
+  On your Wi-Fi: once the reader is connected to your router, open its page
+  from any phone or computer on the same Wi-Fi at the address on the OLED
+  (e.g. http://192.168.1.23) or at http://avilonx-XXXX.local. Its own hotspot
+  then switches off after 10 minutes (the Wi-Fi works faster without it) and
+  comes back by itself when the Wi-Fi is lost, or with a short button press.
 */
 
 // ---- Options ---------------------------------------------------------------
-#define LEGACY_WIRING 0   // ESP8266 only: 1 = the wiring from before the OLED (no OLED)
+#define ESP8266_WIRING 3  // ESP8266 only: 3 = recommended (DS3231), 2 = OLED + DS1302, 1 = first wiring
 #define OLED_SH1106 0     // 0 = 0.96" SSD1306 OLED, 1 = 1.3" SH1106 OLED
+#define BUZZER_ACTIVE_LOW 0  // 1 if your buzzer module sounds when its signal is LOW
 
 #include <Arduino.h>
 #if defined(ESP8266)
   #include <ESP8266WiFi.h>
   #include <ESP8266WebServer.h>
   #include <ESP8266HTTPClient.h>
+  #include <ESP8266mDNS.h>
   #include <WiFiClientSecureBearSSL.h>
   #include <coredecls.h>   // settimeofday_cb: told when internet time arrives
   typedef ESP8266WebServer WebServerType;
-  typedef BearSSL::WiFiClientSecure SecureClient;
   #define BOARD_NAME "ESP8266"
 #elif defined(ESP32)
   #include <WiFi.h>
   #include <WebServer.h>
   #include <HTTPClient.h>
+  #include <ESPmDNS.h>
   #include <WiFiClientSecure.h>
   #include <esp_sntp.h>    // sntp_set_time_sync_notification_cb
   typedef WebServer WebServerType;
-  typedef WiFiClientSecure SecureClient;
   #define BOARD_NAME "ESP32"
 #else
   #error "Choose an ESP8266 or ESP32 board (Tools > Board)."
@@ -123,47 +131,67 @@
 #if defined(ESP32)
   #define RFID_SS_PIN  5      // RC522 SDA
   #define RFID_RST_PIN 27     // RC522 RST
-  #define RTC_CLK_PIN 25      // DS1302 CLK
+  #define I2C_SDA_PIN 21      // OLED and DS3231
+  #define I2C_SCL_PIN 22
+  #define RTC_CLK_PIN 25      // DS1302 CLK (when there is no DS3231)
   #define RTC_DAT_PIN 26      // DS1302 DAT
   #define RTC_RST_PIN 33      // DS1302 RST (CE)
-  #define RESET_BUTTON_PIN 32 // button to GND (internal pull-up)
-  #define RESET_BUTTON_PULLUP 1
-  #define OLED_SDA_PIN 21
-  #define OLED_SCL_PIN 22
-  #define USE_OLED 1
+  #define RESET_BUTTON_PIN 0  // the board's BOOT button
+  #define RESET_BUTTON2_PIN 32 // or a button from GPIO32 to GND
+  #define BUZZER_PIN 4
   #define STATUS_LED_PIN 2    // built-in blue LED, lit when HIGH
   #define STATUS_LED_ON HIGH
   #define USE_STATUS_LED 1
   #define RFID_WIRING_HINT "SDA GPIO5, SCK GPIO18, MOSI GPIO23, MISO GPIO19, RST GPIO27, 3.3V, GND"
-#elif LEGACY_WIRING
+#elif ESP8266_WIRING == 1
   #define RFID_SS_PIN  4      // D2 -> RC522 SDA
   #define RFID_RST_PIN 5      // D1 -> RC522 RST
+  #define I2C_SDA_PIN NO_PIN  // no OLED or DS3231 in this wiring
+  #define I2C_SCL_PIN NO_PIN
   #define RTC_CLK_PIN 0       // D3 -> DS1302 CLK
   #define RTC_DAT_PIN 2       // D4 -> DS1302 DAT
   #define RTC_RST_PIN 15      // D8 -> DS1302 RST (CE)
   #define RESET_BUTTON_PIN 16 // D0 -> button to GND, 10k pull-up to 3.3V
-  #define RESET_BUTTON_PULLUP 0
-  #define USE_OLED 0          // no pins left for it in this wiring
+  #define RESET_BUTTON2_PIN NO_PIN
+  #define BUZZER_PIN NO_PIN
   #define STATUS_LED_PIN 2    // built-in LED (shares D4 with the DS1302)
   #define STATUS_LED_ON LOW
   #define USE_STATUS_LED 0    // off: blinking it would disturb the DS1302 data line
   #define RFID_WIRING_HINT "SDA D2, SCK D5, MOSI D7, MISO D6, RST D1, 3.3V, GND"
-#else
+#elif ESP8266_WIRING == 2
   #define RFID_SS_PIN  15     // D8 -> RC522 SDA
   #define RFID_RST_PIN NO_PIN // RC522 RST to 3.3V: reset by command
+  #define I2C_SDA_PIN 4       // D2 -> OLED SDA
+  #define I2C_SCL_PIN 5       // D1 -> OLED SCL
   #define RTC_CLK_PIN 0       // D3 -> DS1302 CLK
   #define RTC_DAT_PIN 2       // D4 -> DS1302 DAT
   #define RTC_RST_PIN 16      // D0 -> DS1302 RST (CE)
   #define RESET_BUTTON_PIN 3  // RX -> button to GND (internal pull-up)
-  #define RESET_BUTTON_PULLUP 1
-  #define OLED_SDA_PIN 4      // D2
-  #define OLED_SCL_PIN 5      // D1
-  #define USE_OLED 1
+  #define RESET_BUTTON2_PIN NO_PIN
+  #define BUZZER_PIN NO_PIN
   #define STATUS_LED_PIN 2    // built-in LED (shares D4 with the DS1302)
   #define STATUS_LED_ON LOW
   #define USE_STATUS_LED 0    // off: blinking it would disturb the DS1302 data line
   #define RFID_WIRING_HINT "SDA D8, SCK D5, MOSI D7, MISO D6, RST to 3.3V, 3.3V, GND"
+#else
+  #define RFID_SS_PIN  15     // D8 -> RC522 SDA
+  #define RFID_RST_PIN 16     // D0 -> RC522 RST
+  #define I2C_SDA_PIN 4       // D2 -> OLED SDA and DS3231 SDA
+  #define I2C_SCL_PIN 5       // D1 -> OLED SCL and DS3231 SCL
+  #define RTC_CLK_PIN NO_PIN  // no DS1302 in this wiring
+  #define RTC_DAT_PIN NO_PIN
+  #define RTC_RST_PIN NO_PIN
+  #define RESET_BUTTON_PIN 0  // the board's FLASH button (D3)
+  #define RESET_BUTTON2_PIN NO_PIN
+  #define BUZZER_PIN 3        // RX -> buzzer module signal
+  #define STATUS_LED_PIN 2    // built-in LED on D4, lit when LOW
+  #define STATUS_LED_ON LOW
+  #define USE_STATUS_LED 1
+  #define RFID_WIRING_HINT "SDA D8, SCK D5, MOSI D7, MISO D6, RST D0, 3.3V, GND"
 #endif
+#define USE_OLED (I2C_SDA_PIN != NO_PIN)
+#define HAS_DS1302 (RTC_CLK_PIN != NO_PIN)
+#define RESET_BUTTON_PULLUP (RESET_BUTTON_PIN != 16)  // GPIO16 has no pull-up: it needs the resistor
 #define RESET_HOLD_MS 10000UL
 
 #if USE_OLED
@@ -224,6 +252,17 @@ bool restartAfterApChange = false;
 unsigned long apChangeRestartAt = 0;
 unsigned long lastReconnectAttempt = 0;
 unsigned long wifiLostAt = 0;        // when the router Wi-Fi went away (0 = connected)
+// The reader's own hotspot: on at power-up and whenever there is no Wi-Fi; off
+// 10 minutes after joining the router (the Wi-Fi works faster without it), or
+// on again for 10 minutes with a short button press.
+bool hotspotOn = false;
+unsigned long routerConnectedAt = 0;
+unsigned long hotspotKeepUntilMs = 0;
+const unsigned long HOTSPOT_AFTER_CONNECT_MS = 600000UL;
+const unsigned long HOTSPOT_BUTTON_MS = 600000UL;
+// Its name on the router's Wi-Fi, e.g. avilonx-3a7f (open http://avilonx-3a7f.local).
+String hostName = "avilonx-reader";
+bool mdnsStarted = false;
 unsigned long lastWifiNoticeMs = 0;  // last "no Wi-Fi" line in the Serial Monitor
 
 // Saved taps: one small file per tap in LittleFS (/q), removed once AvilonX
@@ -278,13 +317,13 @@ const char PAGE[] PROGMEM = R"HTML(
 </div><div>
 <section class="card"><div class="cardbody"><div class="taginfo"><div><span class="smalllabel">RFID READER: <b id="rfidState">Checking...</b></span><br><span class="smalllabel">LAST TAG (UID)</span><div class="uid" id="uid">Waiting for card</div></div><div><span class="smalllabel">AVILONX REPLY</span><div class="reply" id="reply">No tags sent yet</div></div></div><div class="stats"><div class="stat"><span class="smalllabel">MODE</span><strong class="orange" id="mode">—</strong></div><div class="stat"><span class="smalllabel">TOTAL SCANS</span><strong id="count">0</strong></div><div class="stat"><span class="smalllabel">WAITING TO SEND</span><strong id="pending">0</strong></div></div></div></section>
 <section class="card" id="registration"><div class="cardhead">◇ &nbsp; Device Registration</div><div class="cardbody"><div class="panelrow"><span class="smalllabel">DEVICE SERIAL</span><button class="btn alt" type="button" id="copySerial">Copy serial</button></div><div class="deviceid" id="serial">—</div><div class="divider"></div><div class="panelrow"><b style="font-size:13px">Device Key</b><span class="status" id="keyStatus">Checking...</span></div><form id="keyForm"><div class="field"><label for="key">Device key from the AvilonX Super Admin</label><input id="key" name="key" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Paste 32-character device key" required></div><div class="buttons"><button class="btn" type="submit">Save Device Key</button></div></form><div id="keyMessage" class="message" role="status"></div><p class="notice">Send this device serial to the AvilonX Super Admin first. They register it for your club and give you the device key, which is saved inside the reader.</p></div></section>
-<section class="card" id="wifi"><div class="cardhead"><span>◉ &nbsp; Wi-Fi Connection</span><span class="status" id="wifiStatus">Checking...</span></div><div class="cardbody"><div class="info"><b>Current network:</b> <span id="ssid">—</span><br><b>Router IP:</b> <span id="ip">—</span><br><b>AvilonX:</b> <span id="avilonxState">—</span><br><b>Device AP:</b> <span id="apName">RFID-READER</span> · 192.168.4.1</div><form id="wifiForm"><div class="field"><label for="network">Select a 2.4 GHz Wi-Fi network</label><select id="network" name="ssid" required><option value="">Scanning networks...</option></select></div><div class="field"><label for="password">Wi-Fi password</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="Password (blank for open Wi-Fi)"></div><div class="buttons"><button class="btn alt" type="button" id="scanBtn">↻ Scan Networks</button><button class="btn" type="submit">Save &amp; Connect</button></div></form><div class="message" id="message" role="status"></div><div class="divider"></div><h3 style="margin:12px 0 4px;font-size:16px">Reader hotspot settings</h3><p class="notice">Change the reader's own Wi-Fi name and password. This does not change the internet router connection or AvilonX registration.</p><form id="apForm"><div class="field"><label for="apSsidInput">Reader Wi-Fi name (SSID)</label><input id="apSsidInput" name="ap_ssid" maxlength="32" required placeholder="RFID-READER"></div><div class="field"><label for="apPasswordInput">New reader Wi-Fi password</label><input id="apPasswordInput" name="ap_password" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="8–63 characters"></div><div class="field"><label for="apConfirmInput">Confirm new password</label><input id="apConfirmInput" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="Repeat new password"></div><div class="buttons"><button class="btn" type="submit">Update Reader Hotspot</button></div></form><div class="message" id="apMessage" role="status"></div><p class="notice">After saving, the reader will restart. Reconnect your phone to the new hotspot name; the website address stays 192.168.4.1.</p><p class="notice">Forgot the reader hotspot name or password? Hold the reset button on D0 for 10 seconds. The reader restarts and the hotspot returns to RFID-READER / RFID12345. The saved router connection, AvilonX key and saved taps are kept.</p></div></section>
+<section class="card" id="wifi"><div class="cardhead"><span>◉ &nbsp; Wi-Fi Connection</span><span class="status" id="wifiStatus">Checking...</span></div><div class="cardbody"><div class="info"><b>Current network:</b> <span id="ssid">—</span><br><b>Router IP:</b> <span id="ip">—</span><br><b>Open on your Wi-Fi:</b> <span id="lan">—</span><br><b>AvilonX:</b> <span id="avilonxState">—</span><br><b>Device AP:</b> <span id="apName">RFID-READER</span> · 192.168.4.1</div><form id="wifiForm"><div class="field"><label for="network">Select a 2.4 GHz Wi-Fi network</label><select id="network" name="ssid" required><option value="">Scanning networks...</option></select></div><div class="field"><label for="password">Wi-Fi password</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="Password (blank for open Wi-Fi)"></div><div class="buttons"><button class="btn alt" type="button" id="scanBtn">↻ Scan Networks</button><button class="btn" type="submit">Save &amp; Connect</button></div></form><div class="message" id="message" role="status"></div><div class="divider"></div><h3 style="margin:12px 0 4px;font-size:16px">Reader hotspot settings</h3><p class="notice">Change the reader's own Wi-Fi name and password. This does not change the internet router connection or AvilonX registration.</p><form id="apForm"><div class="field"><label for="apSsidInput">Reader Wi-Fi name (SSID)</label><input id="apSsidInput" name="ap_ssid" maxlength="32" required placeholder="RFID-READER"></div><div class="field"><label for="apPasswordInput">New reader Wi-Fi password</label><input id="apPasswordInput" name="ap_password" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="8–63 characters"></div><div class="field"><label for="apConfirmInput">Confirm new password</label><input id="apConfirmInput" type="password" minlength="8" maxlength="63" required autocomplete="new-password" placeholder="Repeat new password"></div><div class="buttons"><button class="btn" type="submit">Update Reader Hotspot</button></div></form><div class="message" id="apMessage" role="status"></div><p class="notice">After saving, the reader will restart. Reconnect your phone to the new hotspot name; the website address stays 192.168.4.1.</p><p class="notice">Forgot the reader hotspot name or password? Hold the reset button on D0 for 10 seconds. The reader restarts and the hotspot returns to RFID-READER / RFID12345. The saved router connection, AvilonX key and saved taps are kept.</p></div></section>
 </div></div></main></div></div>
 <script>
 const $=id=>document.getElementById(id);let previousUID='',updating=false,scanning=false;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 function statusBadge(el,label,good){el.textContent=label;el.className='status '+(good?'good':'bad');}
-async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;if($('rfidState')){$('rfidState').textContent=s.rfid_ok?('OK'+(s.rfid_restarts?' (restarted '+s.rfid_restarts+'x)':'')):'Not answering: check RC522 wiring and 3.3V';$('rfidState').className=s.rfid_ok?'ok':'bad';}$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=(s.clock_synced?'clock is set from '+(s.clock_source==='ds1302'?'the DS1302 battery clock':'internet time')+', Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)')+(s.clock_source==='ds1302_unset'?'. The DS1302 needs internet once to set its time':'')+(s.clock_source==='internet'?'. No DS1302 found: the time is lost if the reader is switched off':'');statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=s.ap_ssid||'RFID-READER';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';$('avilonxState').textContent=s.avilonx_online?'Online (the club can see this reader)':(s.wifi_connected?'Not reachable yet':'Offline (no internet)');statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const wb=$('waiting');if(wb){const w=s.waiting||[];$('waitingBox').hidden=!w.length;wb.replaceChildren();w.forEach((x,i)=>{const tr=document.createElement('tr');[String(i+1),x.uid,x.time].forEach((v,k)=>{const td=document.createElement('td');td.textContent=v;if(k===1)td.className='tagcode';tr.appendChild(td);});wb.appendChild(tr);});}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
+async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;if($('rfidState')){$('rfidState').textContent=s.rfid_ok?('OK'+(s.rfid_restarts?' (restarted '+s.rfid_restarts+'x)':'')):'Not answering: check RC522 wiring and 3.3V';$('rfidState').className=s.rfid_ok?'ok':'bad';}$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=(s.clock_synced?'clock is set from '+(/^ds/.test(s.clock_source)?'the '+s.clock_source.slice(0,6).toUpperCase()+' battery clock':'internet time')+', Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)')+(/_unset$/.test(s.clock_source)?'. The '+s.clock_source.slice(0,6).toUpperCase()+' needs internet once to set its time':'')+(s.clock_source==='internet'?'. No DS3231 or DS1302 found: the time is lost if the reader is switched off':'');statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=(s.ap_ssid||'RFID-READER')+(s.ap_on?'':' (off while on your Wi-Fi: press the board button once to turn it on)');$('lan').textContent=s.router_ip?('http://'+s.router_ip+'  or  http://'+s.hostname+'.local'):'Connect the reader to your Wi-Fi first';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';$('avilonxState').textContent=s.avilonx_online?'Online (the club can see this reader)':(s.wifi_connected?'Not reachable yet':'Offline (no internet)');statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const wb=$('waiting');if(wb){const w=s.waiting||[];$('waitingBox').hidden=!w.length;wb.replaceChildren();w.forEach((x,i)=>{const tr=document.createElement('tr');[String(i+1),x.uid,x.time].forEach((v,k)=>{const td=document.createElement('td');td.textContent=v;if(k===1)td.className='tagcode';tr.appendChild(td);});wb.appendChild(tr);});}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
 async function scanNetworks(){if(scanning)return;scanning=true;const btn=$('scanBtn'),select=$('network');btn.disabled=true;select.replaceChildren(new Option('Scanning networks...',''));try{let items=null;for(let i=0;i<15&&!items;i++){const r=await fetch('/api/networks',{cache:'no-store'});if(r.status===202){await wait(1000);continue;}if(!r.ok)throw Error('scan failed');items=await r.json();}if(!items)throw Error('scan timed out');select.replaceChildren(new Option('Choose a Wi-Fi network',''));items.forEach(n=>select.add(new Option(n.ssid+' ('+n.rssi+' dBm)'+(n.open?' - Open':''),n.ssid)));$('message').textContent=items.length?'':'No Wi-Fi networks found. Try again.';}catch(e){select.replaceChildren(new Option('Could not scan',''));$('message').textContent='Wi-Fi scan failed. Try again.';}finally{scanning=false;btn.disabled=false;}}
 async function post(url,form,output){output.textContent='Saving...';try{const r=await fetch(url,{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok)update();}catch(e){output.textContent='Could not save. Check that you are connected to the reader hotspot.';}}
 $('scanBtn').addEventListener('click',scanNetworks);$('copySerial').addEventListener('click',()=>{const text=$('serial').textContent;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>{$('copySerial').textContent='Copied';});else window.prompt('Copy device serial',text);});$('wifiForm').addEventListener('submit',e=>{e.preventDefault();post('/wifi/save',e.target,$('message')).then(()=>$('password').value='');});$('keyForm').addEventListener('submit',e=>{e.preventDefault();post('/device/save',e.target,$('keyMessage')).then(()=>$('key').value='');});$('apForm').addEventListener('submit',async e=>{e.preventDefault();const form=e.target,output=$('apMessage'),pw=$('apPasswordInput').value;if(pw!==$('apConfirmInput').value){output.textContent='Passwords do not match.';return;}output.textContent='Saving hotspot credentials...';try{const r=await fetch('/ap/save',{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok){$('apPasswordInput').value='';$('apConfirmInput').value='';}}catch(err){output.textContent='Could not save; check your connection.';}});update();setInterval(update,1000);scanNetworks();
@@ -294,15 +333,16 @@ $('scanBtn').addEventListener('click',scanNetworks);$('copySerial').addEventList
 void addHistory(const String &line);
 uint32_t readScanTime();
 const char* clockSource();
+const char* rtcName();
 
 // ---- OLED display -----------------------------------------------------------
 // 128x64, 21 characters x 5 lines under a title bar. Found by itself at
 // start-up (I2C address 0x3C or 0x3D); without one, nothing below does anything.
 #if USE_OLED
   #if OLED_SH1106
-    U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE, OLED_SCL_PIN, OLED_SDA_PIN);
+    U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE, I2C_SCL_PIN, I2C_SDA_PIN);
   #else
-    U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE, OLED_SCL_PIN, OLED_SDA_PIN);
+    U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE, I2C_SCL_PIN, I2C_SDA_PIN);
   #endif
 #endif
 bool oledOk = false;
@@ -318,12 +358,12 @@ String lastShownProblem;
 const unsigned long TAP_SCREEN_MS = 2500UL;
 const unsigned long REPLY_SCREEN_MS = 5000UL;
 const unsigned long PAGE_MS = 4000UL;   // status and "what is needed" take turns
-bool rtcPresent = false;     // a DS1302 answered (set by beginRtc)
+bool rtcPresent = false;     // a DS3231 or DS1302 answered (set by beginRtc)
 bool rtcValid = false;       // its time can be trusted (set by this sketch, still running)
 
 void beginDisplay() {
 #if USE_OLED
-  Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   uint8_t address = 0;
   for (uint8_t candidate : {0x3C, 0x3D}) {
     Wire.beginTransmission(candidate);
@@ -387,7 +427,7 @@ int neededItems(String *items, int room) {
   else if (WiFi.status() != WL_CONNECTED) { add(F("No Wi-Fi: check the")); add(String(" router ") + config.ssid); }
   else if (config.deviceKey[0] && !avilonxReachable) add(F("AvilonX: no reply yet"));
   if (!readScanTime()) { add(F("Clock not set: needs")); add(F(" internet once")); }
-  if (!rtcPresent) add(F("No DS1302 (optional)"));
+  if (!rtcPresent) add(F("No clock module"));
   if (pendingCount + 10 >= MAX_SAVED_SCANS) add(F("Taps memory near full"));
   return n;
 }
@@ -415,7 +455,7 @@ void updateDisplay() {
     // Start-up: which modules were found.
     drawTitle(F("AvilonX " BOARD_NAME), F("CHECK"));
     drawLine(0, rfidOk ? F("RFID RC522: OK") : F("RFID RC522: NOT FOUND"));
-    drawLine(1, !rtcPresent ? F("DS1302 clock: MISSING") : rtcValid ? F("DS1302 clock: OK") : F("DS1302 clock: not set"));
+    drawLine(1, !rtcPresent ? String(F("Clock module: MISSING")) : String(rtcName()) + (rtcValid ? " clock: OK" : " clock: not set"));
     drawLine(2, storageReady ? F("Storage   : OK") : F("Storage   : ERROR"));
     drawLine(3, config.ssid[0] ? String("Wi-Fi: ") + config.ssid : String(F("Wi-Fi     : not set")));
     drawLine(4, config.deviceKey[0] ? F("Device key: saved") : F("Device key: NOT SET"));
@@ -439,9 +479,18 @@ void updateDisplay() {
       for (int k = 0; k < length; k++) items[needed++] = found[i + k];
       i += length - 1;
     }
-    // Status and "what is needed" take turns (needed pages only when something is missing).
-    int pages = 1 + (needed + 4) / 5, page = (now / PAGE_MS) % pages;
-    if (page == 0) {
+    // Status, "what is needed" (only when something is missing) and, on the
+    // router's Wi-Fi, the address to open the reader's page: they take turns.
+    bool onWifi = WiFi.status() == WL_CONNECTED;
+    int neededPages = (needed + 4) / 5, pages = 1 + neededPages + (onWifi ? 1 : 0), page = (now / PAGE_MS) % pages;
+    if (onWifi && page == pages - 1) {
+      drawTitle(F("OPEN READER PAGE"), "");
+      drawLine(0, F("Same Wi-Fi, browser:"));
+      drawLine(1, WiFi.localIP().toString());
+      drawLine(2, String("or ") + hostName + ".local");
+      drawLine(3, hotspotOn ? String("Hotspot: ") + config.apSsid : String(F("Hotspot: off")));
+      drawLine(4, hotspotOn ? String(F(" 192.168.4.1")) : String(F(" (button: turn on)")));
+    } else if (page == 0) {
       String mode = lastMode == "clock" ? F("CLOCKING") : lastMode == "register" ? F("REGISTER") : F("AvilonX");
       drawTitle(mode, waiting);
       drawLine(0, rfidOk ? F("RFID   : ready, tap") : F("RFID   : NOT FOUND"));
@@ -451,7 +500,7 @@ void updateDisplay() {
       uint32_t t = readScanTime();
       drawLine(4, t ? shortTime(t) + " PHT" : String(F("Clock not set")));
     } else {
-      drawTitle(F("WHAT IS NEEDED"), String(page) + "/" + String(pages - 1));
+      drawTitle(F("WHAT IS NEEDED"), String(page) + "/" + String(neededPages));
       for (int i = 0; i < 5; i++) { int at = (page - 1) * 5 + i; if (at < needed) drawLine(i, items[at]); }
     }
   }
@@ -615,7 +664,7 @@ void ds1302WriteRegister(uint8_t command, uint8_t value) { ds1302Begin(); ds1302
 uint8_t ds1302ReadRegister(uint8_t command) { ds1302Begin(); ds1302WriteByte(command); uint8_t v = ds1302ReadByte(); ds1302End(); return v; }
 
 // Reads the DS1302 as seconds since 1970 (UTC). False when it cannot be read.
-bool rtcRead(uint32_t &unixUtc) {
+bool ds1302Read(uint32_t &unixUtc) {
   uint8_t r[7];
   ds1302Begin(); ds1302WriteByte(0xBF);      // clock burst read
   for (uint8_t i = 0; i < 7; i++) r[i] = ds1302ReadByte();
@@ -632,7 +681,7 @@ bool rtcRead(uint32_t &unixUtc) {
 }
 
 // Sets the DS1302 (UTC, 24-hour, clock running) and marks it as set.
-void rtcWrite(uint32_t unixUtc) {
+void ds1302Write(uint32_t unixUtc) {
   int32_t days = (int32_t)(unixUtc / 86400UL);
   uint32_t rest = unixUtc % 86400UL;
   int y; unsigned m, d;
@@ -651,9 +700,88 @@ void rtcWrite(uint32_t unixUtc) {
   ds1302WriteByte(0x00);                     // control: writes stay allowed
   ds1302End();
   ds1302WriteRegister(0xC0, RTC_RAM_MARK);   // RAM byte 0
+}
+
+// ---- DS3231 clock (I2C, shares the OLED's two wires), kept in UTC ---------
+const uint8_t DS3231_ADDRESS = 0x68;
+bool ds3231Detect() {
+#if USE_OLED
+  Wire.beginTransmission(DS3231_ADDRESS);
+  return Wire.endTransmission() == 0;
+#else
+  return false;
+#endif
+}
+// Reads n registers from `first` on; false when the DS3231 does not answer.
+bool ds3231ReadRegisters(uint8_t first, uint8_t *out, uint8_t n) {
+#if USE_OLED
+  Wire.beginTransmission(DS3231_ADDRESS); Wire.write(first);
+  if (Wire.endTransmission() != 0) return false;
+  if (Wire.requestFrom((uint8_t)DS3231_ADDRESS, (uint8_t)n) != n) return false;
+  for (uint8_t i = 0; i < n; i++) out[i] = Wire.read();
+  return true;
+#else
+  return false;
+#endif
+}
+// True while the DS3231 has kept time since it was set (its "oscillator
+// stopped" flag is raised when the battery was flat or removed).
+bool ds3231TimeKept() {
+  uint8_t status = 0;
+  return ds3231ReadRegisters(0x0F, &status, 1) && !(status & 0x80);
+}
+bool ds3231Read(uint32_t &unixUtc) {
+  uint8_t r[7];
+  if (!ds3231ReadRegisters(0x00, r, 7)) return false;
+  uint8_t sec = bcdToDec(r[0] & 0x7F), min = bcdToDec(r[1] & 0x7F), hour;
+  if (r[2] & 0x40) hour = bcdToDec(r[2] & 0x1F) % 12 + ((r[2] & 0x20) ? 12 : 0);  // 12-hour mode
+  else hour = bcdToDec(r[2] & 0x3F);
+  uint8_t day = bcdToDec(r[4] & 0x3F), month = bcdToDec(r[5] & 0x1F);
+  int fullYear = 2000 + bcdToDec(r[6]) + ((r[5] & 0x80) ? 100 : 0);
+  if (sec > 59 || min > 59 || hour > 23 || day < 1 || day > 31 || month < 1 || month > 12 || fullYear < 2024) return false;
+  unixUtc = (uint32_t)(daysFromCivil(fullYear, month, day) * 86400L + hour * 3600L + min * 60L + sec);
+  return true;
+}
+void ds3231Write(uint32_t unixUtc) {
+#if USE_OLED
+  int32_t days = (int32_t)(unixUtc / 86400UL);
+  uint32_t rest = unixUtc % 86400UL;
+  int y; unsigned m, d;
+  civilFromDays(days, y, m, d);
+  if (y < 2000 || y > 2099) return;
+  Wire.beginTransmission(DS3231_ADDRESS);
+  Wire.write((uint8_t)0x00);
+  Wire.write(decToBcd(rest % 60));
+  Wire.write(decToBcd((rest / 60) % 60));
+  Wire.write(decToBcd(rest / 3600));           // 24-hour
+  Wire.write(decToBcd(((days + 4) % 7) + 1));  // 1970-01-01 was a Thursday
+  Wire.write(decToBcd(d));
+  Wire.write(decToBcd(m));
+  Wire.write(decToBcd(y - 2000));
+  Wire.endTransmission();
+  uint8_t status = 0;
+  if (ds3231ReadRegisters(0x0F, &status, 1)) {  // clear "oscillator stopped": the time is good now
+    Wire.beginTransmission(DS3231_ADDRESS); Wire.write((uint8_t)0x0F); Wire.write((uint8_t)(status & 0x7F)); Wire.endTransmission();
+  }
+#endif
+}
+
+// ---- Whichever clock module is fitted ----------------------------------------
+enum RtcKind { RTC_NONE, RTC_DS1302, RTC_DS3231 };
+RtcKind rtcKind = RTC_NONE;
+bool rtcRead(uint32_t &unixUtc) {
+  if (rtcKind == RTC_DS3231) return ds3231Read(unixUtc);
+  if (rtcKind == RTC_DS1302) return ds1302Read(unixUtc);
+  return false;
+}
+void rtcWrite(uint32_t unixUtc) {
+  if (rtcKind == RTC_DS3231) ds3231Write(unixUtc);
+  else if (rtcKind == RTC_DS1302) ds1302Write(unixUtc);
+  else return;
   uint32_t check = 0;
   rtcValid = rtcRead(check) && (check + 2 >= unixUtc) && (check <= unixUtc + 2);
 }
+const char* rtcName() { return rtcKind == RTC_DS3231 ? "DS3231" : rtcKind == RTC_DS1302 ? "DS1302" : "clock module"; }
 
 // The DS1302 has no address to ask, so check it is there by writing a test
 // value to one of its RAM bytes and reading it back.
@@ -673,21 +801,30 @@ void onClockSet() {
 void onSntpSync(struct timeval *) { onClockSet(); }
 #endif
 
+// Finds the clock module: a DS3231 on the OLED's I2C wires, else a DS1302.
 void beginRtc() {
-  pinMode(RTC_RST_PIN, OUTPUT); digitalWrite(RTC_RST_PIN, LOW);
-  pinMode(RTC_CLK_PIN, OUTPUT); digitalWrite(RTC_CLK_PIN, LOW);
-  pinMode(RTC_DAT_PIN, INPUT);
-  rtcPresent = ds1302Detect();
-  if (!rtcPresent) { Serial.println(F("No DS1302 found: using internet time only.")); return; }
   uint32_t now = 0;
-  // The RAM mark is lost, and the clock halts, when the battery is flat or removed.
-  rtcValid = ds1302ReadRegister(0xC1) == RTC_RAM_MARK && rtcRead(now);
+  if (ds3231Detect()) {
+    rtcKind = RTC_DS3231;
+    rtcValid = ds3231TimeKept() && ds3231Read(now);
+  } else if (HAS_DS1302) {
+    pinMode(RTC_RST_PIN, OUTPUT); digitalWrite(RTC_RST_PIN, LOW);
+    pinMode(RTC_CLK_PIN, OUTPUT); digitalWrite(RTC_CLK_PIN, LOW);
+    pinMode(RTC_DAT_PIN, INPUT);
+    if (ds1302Detect()) {
+      rtcKind = RTC_DS1302;
+      // The RAM mark is lost, and the clock halts, when the battery is flat or removed.
+      rtcValid = ds1302ReadRegister(0xC1) == RTC_RAM_MARK && ds1302Read(now);
+    }
+  }
+  rtcPresent = rtcKind != RTC_NONE;
+  if (!rtcPresent) { Serial.println(F("No clock module (DS3231 or DS1302) found: using internet time only.")); return; }
   if (rtcValid) {
     timeval tv = { (time_t)now, 0 };
     settingClockFromRtc = true; settimeofday(&tv, nullptr); settingClockFromRtc = false;
-    Serial.print(F("Clock set from DS1302: ")); Serial.println(manilaTime(now));
+    Serial.print(F("Clock set from ")); Serial.print(rtcName()); Serial.print(F(": ")); Serial.println(manilaTime(now));
   } else {
-    Serial.println(F("DS1302 has no valid time yet: connect to the internet once to set it."));
+    Serial.print(rtcName()); Serial.println(F(" has no valid time yet: connect to the internet once to set it."));
   }
 }
 
@@ -698,7 +835,7 @@ void keepRtcInStep() {
   time_t t = time(nullptr);
   if (rtcPresent && t >= 1700000000) {
     rtcWrite((uint32_t)t);
-    Serial.println(F("DS1302 set from internet time."));
+    Serial.print(rtcName()); Serial.println(F(" set from internet time."));
   }
 }
 
@@ -712,8 +849,8 @@ uint32_t readScanTime() {
 }
 
 const char* clockSource() {
-  if (rtcPresent && rtcValid) return "ds1302";
-  if (rtcPresent) return "ds1302_unset";
+  if (rtcKind == RTC_DS3231) return rtcValid ? "ds3231" : "ds3231_unset";
+  if (rtcKind == RTC_DS1302) return rtcValid ? "ds1302" : "ds1302_unset";
   return time(nullptr) >= 1700000000 ? "internet" : "none";
 }
 
@@ -882,6 +1019,28 @@ void beginRouterConnection() {
   }
 }
 
+// Buzzer: short beeps on a timer (no delay), like the LED.
+unsigned long buzzerNextMs = 0;
+uint8_t buzzerTogglesRemaining = 0;
+bool buzzerIsOn = false;
+void buzzerWrite(bool on) {
+  if (BUZZER_PIN == NO_PIN) return;
+  digitalWrite(BUZZER_PIN, (on != (bool)BUZZER_ACTIVE_LOW) ? HIGH : LOW);
+}
+void beep(int times) {
+  if (BUZZER_PIN == NO_PIN) return;
+  buzzerIsOn = false; buzzerWrite(false);
+  buzzerTogglesRemaining = (uint8_t)(times * 2);
+  buzzerNextMs = millis();
+}
+void updateBuzzer() {
+  if (!buzzerTogglesRemaining || (int32_t)(millis() - buzzerNextMs) < 0) return;
+  buzzerIsOn = !buzzerIsOn;
+  buzzerWrite(buzzerIsOn);
+  --buzzerTogglesRemaining;
+  buzzerNextMs = millis() + (buzzerIsOn ? 70UL : 90UL);
+}
+
 void blink(int times) {
   ledIsOn = false;
   if (USE_STATUS_LED) digitalWrite(STATUS_LED_PIN, !STATUS_LED_ON);
@@ -938,7 +1097,11 @@ void handleStatus() {
   result += jsonEscape(String(config.apSsid));
   result += F("\",\"saved_ssid\":\"");
   result += jsonEscape(String(config.ssid));
-  result += F("\",\"router_ip\":\"");
+  result += F("\",\"hostname\":\"");
+  result += hostName;
+  result += F("\",\"ap_on\":");
+  result += hotspotOn ? F("true") : F("false");
+  result += F(",\"router_ip\":\"");
   if (WiFi.status() == WL_CONNECTED) result += WiFi.localIP().toString();
   // Saved taps still waiting to be sent, read from flash (kept through restarts).
   result += F("\",\"waiting\":[");
@@ -1065,20 +1228,52 @@ void handleDeviceSave() {
 // the taps after it. SEND_RETRY means no internet, server busy or no key yet:
 // the tap stays saved and is tried again later.
 // Tells AvilonX the reader is online. Returns true when AvilonX answered.
-bool sendHeartbeat() {
-  if (!config.deviceKey[0] || WiFi.status() != WL_CONNECTED) return false;
-  SecureClient client;
-  client.setInsecure();  // see sendTag(): the device key proves who is calling
+// Calls one AvilonX function (Supabase RPC). Returns the HTTP code (<= 0: no
+// connection) and the reply. The reader does not check Supabase's certificate
+// (it cannot keep the certificate list up to date); the device key, not the
+// connection, proves which reader is calling.
+// Faster: the ESP32 keeps the secure connection open between calls; the
+// ESP8266 (less memory) resumes the last secure session, a much shorter start.
+#if defined(ESP8266)
+BearSSL::Session tlsSession;
+int postAvilonX(const char *function, const String &body, String &reply) {
+  BearSSL::WiFiClientSecure client;
+  client.setInsecure();
+  client.setSession(&tlsSession);
   HTTPClient http;
   http.setTimeout(5000);
-  if (!http.begin(client, String(SUPABASE_URL) + "/rest/v1/rpc/device_rfid_heartbeat")) return false;
+  if (!http.begin(client, String(SUPABASE_URL) + "/rest/v1/rpc/" + function)) return -1;
   http.addHeader("Content-Type", "application/json");
   http.addHeader("apikey", SUPABASE_KEY);
+  int code = http.POST(body);
+  reply = code > 0 ? http.getString() : "";
+  http.end();
+  return code;
+}
+#else
+WiFiClientSecure tlsClient;
+HTTPClient avilonxHttp;
+bool avilonxHttpReady = false;
+int postAvilonX(const char *function, const String &body, String &reply) {
+  if (!avilonxHttpReady) { tlsClient.setInsecure(); avilonxHttp.setReuse(true); avilonxHttpReady = true; }
+  avilonxHttp.setTimeout(5000);
+  if (!avilonxHttp.begin(tlsClient, String(SUPABASE_URL) + "/rest/v1/rpc/" + function)) return -1;
+  avilonxHttp.addHeader("Content-Type", "application/json");
+  avilonxHttp.addHeader("apikey", SUPABASE_KEY);
+  int code = avilonxHttp.POST(body);
+  reply = code > 0 ? avilonxHttp.getString() : "";
+  avilonxHttp.end();  // keeps the connection open for the next call
+  if (code <= 0) tlsClient.stop();  // a broken connection: start afresh next time
+  return code;
+}
+#endif
+
+bool sendHeartbeat() {
+  if (!config.deviceKey[0] || WiFi.status() != WL_CONNECTED) return false;
   String body = String("{\"p_serial\":\"") + deviceSerial + "\",\"p_key\":\"" + config.deviceKey + "\",\"p_pending\":" + String(pendingCount)
               + ",\"p_clock\":\"" + clockSource() + "\",\"p_firmware\":\"" + FIRMWARE_VERSION + "\"}";
-  int code = http.POST(body);
-  String reply = code > 0 ? http.getString() : "";
-  http.end();
+  String reply;
+  int code = postAvilonX("device_rfid_heartbeat", body, reply);
   avilonxReachable = code >= 200 && code < 300;
   if (avilonxReachable) {
     String mode = jsonField(reply, "mode");
@@ -1107,20 +1302,7 @@ SendResult sendTag(const StoredScan &scan) {
     lastReply = "Save the device key from AvilonX first. Taps are kept until then.";
     return SEND_RETRY;
   }
-  SecureClient client;
-  // The reader does not check Supabase's certificate (an ESP8266 cannot keep
-  // the certificate list up to date). The device key, not the connection,
-  // proves which reader is calling.
-  client.setInsecure();
-  HTTPClient http;
   // Sending pauses tag reading briefly; saved taps are never lost.
-  http.setTimeout(5000);
-  if (!http.begin(client, String(SUPABASE_URL) + "/rest/v1/rpc/device_rfid_scan")) {
-    lastReply = "Could not reach AvilonX. Will retry.";
-    return SEND_RETRY;
-  }
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("apikey", SUPABASE_KEY);
   String body = String("{\"p_serial\":\"") + deviceSerial + "\",\"p_key\":\"" + config.deviceKey + "\",\"p_tag\":\"" + uid + "\"";
   if (RPC_SUPPORTS_SCANNED_AT && scan.scannedAtUtc) {
     time_t t = scan.scannedAtUtc;
@@ -1132,9 +1314,8 @@ SendResult sendTag(const StoredScan &scan) {
     }
   }
   body += "}";
-  int code = http.POST(body);
-  String reply = code > 0 ? http.getString() : "";
-  http.end();
+  String reply;
+  int code = postAvilonX("device_rfid_scan", body, reply);
 
   if (code <= 0 || code >= 500 || code == 404 || code == 408 || code == 429) {
     // No internet, server busy or AvilonX not set up yet: keep the tap.
@@ -1160,6 +1341,7 @@ SendResult sendTag(const StoredScan &scan) {
   addHistory(uid + "  -  " + text);
   Serial.print(F("AvilonX: ")); Serial.println(text);
   blink(good ? 1 : 3);
+  if (!good) beep(2);
   return SEND_ANSWERED;
 }
 
@@ -1259,25 +1441,76 @@ void readRFID() {
       lastReply = "Tag already saved; waiting to send. Not saved again.";
       addHistory(uid + " - already saved, not saved again");
       showTap(uid, F("Already saved, waiting to send"));
+      beep(1);
     } else if (saveScan(uid)) {
       lastSendAttempt = 0;
       lastReply = readScanTime()
           ? (WiFi.status() == WL_CONNECTED ? "Saved; sending to AvilonX" : "Saved; will send when the internet is back")
           : "Saved, but the clock is not set: AvilonX will use the time it receives it";
       showTap(uid, !readScanTime() ? F("Saved. Clock not set!") : WiFi.status() == WL_CONNECTED ? F("Saved. Sending to AvilonX...") : F("Saved. No internet: sent later"));
+      beep(1);
     } else {
       lastReply = "SAVE FAILED / STORAGE FULL - this tap was not saved";
       addHistory(uid + " - SAVE FAILED");
       showTap(uid, F("NOT SAVED: storage full or error"));
       blink(3);
+      beep(3);
     }
   }
   reader.PICC_HaltA();
   reader.PCD_StopCrypto1();
 }
 
+void startHotspot() {
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
+  hotspotOn = WiFi.softAP(config.apSsid, config.apPassword, 6, false, 4);
+  if (hotspotOn) { Serial.print(F("Reader hotspot on: ")); Serial.print(config.apSsid); Serial.println(F(" - http://192.168.4.1")); }
+  else Serial.println(F("ERROR: Could not start reader hotspot"));
+  screenDirty = true;
+}
+void stopHotspot() {
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+  hotspotOn = false;
+  Serial.print(F("Reader hotspot off (on your Wi-Fi now). Open http://")); Serial.print(WiFi.localIP().toString());
+  Serial.print(F(" or http://")); Serial.print(hostName); Serial.println(F(".local - a short button press turns the hotspot on."));
+  screenDirty = true;
+}
+void manageHotspot() {
+  static unsigned long lastCheck = 0;
+  if ((unsigned long)(millis() - lastCheck) < 1000UL) return;
+  lastCheck = millis();
+  bool connected = WiFi.status() == WL_CONNECTED;
+  if (!connected) routerConnectedAt = 0;
+  else if (routerConnectedAt == 0) routerConnectedAt = millis();
+  bool pressed = hotspotKeepUntilMs && (int32_t)(millis() - hotspotKeepUntilMs) < 0;
+  bool want;
+  if (connected) want = pressed || (unsigned long)(millis() - routerConnectedAt) < HOTSPOT_AFTER_CONNECT_MS || WiFi.softAPgetStationNum() > 0;
+  else want = hotspotOn || pressed || !config.ssid[0] || (wifiLostAt && (unsigned long)(millis() - wifiLostAt) > 60000UL);
+  if (want && !hotspotOn) startHotspot();
+  else if (!want && hotspotOn) stopHotspot();
+}
+// http://<name>.local on the router's Wi-Fi (phones and computers on it can open the reader).
+void startNameOnWifi() {
+  if (mdnsStarted || WiFi.status() != WL_CONNECTED) return;
+  if (MDNS.begin(hostName.c_str())) {
+    MDNS.addService("http", "tcp", 80);
+    mdnsStarted = true;
+    Serial.print(F("Reader page on your Wi-Fi: http://")); Serial.print(WiFi.localIP().toString());
+    Serial.print(F(" or http://")); Serial.print(hostName); Serial.println(F(".local"));
+  }
+}
+
+bool buttonDown() {
+  if (digitalRead(RESET_BUTTON_PIN) == LOW) return true;
+  return RESET_BUTTON2_PIN != NO_PIN && digitalRead(RESET_BUTTON2_PIN) == LOW;
+}
+
+// Short press (under 3 s): the reader's hotspot on for 10 minutes.
+// Hold 10 s: the hotspot's name and password back to RFID-READER / RFID12345.
 void checkResetButton() {
-  if (digitalRead(RESET_BUTTON_PIN) == LOW) {
+  if (buttonDown()) {
     if (buttonPressedAt == 0) buttonPressedAt = millis();
     if (!resetAlreadyHandled && (unsigned long)(millis() - buttonPressedAt) >= RESET_HOLD_MS) {
       resetAlreadyHandled = true;
@@ -1285,20 +1518,32 @@ void checkResetButton() {
       restoreDefaultApOnly();        // keeps router Wi-Fi, device key and saved taps
       restartAfterResetBlinks = true;
       blink(3);
+      beep(3);
     }
   } else {
+    if (buttonPressedAt != 0 && !resetAlreadyHandled) {
+      unsigned long held = millis() - buttonPressedAt;
+      if (held >= 50UL && held < 3000UL) {
+        hotspotKeepUntilMs = millis() + HOTSPOT_BUTTON_MS;
+        Serial.println(F("Button: reader hotspot on for 10 minutes."));
+        showReply(String(F("Hotspot ")) + config.apSsid + F(" on for 10 minutes. Open 192.168.4.1"), true);
+        beep(1);
+      }
+    }
     buttonPressedAt = 0;
     resetAlreadyHandled = false;
   }
 }
 
 void setup() {
-#if defined(ESP8266) && RESET_BUTTON_PIN == 3
-  Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);  // RX is the reset button
+#if defined(ESP8266) && (RESET_BUTTON_PIN == 3 || BUZZER_PIN == 3)
+  Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);  // RX is used by the button or the buzzer
 #else
   Serial.begin(115200);
 #endif
   pinMode(RESET_BUTTON_PIN, RESET_BUTTON_PULLUP ? INPUT_PULLUP : INPUT);
+  if (RESET_BUTTON2_PIN != NO_PIN) pinMode(RESET_BUTTON2_PIN, INPUT_PULLUP);
+  if (BUZZER_PIN != NO_PIN) { pinMode(BUZZER_PIN, OUTPUT); buzzerWrite(false); }
   beginDisplay();
   if (USE_STATUS_LED) { pinMode(STATUS_LED_PIN, OUTPUT); digitalWrite(STATUS_LED_PIN, !STATUS_LED_ON); }
   EEPROM.begin(EEPROM_BYTES);
@@ -1308,17 +1553,24 @@ void setup() {
   WiFi.persistent(false);
   WiFi.mode(WIFI_AP_STA);
   deviceSerial = WiFi.macAddress();
+  {
+    // e.g. avilonx-3a7f, from the last 4 characters of the serial.
+    String tail = deviceSerial; tail.replace(":", ""); tail.toLowerCase();
+    if (tail.length() >= 4) hostName = "avilonx-" + tail.substring(tail.length() - 4);
+  }
+#if defined(ESP8266)
+  WiFi.hostname(hostName);
+#else
+  WiFi.setHostname(hostName.c_str());
+#endif
   WiFi.softAPdisconnect(true);
   delay(200);
-  WiFi.mode(WIFI_AP_STA);
-  WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
-  bool apOK = WiFi.softAP(config.apSsid, config.apPassword, 6, false, 4);
-  if (!apOK) Serial.println(F("ERROR: Could not start reader hotspot"));
+  startHotspot();
   Serial.print(F("Device serial: ")); Serial.println(deviceSerial);
   Serial.println(F("Reader page: http://192.168.4.1"));
   beginRouterConnection();
   // The clock runs in UTC (what AvilonX expects) and the page shows Philippine
-  // time. The DS1302 sets it at power-up; internet time corrects both.
+  // time. The clock module sets it at power-up; internet time corrects both.
 #if defined(ESP8266)
   settimeofday_cb(onClockSet);
 #else
@@ -1370,6 +1622,12 @@ void loop() {
   watchRfidReader();
   readRFID();
   updateDisplay();
+  updateBuzzer();
+  manageHotspot();
+  startNameOnWifi();
+#if defined(ESP8266)
+  if (mdnsStarted) MDNS.update();
+#endif
   keepRtcInStep();
   sendPending();
   keepOnline();
