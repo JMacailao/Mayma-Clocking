@@ -246,14 +246,12 @@ unsigned long totalScans = 0;
 String lastUID = "Waiting for card";
 String lastReply = "No tags sent yet";
 String lastMode = "";
-String lastSeenUID = "";
-unsigned long lastSeenMs = 0;
 // RC522 watchdog: if the reader stops answering (power dip), it is reset on its
 // own every few seconds until it answers again; the board keeps running.
 unsigned long lastRfidCheckMs = 0;
 unsigned long lastRfidActivityMs = 0;
 uint32_t rfidRestarts = 0;
-bool rfidOk = false;
+volatile bool rfidOk = false;
 const unsigned long RFID_CHECK_MS = 5000UL;      // check the reader every 5 seconds
 unsigned long buttonPressedAt = 0;
 bool resetAlreadyHandled = false;
@@ -296,6 +294,7 @@ const uint32_t SCAN_MAGIC = 0x53434131UL;
 // top of the sketch, and sendTag() returns this type.
 enum SendResult { SEND_ANSWERED, SEND_RETRY };
 unsigned long lastSendAttempt = 0;
+unsigned long lastTapMs = 0;   // when the last tag was tapped (sending waits for a quiet moment)
 // Online signal to AvilonX about every minute, so the club admin and Super
 // Admin can see the reader is online and how many taps it still holds.
 const char* FIRMWARE_VERSION = "avilonx-reader-2026.11.2-" BOARD_NAME;
@@ -879,12 +878,14 @@ bool isAlreadySaved(const String &uid) {
   return found;
 }
 
-bool saveScan(const String &uid) {
+// agoMs: how long ago the tag was read (the ESP32 reads tags on their own task).
+bool saveScan(const String &uid, unsigned long agoMs) {
   if (!storageReady || pendingCount >= MAX_SAVED_SCANS) return false;
   StoredScan item = {};
   item.magic = SCAN_MAGIC;
   item.id = nextScanId;
   item.scannedAtUtc = readScanTime();
+  if (item.scannedAtUtc && agoMs) item.scannedAtUtc -= (uint32_t)((agoMs + 500UL) / 1000UL);
   uid.toCharArray(item.uid, sizeof(item.uid));
   item.checksum = scanChecksum(item);
   String dest = scanFile(item.id);
@@ -1285,14 +1286,20 @@ HTTPClient avilonxHttp;
 bool avilonxHttpReady = false;
 int postAvilonX(const char *function, const String &body, String &reply) {
   if (!avilonxHttpReady) { tlsClient.setInsecure(); avilonxHttp.setReuse(true); avilonxHttpReady = true; }
-  avilonxHttp.setTimeout(5000);
-  if (!avilonxHttp.begin(tlsClient, String(SUPABASE_URL) + "/rest/v1/rpc/" + function)) return -1;
-  avilonxHttp.addHeader("Content-Type", "application/json");
-  avilonxHttp.addHeader("apikey", SUPABASE_KEY);
-  int code = avilonxHttp.POST(body);
-  reply = code > 0 ? avilonxHttp.getString() : "";
-  avilonxHttp.end();  // keeps the connection open for the next call
-  if (code <= 0) tlsClient.stop();  // a broken connection: start afresh next time
+  int code = -1;
+  // AvilonX may have closed a connection left open: then try once more at
+  // once, on a new connection, instead of waiting 10 seconds.
+  for (int attempt = 0; attempt < 2; attempt++) {
+    avilonxHttp.setTimeout(8000);
+    if (!avilonxHttp.begin(tlsClient, String(SUPABASE_URL) + "/rest/v1/rpc/" + function)) { tlsClient.stop(); continue; }
+    avilonxHttp.addHeader("Content-Type", "application/json");
+    avilonxHttp.addHeader("apikey", SUPABASE_KEY);
+    code = avilonxHttp.POST(body);
+    reply = code > 0 ? avilonxHttp.getString() : "";
+    avilonxHttp.end();  // keeps the connection open for the next call
+    if (code > 0) break;
+    tlsClient.stop();   // a broken connection: start afresh
+  }
   return code;
 }
 #endif
@@ -1319,6 +1326,7 @@ void keepOnline() {
   if (!connected) { avilonxReachable = false; wasWifiConnected = false; return; }
   bool justConnected = !wasWifiConnected;
   wasWifiConnected = true;
+  if (lastTapMs && (unsigned long)(millis() - lastTapMs) < 5000UL) return;  // not while birds are being tapped
   if (justConnected || lastHeartbeatMs == 0 || (unsigned long)(millis() - lastHeartbeatMs) >= HEARTBEAT_MS) {
     lastHeartbeatMs = millis();
     sendHeartbeat();
@@ -1374,8 +1382,12 @@ SendResult sendTag(const StoredScan &scan) {
   return SEND_ANSWERED;
 }
 
+// Sends after a short quiet moment (1.5 s without a tap): birds arriving
+// together are all read first. The tap times are saved, so nothing is lost.
+const unsigned long SEND_QUIET_MS = 1500UL;
 void sendPending() {
   if (pendingCount == 0 || !storageReady || WiFi.status() != WL_CONNECTED) return;
+  if (lastTapMs && (unsigned long)(millis() - lastTapMs) < SEND_QUIET_MS) return;
   if (lastSendAttempt && millis() - lastSendAttempt < sendWaitMs) return;
   lastSendAttempt = millis();
   String path;
@@ -1427,7 +1439,6 @@ bool startRfidReader(const char *why) {
   }
   rfidOk = false;
   Serial.println(F("RFID reader is not answering. Check the RC522 wiring and its 3.3V power."));
-  lastReply = "RFID reader not answering: check the RC522 wiring and 3.3V power";
   return false;
 }
 
@@ -1445,49 +1456,92 @@ void watchRfidReader() {
   }
 }
 
-void readRFID() {
-  if (!reader.PICC_IsNewCardPresent()) return;
-  if (!reader.PICC_ReadCardSerial()) return;
+// Reads one tag from the RC522 (SPI only): its UID in hex, or "" when none.
+// A short guard keeps the same tag from counting twice in a row; other tags
+// count at once.
+String pollRfid() {
+  if (!reader.PICC_IsNewCardPresent()) return "";
+  if (!reader.PICC_ReadCardSerial()) return "";
   lastRfidActivityMs = millis();
-
-  String uid;
-  for (byte i = 0; i < reader.uid.size; i++) {
-    if (reader.uid.uidByte[i] < 0x10) uid += '0';
-    uid += String(reader.uid.uidByte[i], HEX);
-  }
-  uid.toUpperCase();
-
-  // Short guard against the same tag read twice in a row; other tags count at once.
-  unsigned long now = millis();
-  if (uid != lastSeenUID || (unsigned long)(now - lastSeenMs) >= SAME_TAG_GUARD_MS) {
-    lastUID = uid;
-    lastSeenUID = uid;
-    lastSeenMs = now;
-    totalScans++;
-    Serial.print(F("Tag: ")); Serial.println(uid);
-    if (isAlreadySaved(uid)) {
-      // Each tag is saved once: the first tap (and its time) is the one sent.
-      lastReply = "Tag already saved; waiting to send. Not saved again.";
-      addHistory(uid + " - already saved, not saved again");
-      showTap(uid, F("Already saved, waiting to send"));
-      beep(1);
-    } else if (saveScan(uid)) {
-      lastSendAttempt = 0;
-      lastReply = readScanTime()
-          ? (WiFi.status() == WL_CONNECTED ? "Saved; sending to AvilonX" : "Saved; will send when the internet is back")
-          : "Saved, but the clock is not set: AvilonX will use the time it receives it";
-      showTap(uid, !readScanTime() ? F("Saved. Clock not set!") : WiFi.status() == WL_CONNECTED ? F("Saved. Sending to AvilonX...") : F("Saved. No internet: sent later"));
-      beep(1);
-    } else {
-      lastReply = "SAVE FAILED / STORAGE FULL - this tap was not saved";
-      addHistory(uid + " - SAVE FAILED");
-      showTap(uid, F("NOT SAVED: storage full or error"));
-      blink(3);
-      beep(3);
-    }
-  }
+  char hex[21] = {0};
+  for (byte i = 0; i < reader.uid.size && i < 10; i++) snprintf(hex + i * 2, 3, "%02X", reader.uid.uidByte[i]);
   reader.PICC_HaltA();
   reader.PCD_StopCrypto1();
+  static char lastSeen[21] = {0};
+  static unsigned long lastSeenAt = 0;
+  unsigned long now = millis();
+  if (strcmp(hex, lastSeen) == 0 && (unsigned long)(now - lastSeenAt) < SAME_TAG_GUARD_MS) return "";
+  strncpy(lastSeen, hex, sizeof(lastSeen) - 1);
+  lastSeenAt = now;
+  return String(hex);
+}
+
+// A tag was tapped agoMs ago: save it with its time, show it, beep.
+void handleTap(const String &uid, unsigned long agoMs) {
+  lastTapMs = millis();
+  lastUID = uid;
+  totalScans++;
+  Serial.print(F("Tag: ")); Serial.println(uid);
+  if (isAlreadySaved(uid)) {
+    // Each tag is saved once: the first tap (and its time) is the one sent.
+    lastReply = "Tag already saved; waiting to send. Not saved again.";
+    addHistory(uid + " - already saved, not saved again");
+    showTap(uid, F("Already saved, waiting to send"));
+    beep(1);
+  } else if (saveScan(uid, agoMs)) {
+    lastSendAttempt = 0;
+    lastReply = readScanTime()
+        ? (WiFi.status() == WL_CONNECTED ? "Saved; sending to AvilonX" : "Saved; will send when the internet is back")
+        : "Saved, but the clock is not set: AvilonX will use the time it receives it";
+    showTap(uid, !readScanTime() ? F("Saved. Clock not set!") : WiFi.status() == WL_CONNECTED ? F("Saved. Sending to AvilonX...") : F("Saved. No internet: sent later"));
+    beep(1);
+  } else {
+    lastReply = "SAVE FAILED / STORAGE FULL - this tap was not saved";
+    addHistory(uid + " - SAVE FAILED");
+    showTap(uid, F("NOT SAVED: storage full or error"));
+    blink(3);
+    beep(3);
+  }
+}
+
+#if defined(ESP32)
+// ESP32: tags are read on their own task, so a tap is never missed while the
+// reader is busy sending to AvilonX. Taps wait in a queue for the main loop.
+struct TapItem { char uid[21]; uint32_t atMs; };
+QueueHandle_t tapQueue = nullptr;
+void rfidTask(void *) {
+  for (;;) {
+    watchRfidReader();
+    String uid = pollRfid();
+    if (uid.length()) {
+      TapItem item = {};
+      strncpy(item.uid, uid.c_str(), sizeof(item.uid) - 1);
+      item.atMs = millis();
+      if (xQueueSend(tapQueue, &item, 0) != pdTRUE) Serial.println(F("Tap queue full: tap dropped."));
+    }
+    vTaskDelay(pdMS_TO_TICKS(15));
+  }
+}
+void startRfidTask() {
+  tapQueue = xQueueCreate(32, sizeof(TapItem));
+  xTaskCreatePinnedToCore(rfidTask, "rfid", 4096, nullptr, 2, nullptr, 1);
+}
+#endif
+
+// Main loop: read (ESP8266) or collect (ESP32) the taps.
+void readRFID() {
+#if defined(ESP32)
+  TapItem item;
+  while (tapQueue && xQueueReceive(tapQueue, &item, 0) == pdTRUE) handleTap(String(item.uid), millis() - item.atMs);
+#else
+  watchRfidReader();
+  String uid = pollRfid();
+  if (uid.length()) handleTap(uid, 0);
+#endif
+  // The reader stopped answering: say so on the page (set here, not in the RFID task).
+  static bool wasOk = true;
+  if (!rfidOk && wasOk) lastReply = "RFID reader not answering: check the RC522 wiring and 3.3V power";
+  wasOk = rfidOk;
 }
 
 // The device serial: the board's Wi-Fi address, e.g. 5C:CF:7F:12:34:56.
@@ -1619,6 +1673,12 @@ void setup() {
 
   WiFi.persistent(false);
   WiFi.mode(WIFI_AP_STA);
+  // No Wi-Fi power saving: a steadier connection and quicker answers.
+#if defined(ESP8266)
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
+#else
+  WiFi.setSleep(false);
+#endif
   deviceSerial = readDeviceSerial();
   {
     // e.g. avilonx-3a7f, from the last 4 characters of the serial.
@@ -1667,6 +1727,9 @@ void setup() {
   server.on("/device/save", HTTP_POST, handleDeviceSave);
   server.onNotFound([]() { server.sendHeader("Location", "/"); server.send(302, "text/plain", ""); });
   server.begin();
+#if defined(ESP32)
+  startRfidTask();
+#endif
   // The OLED shows which modules were found for a few seconds, then the status.
   bootScreenUntilMs = millis() + 5000UL;
   screenDirty = true;
@@ -1689,7 +1752,6 @@ void loop() {
     return;
   }
   if (restartAfterApChange && (int32_t)(millis() - apChangeRestartAt) >= 0) ESP.restart();
-  watchRfidReader();
   readRFID();
   updateDisplay();
   updateBuzzer();

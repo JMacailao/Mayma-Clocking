@@ -153,3 +153,19 @@ saved taps: upload again with *Tools → Erase Flash → All Flash Contents*.)
   is sent without a new connection.
 - **ESP8266:** resumes the last secure session, which makes connecting about a
   second faster.
+
+## When tags are sometimes not read
+
+The reader keeps reading while it sends to AvilonX (on the ESP32 tags are read on
+their own task; both boards wait for 1.5 s without a tap before sending). If tags
+are still sometimes missed, it is usually the hardware:
+
+- **Wires:** keep the RC522 wires short (under 15 cm) and firm. Loose breadboard
+  jumpers cause misses; solder or use female-female jumpers straight on the pins.
+- **Power:** add a **100 µF capacitor** across the RC522's 3.3V and GND (long leg to
+  3.3V). Wi-Fi draws short bursts of current that can upset the RC522. Use a good
+  USB cable and power supply (at least 1 A).
+- **The tag:** hold it flat over the middle of the RC522 antenna, within 2–3 cm,
+  for half a second. Keep metal away from the antenna.
+- **Serial Monitor (115200):** `RFID reader restarted: it stopped answering` means
+  the RC522 lost power or a wire for a moment: check the power and wires above.
