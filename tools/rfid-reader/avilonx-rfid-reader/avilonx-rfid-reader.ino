@@ -46,6 +46,9 @@
        or "esp32" by Espressif) and the libraries "MFRC522" and "U8g2"
        (Sketch > Include Library > Manage Libraries). Board: e.g. "NodeMCU 1.0
        (ESP-12E Module)" or "ESP32 Dev Module". Upload this sketch.
+       ESP32: also set Tools > Partition Scheme > "Huge APP (3MB No OTA/1MB
+       SPIFFS)" (the default leaves too little room: "Sketch too big"). Not
+       "Minimal SPIFFS": it leaves too little room for the saved taps.
     2. Join the Wi-Fi "RFID-READER" (password RFID12345), open http://192.168.4.1
     3. The Super Admin registers the Device serial (Register RFID reader).
     4. On http://192.168.4.1 enter the device key, then pick your 2.4 GHz Wi-Fi
@@ -564,6 +567,8 @@ bool loadScanFile(const String &path, StoredScan &item) {
 void initializeQueue() {
 #if defined(ESP32)
   storageReady = LittleFS.begin(true);  // formats the first time
+  if (storageReady && LittleFS.totalBytes() < 400000UL)
+    Serial.println(F("Warning: little room for saved taps. Use Tools > Partition Scheme > Huge APP (3MB No OTA/1MB SPIFFS)."));
 #else
   storageReady = LittleFS.begin();
 #endif

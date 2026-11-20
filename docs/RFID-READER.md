@@ -23,7 +23,11 @@ button is used.
 
 1. Boards: install **esp8266** (by ESP8266 Community) or **esp32** (by Espressif).
 2. Libraries (Sketch → Include Library → Manage Libraries): **MFRC522** and **U8g2**.
-3. Board: *NodeMCU 1.0 (ESP-12E Module)* or *ESP32 Dev Module*. Upload.
+3. Board: *NodeMCU 1.0 (ESP-12E Module)* or *ESP32 Dev Module*.
+   **ESP32:** also set **Tools → Partition Scheme → "Huge APP (3MB No OTA/1MB
+   SPIFFS)"**. With the default the sketch is too big ("Sketch too big … text
+   section exceeds available space"). Don't use "Minimal SPIFFS": it leaves too
+   little room for saved taps. Then Upload.
 4. At the top of the sketch:
    - 1.3" OLED (SH1106): `#define OLED_SH1106 1`
    - a buzzer module that sounds on LOW: `#define BUZZER_ACTIVE_LOW 1`
