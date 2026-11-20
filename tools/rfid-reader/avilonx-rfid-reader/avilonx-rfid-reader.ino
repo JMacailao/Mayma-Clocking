@@ -119,6 +119,10 @@
   #include <ESPmDNS.h>
   #include <WiFiClientSecure.h>
   #include <esp_sntp.h>    // sntp_set_time_sync_notification_cb
+  #include <esp_system.h>
+  #if __has_include(<esp_mac.h>)
+    #include <esp_mac.h>    // esp_read_mac (ESP32 boards package 3.x)
+  #endif
   typedef WebServer WebServerType;
   #define BOARD_NAME "ESP32"
 #else
@@ -1486,6 +1490,24 @@ void readRFID() {
   reader.PCD_StopCrypto1();
 }
 
+// The device serial: the board's Wi-Fi address, e.g. 5C:CF:7F:12:34:56.
+// On the ESP32 it is read from the chip itself: asked through WiFi just as the
+// Wi-Fi starts, newer ESP32 board packages answer 00:00:00:00:00:00.
+String readDeviceSerial() {
+#if defined(ESP32)
+  uint8_t mac[6] = {0};
+  if (esp_read_mac(mac, ESP_MAC_WIFI_STA) != ESP_OK || !(mac[0] | mac[1] | mac[2] | mac[3] | mac[4] | mac[5])) {
+    uint64_t fused = ESP.getEfuseMac();   // the same address, as burned into the chip
+    for (int i = 0; i < 6; i++) mac[i] = (uint8_t)(fused >> (8 * i));
+  }
+  char text[18];
+  snprintf(text, sizeof(text), "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  return String(text);
+#else
+  return WiFi.macAddress();
+#endif
+}
+
 void startHotspot() {
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
@@ -1597,7 +1619,7 @@ void setup() {
 
   WiFi.persistent(false);
   WiFi.mode(WIFI_AP_STA);
-  deviceSerial = WiFi.macAddress();
+  deviceSerial = readDeviceSerial();
   {
     // e.g. avilonx-3a7f, from the last 4 characters of the serial.
     String tail = deviceSerial; tail.replace(":", ""); tail.toLowerCase();
