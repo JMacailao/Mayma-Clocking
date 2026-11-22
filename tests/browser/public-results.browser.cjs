@@ -17,6 +17,7 @@ module.exports = async (page, { open, check, OUT }) => {
   check(/Closed · final/.test(body) && /\bOpen\b/.test(body), 'shows the race status');
   const firstRank = await page.locator('[data-public-results-table] tbody tr').first().locator('.public-rank').innerText().catch(() => '');
   check(firstRank === '1', 'fastest bird ranked 1');
+  check(/11:00:00\sAM/.test(body), `arrival shows seconds (${(body.match(/\d{1,2}:\d{2}(:\d{2})?\s[AP]M/) || [''])[0]})`);
   check(await page.locator('[data-public-results-legend]').isVisible(), 'explains the columns');
   await page.screenshot({ path: `${OUT}/public-results.png`, fullPage: true });
 };

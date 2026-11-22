@@ -111,8 +111,8 @@ export async function render(view,identity,setPageCleanup) {
    const {data,error}=await supabase.rpc('submit_member_nfc_clock',{p_tag:uid,p_race_id:nfcRace.value?Number(nfcRace.value):null});
    if(error){const text=error.code==='PGRST202'?'NFC clocking is not set up yet. Ask your club to run nfc-tags.sql.':error.message;nfcSay(text,'error');logNfc(`${formatNfcUid(uid)} · ${text}`,'error');if(radar.isOpen())radar.report({kind:'error',ring:formatNfcUid(uid),detail:text});else navigator.vibrate?.([80,60,80]);return;}
    radar.report({kind:data.status==='accepted'?'success':'info',ring:data.pigeon_ring||formatNfcUid(uid),detail:data.message||'',time:data.received_at_utc||null});
-   const time=data.received_at_utc?` Received ${formatDate(data.received_at_utc)}.`:'';
-   nfcSay(`${data.message}${time}`,data.status==='accepted'?'success':'info');showReceipt(data);logNfc(`${data.pigeon_ring} · ${data.status==='accepted'?'Clocked':'Already clocked'}${data.received_at_utc?` at ${formatDate(data.received_at_utc)}`:''}`,data.status==='accepted'?'success':'info');navigator.vibrate?.(120);
+   const time=data.received_at_utc?` Received ${formatDateSeconds(data.received_at_utc)}.`:'';
+   nfcSay(`${data.message}${time}`,data.status==='accepted'?'success':'info');showReceipt(data);logNfc(`${data.pigeon_ring} · ${data.status==='accepted'?'Clocked':'Already clocked'}${data.received_at_utc?` at ${formatDateSeconds(data.received_at_utc)}`:''}`,data.status==='accepted'?'success':'info');navigator.vibrate?.(120);
   }catch(error){const text=error.message||'Could not send the clocking. Check your internet connection and tap again.';nfcSay(text,'error');radar.report({kind:'error',ring:formatNfcUid(uid),detail:text});}
   finally{pending.delete(uid);}
  };

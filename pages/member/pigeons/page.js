@@ -1,4 +1,4 @@
-import { supabase, escapeHTML, number, formatDate } from '../../../assets/js/shared.js';
+import { supabase, escapeHTML, number, formatDate, formatDateSeconds } from '../../../assets/js/shared.js';
 import { formatNfcUid } from '../../../assets/js/nfc.js';
 import { birdPhotoUrls } from '../../admin/birds/photos.js';
 import { raceRows } from '../../../assets/js/race-export.js';
@@ -38,7 +38,7 @@ export async function render(view,identity){
     <td data-label="${t('Colour')}" class="bird-col-colour">${escapeHTML(bird.color)}</td>
     <td data-label="RFID">${bird.bond_type==='ring'?`<span class="bird-ring-only">${t('Ring only · sticker')}</span>`:bird.nfc_tag?`<code>${escapeHTML(formatNfcUid(bird.nfc_tag))}</code>`:'—'}</td>
     <td data-label="${t('Races')}">${s.races} ${t('entered')} · ${s.clocked} ${t('clocked')}</td>
-    <td data-label="${t('Best speed')}">${s.best?`<strong>${number(s.best.row.speed)} m/min</strong><br><span class="small">${escapeHTML(s.best.race.name)} · ${escapeHTML(formatDate(s.best.row.clock.received_at_utc))}</span>`:'—'}</td></tr>`;}).join('')}</tbody></table></div>`:`<p class="small">${t('No birds are bonded to you yet. The club bonds your birds on Band Assignments.')}</p>`}</section>`;
+    <td data-label="${t('Best speed')}">${s.best?`<strong>${number(s.best.row.speed)} m/min</strong><br><span class="small">${escapeHTML(s.best.race.name)} · ${escapeHTML(formatDateSeconds(s.best.row.clock.received_at_utc))}</span>`:'—'}</td></tr>`;}).join('')}</tbody></table></div>`:`<p class="small">${t('No birds are bonded to you yet. The club bonds your birds on Band Assignments.')}</p>`}</section>`;
   const viewer=document.createElement('dialog');viewer.className='photo-viewer';view.append(viewer);
   viewer.addEventListener('click',event=>{if(event.target===viewer)viewer.close();});
   view.querySelectorAll('[data-view-photo]').forEach(button=>button.onclick=()=>{
