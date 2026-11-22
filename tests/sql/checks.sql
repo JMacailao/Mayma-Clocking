@@ -170,6 +170,18 @@ DO $$ DECLARE v record; BEGIN
   ASSERT v.race_status = 'closed', 'race status is shown';
   ASSERT v.verification = 'verified', 'Show up verification is shown';
   ASSERT has_function_privilege('anon', 'public.public_race_results(bigint, date)', 'EXECUTE'), 'visitors (not signed in) can read the public results';
+  ASSERT NOT v.disqualified, 'a verified bird is not DQ';
+END $$;
+-- A bird clocked in a closed race that never showed up is listed as DQ, not ranked.
+INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, source, verification)
+  SELECT id, 'PH-2', now() AT TIME ZONE 'UTC', 'barcode', 'provisional' FROM public.race_entries WHERE barcode = '902';
+DO $$ DECLARE v record; BEGIN
+  SELECT * INTO v FROM public.public_race_results(
+    (SELECT id FROM public.clubs LIMIT 1),
+    (SELECT ((release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date FROM public.races WHERE name = 'Race L'))
+  WHERE race_name = 'Race L';
+  ASSERT FOUND, 'the disqualified bird is listed';
+  ASSERT v.disqualified AND v.rank IS NULL, 'it is marked DQ and not ranked';
 END $$;
 
 SELECT 'All database checks passed.' AS result;

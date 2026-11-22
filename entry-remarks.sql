@@ -43,11 +43,12 @@ ALTER TABLE public.race_entries ADD CONSTRAINT race_entries_remarks_limit CHECK 
 -- public results.
 ALTER TABLE public.races ADD COLUMN IF NOT EXISTS is_practice boolean NOT NULL DEFAULT false;
 
--- Public results show each ring with its remarks, e.g. "12345 P1/P2/P3", and
--- leave out disqualified results (race closed, never verified on Show up).
+-- Public results show each ring with its remarks, e.g. "12345 P1/P2/P3".
 -- Each row also has its rank in its race (by speed), the race's status (open
--- = results can still change, closed = final) and its Show up verification
--- (verified or provisional). This replaces the version in public-results.sql;
+-- = results can still change, closed = final), its Show up verification
+-- (verified or provisional) and whether it is disqualified (DQ: the race is
+-- closed and the bird never showed up). DQ birds are listed, not ranked, after
+-- the ranked ones. Clocks the club rejected are left out. This replaces the version in public-results.sql;
 -- run this file again after re-running public-results.sql.
 DROP FUNCTION IF EXISTS public.public_race_results(bigint, date);
 CREATE FUNCTION public.public_race_results(p_club_id bigint, p_race_date date)
@@ -62,7 +63,8 @@ RETURNS TABLE(
   speed_m_per_min numeric,
   rank bigint,
   race_status text,
-  verification text
+  verification text,
+  disqualified boolean
 )
 LANGUAGE sql
 STABLE
@@ -71,9 +73,9 @@ SET search_path = ''
 AS $function$
   SELECT
     x.race_name, x.loft_name, x.distance_m, x.pigeon_ring, x.barcode, x.arrival_at_utc, x.flight_seconds, x.speed_m_per_min,
-    CASE WHEN x.speed_m_per_min IS NOT NULL
-      THEN rank() OVER (PARTITION BY x.race_id ORDER BY x.speed_m_per_min DESC NULLS LAST) END,
-    x.race_status, x.verification
+    CASE WHEN x.speed_m_per_min IS NOT NULL AND NOT x.disqualified
+      THEN rank() OVER (PARTITION BY x.race_id, x.disqualified ORDER BY x.speed_m_per_min DESC NULLS LAST) END,
+    x.race_status, x.verification, x.disqualified
   FROM (
     SELECT
       r.id AS race_id,
@@ -95,7 +97,9 @@ AS $function$
         ELSE NULL::numeric
       END AS speed_m_per_min,
       r.status::text AS race_status,
-      c.verification::text AS verification
+      c.verification::text AS verification,
+      -- Disqualified: the race is closed and the pigeon never showed up (Show up).
+      (c.verification = 'provisional' AND r.status = 'closed') AS disqualified
     FROM public.clubs AS club
     JOIN public.races AS r ON r.club_id = club.id
     JOIN public.race_entries AS e ON e.race_id = r.id
@@ -104,15 +108,13 @@ AS $function$
     WHERE club.id = p_club_id
       AND ((r.release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date = p_race_date
       AND c.verification <> 'rejected'
-      -- Disqualified: the race is closed and the pigeon never showed up (Show up).
-      AND NOT (c.verification = 'provisional' AND r.status = 'closed')
       AND NOT r.is_practice
   ) AS x
-  ORDER BY x.race_name, x.speed_m_per_min DESC NULLS LAST, x.loft_name, x.pigeon_ring;
+  ORDER BY x.race_name, x.disqualified, x.speed_m_per_min DESC NULLS LAST, x.loft_name, x.pigeon_ring;
 $function$;
 REVOKE ALL ON FUNCTION public.public_race_results(bigint, date) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.public_race_results(bigint, date) TO anon, authenticated;
 COMMENT ON FUNCTION public.public_race_results(bigint, date) IS
-  'Public race results for a club and Philippines-local race date: rank, race status and Show up verification; no member or account data.';
+  'Public race results for a club and Philippines-local race date: rank, race status, Show up verification and DQ; no member or account data.';
 
 NOTIFY pgrst, 'reload schema';
