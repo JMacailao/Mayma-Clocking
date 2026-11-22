@@ -1167,3 +1167,5 @@ dialog.radar-scan[open]{display:flex;flex-direction:column}
 .radar-reader::before{content:"";width:9px;height:9px;border-radius:50%;background:#8fd9ab;flex:none}
 .radar-reader.is-ok::before{background:var(--radar);box-shadow:0 0 6px var(--radar)}
 .radar-reader.is-bad{color:#ffb4b4}.radar-reader.is-bad::before{background:#ff5d5d}
+.public-rank{display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#0b2345;color:#fff;font-variant-numeric:tabular-nums}
+.public-results-legend{margin:8px 0 10px;color:#5b6b7c}

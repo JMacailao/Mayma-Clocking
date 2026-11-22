@@ -583,8 +583,10 @@ AS $function$
   ORDER BY c.name;
 $function$;
 
--- entry-remarks.sql replaces this function to add each entry's remarks after
--- the ring number; run it again after re-running this file.
+-- entry-remarks.sql replaces this function (remarks after the ring number,
+-- rank, race status and Show up verification); run it again after re-running
+-- this file. Dropped first: the newer version has more columns.
+DROP FUNCTION IF EXISTS public.public_race_results(bigint, date);
 CREATE OR REPLACE FUNCTION public.public_race_results(p_club_id bigint, p_race_date date)
 RETURNS TABLE(
   race_name text,
@@ -2029,9 +2031,12 @@ ALTER TABLE public.races ADD COLUMN IF NOT EXISTS is_practice boolean NOT NULL D
 
 -- Public results show each ring with its remarks, e.g. "12345 P1/P2/P3", and
 -- leave out disqualified results (race closed, never verified on Show up).
--- This replaces the version in public-results.sql (same name and columns), so
+-- Each row also has its rank in its race (by speed), the race's status (open
+-- = results can still change, closed = final) and its Show up verification
+-- (verified or provisional). This replaces the version in public-results.sql;
 -- run this file again after re-running public-results.sql.
-CREATE OR REPLACE FUNCTION public.public_race_results(p_club_id bigint, p_race_date date)
+DROP FUNCTION IF EXISTS public.public_race_results(bigint, date);
+CREATE FUNCTION public.public_race_results(p_club_id bigint, p_race_date date)
 RETURNS TABLE(
   race_name text,
   loft_name text,
@@ -2040,7 +2045,10 @@ RETURNS TABLE(
   barcode text,
   arrival_at_utc timestamp without time zone,
   flight_seconds numeric,
-  speed_m_per_min numeric
+  speed_m_per_min numeric,
+  rank bigint,
+  race_status text,
+  verification text
 )
 LANGUAGE sql
 STABLE
@@ -2048,36 +2056,50 @@ SECURITY DEFINER
 SET search_path = ''
 AS $function$
   SELECT
-    r.name::text,
-    m.loft_name::text,
-    e.distance_m::numeric,
-    (COALESCE(e.pigeon_ring, c.pigeon_ring)
-      || CASE WHEN cardinality(e.remarks) > 0 THEN ' ' || array_to_string(e.remarks, '/') ELSE '' END)::text,
-    COALESCE(e.barcode, '')::text,
-    c.received_at_utc,
-    CASE
-      WHEN c.received_at_utc > r.release_at_utc
-        THEN EXTRACT(EPOCH FROM (c.received_at_utc - r.release_at_utc))
-      ELSE NULL::numeric
-    END,
-    CASE
-      WHEN c.received_at_utc > r.release_at_utc
-        THEN e.distance_m * 60 / NULLIF(EXTRACT(EPOCH FROM (c.received_at_utc - r.release_at_utc)), 0)
-      ELSE NULL::numeric
-    END
-  FROM public.clubs AS club
-  JOIN public.races AS r ON r.club_id = club.id
-  JOIN public.race_entries AS e ON e.race_id = r.id
-  JOIN public.members AS m ON m.id = e.member_id AND m.club_id = club.id
-  JOIN public.clock_events AS c ON c.race_entry_id = e.id
-  WHERE club.id = p_club_id
-    AND ((r.release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date = p_race_date
-    AND c.verification <> 'rejected'
-    -- Disqualified: the race is closed and the pigeon never showed up (Show up).
-    AND NOT (c.verification = 'provisional' AND r.status = 'closed')
-    AND NOT r.is_practice
-  ORDER BY r.name, m.loft_name, e.pigeon_ring;
+    x.race_name, x.loft_name, x.distance_m, x.pigeon_ring, x.barcode, x.arrival_at_utc, x.flight_seconds, x.speed_m_per_min,
+    CASE WHEN x.speed_m_per_min IS NOT NULL
+      THEN rank() OVER (PARTITION BY x.race_id ORDER BY x.speed_m_per_min DESC NULLS LAST) END,
+    x.race_status, x.verification
+  FROM (
+    SELECT
+      r.id AS race_id,
+      r.name::text AS race_name,
+      m.loft_name::text AS loft_name,
+      e.distance_m::numeric AS distance_m,
+      (COALESCE(e.pigeon_ring, c.pigeon_ring)
+        || CASE WHEN cardinality(e.remarks) > 0 THEN ' ' || array_to_string(e.remarks, '/') ELSE '' END)::text AS pigeon_ring,
+      COALESCE(e.barcode, '')::text AS barcode,
+      c.received_at_utc AS arrival_at_utc,
+      CASE
+        WHEN c.received_at_utc > r.release_at_utc
+          THEN EXTRACT(EPOCH FROM (c.received_at_utc - r.release_at_utc))
+        ELSE NULL::numeric
+      END AS flight_seconds,
+      CASE
+        WHEN c.received_at_utc > r.release_at_utc
+          THEN e.distance_m * 60 / NULLIF(EXTRACT(EPOCH FROM (c.received_at_utc - r.release_at_utc)), 0)
+        ELSE NULL::numeric
+      END AS speed_m_per_min,
+      r.status::text AS race_status,
+      c.verification::text AS verification
+    FROM public.clubs AS club
+    JOIN public.races AS r ON r.club_id = club.id
+    JOIN public.race_entries AS e ON e.race_id = r.id
+    JOIN public.members AS m ON m.id = e.member_id AND m.club_id = club.id
+    JOIN public.clock_events AS c ON c.race_entry_id = e.id
+    WHERE club.id = p_club_id
+      AND ((r.release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date = p_race_date
+      AND c.verification <> 'rejected'
+      -- Disqualified: the race is closed and the pigeon never showed up (Show up).
+      AND NOT (c.verification = 'provisional' AND r.status = 'closed')
+      AND NOT r.is_practice
+  ) AS x
+  ORDER BY x.race_name, x.speed_m_per_min DESC NULLS LAST, x.loft_name, x.pigeon_ring;
 $function$;
+REVOKE ALL ON FUNCTION public.public_race_results(bigint, date) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.public_race_results(bigint, date) TO anon, authenticated;
+COMMENT ON FUNCTION public.public_race_results(bigint, date) IS
+  'Public race results for a club and Philippines-local race date: rank, race status and Show up verification; no member or account data.';
 
 NOTIFY pgrst, 'reload schema';
 

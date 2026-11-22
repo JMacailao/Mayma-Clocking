@@ -160,4 +160,16 @@ DO $$ BEGIN
   ASSERT (SELECT distance_m FROM public.race_entries WHERE barcode = '903') = 84355.165, 'changing a race''s release coordinates recalculates its entries';
 END $$;
 
+-- Public results (home page): rank in the race, race status and Show up verification.
+DO $$ DECLARE v record; BEGIN
+  SELECT * INTO v FROM public.public_race_results(
+    (SELECT id FROM public.clubs LIMIT 1),
+    (SELECT ((release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date FROM public.races WHERE name = 'Race P'))
+  WHERE race_name = 'Race P';
+  ASSERT v.rank = 1, 'the only clocked bird of the race is ranked 1';
+  ASSERT v.race_status = 'closed', 'race status is shown';
+  ASSERT v.verification = 'verified', 'Show up verification is shown';
+  ASSERT has_function_privilege('anon', 'public.public_race_results(bigint, date)', 'EXECUTE'), 'visitors (not signed in) can read the public results';
+END $$;
+
 SELECT 'All database checks passed.' AS result;

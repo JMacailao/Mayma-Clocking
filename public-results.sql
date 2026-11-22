@@ -24,8 +24,10 @@ AS $function$
   ORDER BY c.name;
 $function$;
 
--- entry-remarks.sql replaces this function to add each entry's remarks after
--- the ring number; run it again after re-running this file.
+-- entry-remarks.sql replaces this function (remarks after the ring number,
+-- rank, race status and Show up verification); run it again after re-running
+-- this file. Dropped first: the newer version has more columns.
+DROP FUNCTION IF EXISTS public.public_race_results(bigint, date);
 CREATE OR REPLACE FUNCTION public.public_race_results(p_club_id bigint, p_race_date date)
 RETURNS TABLE(
   race_name text,
