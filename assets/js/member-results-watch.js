@@ -2,7 +2,7 @@
 // whichever way (loft RFID reader, phone, sticker or the club). Checks every
 // 15 seconds while the app is open, and on opening the app shows clocks from
 // the last 24 hours that were not shown yet.
-import { supabase, escapeHTML, formatDateSeconds, number, ringLabel, message } from './shared.js';
+import { supabase, escapeHTML, formatDateSeconds, number, ringLabel, message, distanceKm } from './shared.js';
 
 const CHECK_MS=15000,RECENT_MS=24*3600*1000;
 const asUtc=value=>value?new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(String(value))?String(value).replace(' ','T'):`${String(value).replace(' ','T')}Z`):null;
@@ -37,7 +37,7 @@ export function watchMemberReceipts(memberId){
     if(document.documentElement.classList.contains('radar-is-open')){setTimeout(showNext,1500);return;}
     const item=queue.shift();
     if(!dialog){dialog=document.createElement('dialog');dialog.className='result-popup';document.body.append(dialog);dialog.addEventListener('close',()=>setTimeout(showNext,300));}
-    const rows=[['Race',item.race?.name],['Ring',ringLabel(item.entry.pigeon_ring,item.entry.remarks)],['Bird',item.bird?`${item.bird.bird_name} · ${item.bird.color}`:null],['Clocked at',formatDateSeconds(item.clock.received_at_utc)],['Release',item.race?.release_at_utc?`${item.race.release_location||''}${item.race.release_location?' · ':''}${formatDateSeconds(item.race.release_at_utc)}`:null],['Flight time',flightText(item.seconds)],['Distance',item.entry.distance_m?`${number(item.entry.distance_m/1000)} km`:null],['Speed',item.speed?`${number(item.speed)} m/min`:'—'],['Clocked with',howText(item.clock)],['Show up',item.clock.verification==='verified'?'Verified':item.race?.status==='closed'?'Race closed':'Bring the pigeon to the club before the race is closed']].filter(([,value])=>value);
+    const rows=[['Race',item.race?.name],['Ring',ringLabel(item.entry.pigeon_ring,item.entry.remarks)],['Bird',item.bird?`${item.bird.bird_name} · ${item.bird.color}`:null],['Clocked at',formatDateSeconds(item.clock.received_at_utc)],['Release',item.race?.release_at_utc?`${item.race.release_location||''}${item.race.release_location?' · ':''}${formatDateSeconds(item.race.release_at_utc)}`:null],['Flight time',flightText(item.seconds)],['Distance',item.entry.distance_m?distanceKm(item.entry.distance_m):null],['Speed',item.speed?`${number(item.speed)} m/min`:'—'],['Clocked with',howText(item.clock)],['Show up',item.clock.verification==='verified'?'Verified':item.race?.status==='closed'?'Race closed':'Bring the pigeon to the club before the race is closed']].filter(([,value])=>value);
     dialog.innerHTML=`<div class="result-popup-head"><span class="result-popup-icon" aria-hidden="true">✓</span><div><h2>Your pigeon was clocked</h2><p>${escapeHTML(ringLabel(item.entry.pigeon_ring,item.entry.remarks))}${item.race?` · ${escapeHTML(item.race.name)}`:''}</p></div></div><dl>${rows.map(([label,value])=>`<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value)}</dd></div>`).join('')}</dl><p class="small">Results are provisional until the club verifies them.</p><form method="dialog"><button class="button primary">OK</button></form>`;
     try{dialog.showModal();}catch{dialog.setAttribute('open','');}
     notify(`Your pigeon ${item.entry.pigeon_ring} was clocked`,`${item.race?.name||'Race'}${item.speed?` · ${number(item.speed)} m/min`:''}`);

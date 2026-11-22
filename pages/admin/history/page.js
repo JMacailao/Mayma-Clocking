@@ -1,19 +1,19 @@
-import { supabase, escapeHTML, formatDateSeconds } from '../../../assets/js/shared.js';
+import { supabase, escapeHTML, formatDateSeconds, distanceKm } from '../../../assets/js/shared.js';
 
 const TABLES={races:'Race schedule',race_entries:'Race entry',clock_events:'Clock',pigeons:'Bonded bird'};
 const ACTIONS={insert:'Added',update:'Changed',delete:'Deleted'};
 // Fields worth showing, with friendly names; others are left out of the list.
-const FIELDS={name:'Name',status:'Status',release_at_utc:'Release',release_location:'Release point',open_date:'Open date',end_date:'End date',is_practice:'Practice',pigeon_ring:'Ring',ring_number:'Ring',barcode:'Sticker',nfc_tag:'RFID tag',nfc_expires_at:'Tag expires',remarks:'Remarks',distance_m:'Distance (m)',member_id:'Member',received_at_utc:'Clocked at',verification:'Verification',source:'Clocked with',bird_name:'Bird name',color:'Colour',loft_name:'Loft',bond_type:'Bond',category:'Category',pooling:'Pooling'};
+const FIELDS={name:'Name',status:'Status',release_at_utc:'Release',release_location:'Release point',open_date:'Open date',end_date:'End date',is_practice:'Practice',pigeon_ring:'Ring',ring_number:'Ring',barcode:'Sticker',nfc_tag:'RFID tag',nfc_expires_at:'Tag expires',remarks:'Remarks',distance_m:'Distance',member_id:'Member',received_at_utc:'Clocked at',verification:'Verification',source:'Clocked with',bird_name:'Bird name',color:'Colour',loft_name:'Loft',bond_type:'Bond',category:'Category',pooling:'Pooling'};
 const PAGE=100;
 
-const show=value=>value===null||value===undefined||value===''?'—':Array.isArray(value)?(value.join(', ')||'—'):typeof value==='boolean'?(value?'Yes':'No'):String(value);
+const show=(value,key)=>key==='distance_m'&&value!==null&&value!==undefined&&value!==''?distanceKm(value):value===null||value===undefined||value===''?'—':Array.isArray(value)?(value.join(', ')||'—'):typeof value==='boolean'?(value?'Yes':'No'):String(value);
 // What changed: for an update the fields that differ, otherwise the main fields.
 function changes(row){
   const before=row.old_data||{},after=row.new_data||{};
   const keys=Object.keys(FIELDS).filter(key=>key in before||key in after);
-  if(row.action==='update')return keys.filter(key=>JSON.stringify(before[key])!==JSON.stringify(after[key])).map(key=>[FIELDS[key],show(before[key]),show(after[key])]);
+  if(row.action==='update')return keys.filter(key=>JSON.stringify(before[key])!==JSON.stringify(after[key])).map(key=>[FIELDS[key],show(before[key],key),show(after[key],key)]);
   const data=row.action==='delete'?before:after;
-  return keys.filter(key=>data[key]!==null&&data[key]!==undefined&&data[key]!==''&&!(Array.isArray(data[key])&&!data[key].length)).slice(0,6).map(key=>[FIELDS[key],null,show(data[key])]);
+  return keys.filter(key=>data[key]!==null&&data[key]!==undefined&&data[key]!==''&&!(Array.isArray(data[key])&&!data[key].length)).slice(0,6).map(key=>[FIELDS[key],null,show(data[key],key)]);
 }
 const label=row=>{const data=row.new_data||row.old_data||{};return data.pigeon_ring||data.ring_number||data.name||(row.row_id?`#${row.row_id}`:'');};
 

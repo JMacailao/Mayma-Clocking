@@ -95,6 +95,8 @@ export const utcToPhDateTimeLocal = (value) => {
   return Number.isNaN(date.valueOf())?'':new Date(date.valueOf()+8*60*60*1000).toISOString().slice(0,16);
 };
 export const peso = (value) => Number(value||0).toLocaleString('en-PH',{maximumFractionDigits:2});
+// Distances are stored in metres; everywhere they are shown in km, to the metre (e.g. 177.865 km).
+export const distanceKm = (meters) => meters===null||meters===undefined||meters===''||!Number.isFinite(Number(meters)) ? '—' : `${(Number(meters)/1000).toLocaleString('en-PH',{minimumFractionDigits:3,maximumFractionDigits:3})} km`;
 export const number = (value) => value==null?'—':Number(value).toLocaleString('en-PH',{maximumFractionDigits:3});
 // A ring number with the entry's ticked remarks after it, e.g. "12345 P1/P2/P3".
 // Only for showing: the saved ring number stays plain for clocking and matching.

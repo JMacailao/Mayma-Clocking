@@ -1,4 +1,4 @@
-import { supabase, message, escapeHTML, formatDate, formatDateSeconds, number } from '../../../assets/js/shared.js';
+import { supabase, message, escapeHTML, formatDate, formatDateSeconds, number, distanceKm } from '../../../assets/js/shared.js';
 import { normalizeNfcUid, formatNfcUid, phoneNfcSupported, startPhoneNfc, NFC_HELP, isIos, nfcSetupGuideHtml, listenForReaderKeys } from '../../../assets/js/nfc.js';
 import { createRadarScan } from '../../../assets/js/radar-scan.js';
 
@@ -24,7 +24,7 @@ export async function render(view,identity,setPageCleanup) {
   const accepted=data.status==='accepted';
   receiptDialog.querySelector('[data-receipt-title]').textContent=accepted?'Pigeon clocked':'Already clocked';
   receiptDialog.querySelector('[data-receipt-subtitle]').textContent=accepted?'Provisional until verified by the club.':'This pigeon already had a receipt; here are its details.';
-  const distance=data.distance_m==null?'—':`${number(Number(data.distance_m)/1000)} km (${number(data.distance_m)} m)`;
+  const distance=distanceKm(data.distance_m);
   const speed=data.speed_m_per_min==null?'—':`${number(data.speed_m_per_min)} m/min`;
   const rows=[['Race',data.race],['Pigeon ring',data.pigeon_ring],['Release point',data.release_location],['Release date & time',formatDateSeconds(data.release_at_utc)],['Arrival time',formatDateSeconds(data.received_at_utc)],['Flying time',flyingTime(data.flight_seconds)],['Distance',distance],['Speed',speed]];
   receiptDialog.querySelector('[data-receipt-list]').innerHTML=rows.map(([label,value])=>`<dt>${escapeHTML(label)}</dt><dd>${escapeHTML(value??'—')}</dd>`).join('');
