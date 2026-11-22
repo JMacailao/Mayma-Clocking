@@ -27,6 +27,7 @@ checklist** page shows which parts are done.
 | `club-settings.sql` | Club settings: whether RFID entries need the sticker (required or optional). |
 | `account-devices.sql` | One device per account (Club settings): signing in elsewhere asks first and signs the other device out. |
 | `telegram.sql` | Results on Telegram for members who own a loft reader (see [TELEGRAM.md](TELEGRAM.md)). |
+| `race-point-recalc.sql` | Editing a race point's location or coordinates moves the races using it and recalculates every entry's distance (so speeds and ranks), clocked birds included. |
 | `race-day.sql` | Change history, practice races, live updates (Realtime), `setup_status()`. |
 
 Rebuild `avilonx-update.sql` after changing any file:

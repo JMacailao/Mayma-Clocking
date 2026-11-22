@@ -108,6 +108,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
     'telegram', to_regclass('public.telegram_outbox') IS NOT NULL,
     'race-tag-expiry', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'races' AND column_name = 'nfc_expiry_days'),
     'bird-ring-only', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'pigeons' AND column_name = 'bond_type'),
+    'race-point-recalc', to_regprocedure('public.recalculate_race_distances(bigint)') IS NOT NULL,
     'race-day', to_regclass('public.audit_log') IS NOT NULL,
     'realtime', EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'clock_events')
   );

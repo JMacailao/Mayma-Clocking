@@ -92,7 +92,11 @@ The separate files, for reference:
   18. `account-devices.sql` — **One device per account** (Club settings): each account
       can be signed in on one device at a time; signing in elsewhere asks first and
       signs the other device out.
-  19. `race-day.sql` — change history (who changed races, entries, clocks and
+  19. `race-point-recalc.sql` — editing a race point's location or coordinates
+      moves every race that uses it (open or closed) and recalculates each entry's
+      distance, so speeds and ranks on Results, Race day and the public results
+      follow, clocked birds included.
+  20. `race-day.sql` — change history (who changed races, entries, clocks and
       birds, and when), practice races, instant result pop-ups (Supabase
       Realtime) and the Setup checklist. Run it last.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin

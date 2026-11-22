@@ -19,6 +19,7 @@ const PARTS=[
   ['club-settings','Club settings (sticker for RFID entries)'],
   ['account-devices','One device per account'],
   ['telegram','Telegram results for loft reader owners'],
+  ['race-point-recalc','Editing a race point recalculates the results'],
   ['race-day','Race day: change history, setup checks'],
   ['realtime','Instant result pop-ups (live updates)']
 ];
