@@ -1169,3 +1169,25 @@ dialog.radar-scan[open]{display:flex;flex-direction:column}
 .radar-reader.is-bad{color:#ffb4b4}.radar-reader.is-bad::before{background:#ff5d5d}
 .public-rank{display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#0b2345;color:#fff;font-variant-numeric:tabular-nums}
 .public-results-legend{margin:8px 0 10px;color:#5b6b7c}
+
+/* Public results on phones: compact cards instead of the table. */
+.public-cards{display:none}
+@media (max-width:720px){
+  [data-public-results-table]:has(.public-cards) .table-scroll{display:none}
+  .public-cards{display:block;margin:0;padding:0;list-style:none;border-top:1px solid var(--line);background:#fff}
+  .public-card{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;line-height:1.45;color:#354f66}
+  .public-card.is-dq{background:#fdf7f7}
+  .pc-head{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+  .pc-rank{display:inline-grid;place-items:center;flex:none;min-width:26px;height:26px;padding:0 5px;border-radius:999px;background:#f6e8f4;color:#8a2c7f;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+  .public-card.is-dq .pc-rank{background:#edf1f5;color:#8a97a5}
+  .pc-loft{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#122f49;font-size:15px;font-weight:800;letter-spacing:.01em}
+  .pc-line{display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px}
+  .pc-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-weight:700;color:#354f66;font-variant-numeric:tabular-nums}
+  .pc-label{color:#8a97a5}
+  .pc-label+*{margin-left:-6px}
+  .pc-pill{display:inline-block;padding:1px 10px;border-radius:999px;background:#edf1f5;color:#5b6b7c;font-size:12px;font-weight:600}
+  .pc-pill.is-ok{background:#e3f4ea;color:#1c7a45}
+  .pc-pill.is-dq{background:#fde7e7;color:#b42323}
+  .pc-status{color:#1f5fbf;font-weight:600}
+  .pc-status.is-closed{color:#122f49;text-decoration:none;font-weight:600}
+}
