@@ -21,7 +21,7 @@ function memberReminders(races,entries,clocks){
   const out=[];
   races.forEach(race=>{
     const mine=entries.filter(entry=>entry.race_id===race.id);
-    const waiting=mine.filter(entry=>clocks.some(clock=>clock.race_entry_id===entry.id&&clock.verification==='provisional'));
+    const waiting=race.requires_show_up===false?[]:mine.filter(entry=>clocks.some(clock=>clock.race_entry_id===entry.id&&clock.verification==='provisional'));
     if(waiting.length){const rings=waiting.map(entry=>ringLabel(entry.pigeon_ring,entry.remarks)).join(', ');const text=`Bring ${rings} to the club for Show up before ${race.name} is closed${race.end_date?` (end date ${race.end_date})`:''}, or ${waiting.length===1?'it is':'they are'} disqualified.`;out.push({kind:'showup',text,html:`<strong>Show up:</strong> ${escapeHTML(text)}`});}
     const flying=mine.filter(entry=>!clocks.some(clock=>clock.race_entry_id===entry.id)).length;
     if(flying){const text=race.release_at_utc?`${race.name}: ${flying} of your pigeon${flying===1?'':'s'} not clocked yet. Released ${formatDate(race.release_at_utc)}.`:`${race.name} is open: ${flying} of your pigeon${flying===1?' is':'s are'} entered. The release time is not set yet.`;out.push({kind:'race',text,html:escapeHTML(text)});}

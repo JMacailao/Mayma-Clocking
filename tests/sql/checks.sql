@@ -205,4 +205,43 @@ DO $$ DECLARE v record; BEGIN
   ASSERT v.disqualified AND v.rank IS NULL, 'it is marked DQ and not ranked';
 END $$;
 
+-- Show up needed unticked: the same bird counts, ranked, not DQ.
+UPDATE public.races SET requires_show_up = false WHERE name = 'Race L';
+DO $$ DECLARE v record; BEGIN
+  SELECT * INTO v FROM public.public_race_results(
+    (SELECT id FROM public.clubs LIMIT 1),
+    (SELECT ((release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date FROM public.races WHERE name = 'Race L'))
+  WHERE race_name = 'Race L';
+  ASSERT NOT v.disqualified AND v.rank = 1 AND v.show_up_required = false, 'no show-up needed: ranked, not DQ';
+  ASSERT (SELECT requires_show_up FROM public.races WHERE name = 'Race P'), 'races need a show-up by default';
+END $$;
+
+-- Clocking videos: a member saves a video only for their own clock, in their folder.
+DO $$ DECLARE v_user uuid; v_other uuid; v_clock bigint; v_member bigint; v_club bigint; v_path text; r jsonb; v_failed boolean; BEGIN
+  SELECT c.id, e.member_id, rc.club_id INTO v_clock, v_member, v_club
+    FROM public.clock_events c JOIN public.race_entries e ON e.id = c.race_entry_id JOIN public.races rc ON rc.id = e.race_id
+   WHERE e.barcode = '901';
+  INSERT INTO auth.users (email) VALUES ('video-member@users.mayma.invalid') RETURNING id INTO v_user;
+  INSERT INTO public.app_profiles (id, role, username, member_id, club_id, is_active) VALUES (v_user, 'member', 'videomember', v_member, v_club, true);
+  PERFORM set_config('request.jwt.claim.sub', v_user::text, true);
+  v_path := v_club || '/' || v_member || '/' || v_clock || '/1.mp4';
+  r := public.member_save_clock_video(v_clock, v_path, 12.5, 4000000);
+  ASSERT r->>'status' = 'saved' AND r->>'replaced_path' IS NULL, 'member saves a video: ' || r::text;
+  r := public.member_save_clock_video(v_clock, v_club || '/' || v_member || '/' || v_clock || '/2.mp4', 9, 3000000);
+  ASSERT r->>'replaced_path' = v_path, 'a new video replaces the old one';
+  ASSERT (SELECT count(*) FROM public.clock_videos WHERE clock_event_id = v_clock) = 1, 'one video per clock';
+  v_failed := false; BEGIN PERFORM public.member_save_clock_video(v_clock, v_club || '/999/' || v_clock || '/3.mp4', 5, 1000); EXCEPTION WHEN OTHERS THEN v_failed := true; END;
+  ASSERT v_failed, 'refused outside the member''s folder';
+  v_failed := false; BEGIN PERFORM public.member_save_clock_video(v_clock, v_club || '/' || v_member || '/' || v_clock || '/4.mp4', 45, 1000); EXCEPTION WHEN OTHERS THEN v_failed := true; END;
+  ASSERT v_failed, 'refused over 30 seconds';
+  -- Another member cannot attach a video to this clock.
+  INSERT INTO auth.users (email) VALUES ('video-other@users.mayma.invalid') RETURNING id INTO v_other;
+  INSERT INTO public.members (member_no, full_name, loft_name, latitude, longitude, club_id) VALUES ('VID-2', 'Other Member', 'Other Loft', 14, 121, v_club);
+  INSERT INTO public.app_profiles (id, role, username, member_id, club_id, is_active) SELECT v_other, 'member', 'videoother', id, v_club, true FROM public.members WHERE member_no = 'VID-2';
+  PERFORM set_config('request.jwt.claim.sub', v_other::text, true);
+  v_failed := false; BEGIN PERFORM public.member_save_clock_video(v_clock, v_club || '/' || (SELECT id FROM public.members WHERE member_no = 'VID-2') || '/' || v_clock || '/5.mp4', 5, 1000); EXCEPTION WHEN OTHERS THEN v_failed := true; END;
+  ASSERT v_failed, 'another member''s clock is refused';
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+END $$;
+
 SELECT 'All database checks passed.' AS result;

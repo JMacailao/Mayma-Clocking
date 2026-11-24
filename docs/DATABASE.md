@@ -18,7 +18,7 @@ checklist** page shows which parts are done.
 | `race-schedule-dates.sql` | Open and end dates. |
 | `nfc-tags.sql` | RFID/NFC tags, registered tags, phone clocking by tag. |
 | `rfid-devices.sql` | ESP8266 readers: registration, device keys, taps, heartbeats, offline taps with their time. |
-| `entry-remarks.sql` | Remarks list and remarks per entry; public results with remarks, without disqualified and practice races. |
+| `entry-remarks.sql` | Remarks list and remarks per entry; practice races and the per-race Show up needed option (`requires_show_up`); public results with remarks, without practice races. |
 | `bird-bonding.sql` | Bonded birds with photo (private storage bucket); entries must use a bonded bird. |
 | `show-up.sql` | Show up verification; disqualified when the race is closed without it. |
 | `rfid-tag-in-use.sql` | A tag once per race, and not while active in another race. |
@@ -27,6 +27,7 @@ checklist** page shows which parts are done.
 | `club-settings.sql` | Club settings: whether RFID entries need the sticker (required or optional). |
 | `account-devices.sql` | One device per account (Club settings): signing in elsewhere asks first and signs the other device out. |
 | `telegram.sql` | Results on Telegram for members who own a loft reader (see [TELEGRAM.md](TELEGRAM.md)). |
+| `clock-videos.sql` | Short video per clocking: `clock_videos`, private `clock-videos` bucket, `member_save_clock_video()`. Members see their own, the club sees all of its own. |
 | `race-point-recalc.sql` | Editing a race point's location or coordinates moves the races using it and recalculates every entry's distance (so speeds and ranks), clocked birds included. |
 | `race-day.sql` | Change history, practice races, live updates (Realtime), `setup_status()`. |
 
