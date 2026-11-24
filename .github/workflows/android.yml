@@ -6,6 +6,10 @@
 # ANDROID_KEYSTORE_PASSWORD. Each build on main then publishes AvilonX.apk on the
 # Releases page. Without them a debug APK is built (for checking the build only:
 # it cannot be updated in place and opens with an address bar).
+#
+# New APK: raise versionCode (and versionName) in /android-app.json. The app
+# then shows members an Update button once the release is published. A version
+# that is already on Releases is not built again.
 name: android
 
 on:
@@ -14,6 +18,7 @@ on:
       - 'android/**'
       - '.github/workflows/android.yml'
       - '.well-known/assetlinks.json'
+      - 'android-app.json'
   workflow_dispatch:
 
 permissions:
@@ -24,6 +29,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name=$(jq -r .versionName android-app.json)
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          if gh release view "android-$name" >/dev/null 2>&1; then echo "exists=1" >> "$GITHUB_OUTPUT"; echo "::notice::android-$name is already released: raise versionCode in android-app.json for a new APK."; fi
 
       - uses: actions/setup-java@v4
         with:
@@ -49,7 +63,6 @@ jobs:
       - name: Build
         working-directory: android
         env:
-          VERSION_CODE: ${{ github.run_number }}
           AVILONX_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           if [ -n "$SIGNED" ]; then gradle --no-daemon assembleRelease; else gradle --no-daemon assembleDebug; fi
@@ -63,10 +76,10 @@ jobs:
           path: dist/*.apk
 
       - name: Publish on Releases (main, signed)
-        if: env.SIGNED == '1' && github.ref == 'refs/heads/main'
+        if: env.SIGNED == '1' && github.ref == 'refs/heads/main' && steps.version.outputs.exists != '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="android-1.0.${{ github.run_number }}"
-          gh release create "$tag" dist/AvilonX.apk --title "AvilonX for Android 1.0.${{ github.run_number }}" \
+          name="${{ steps.version.outputs.name }}"
+          gh release create "android-$name" dist/AvilonX.apk --latest --title "AvilonX for Android $name" \
             --notes "Install on Android: download AvilonX.apk on the phone, open it and allow installing from this source. Sign in with your usual club or member account."

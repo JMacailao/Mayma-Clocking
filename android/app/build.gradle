@@ -1,6 +1,8 @@
 // AvilonX for Android: a Trusted Web Activity that opens https://www.avilonx.site
 // full screen in Chrome, so phone NFC, the camera, notifications and sign-in
 // work exactly as on the website. Built by .github/workflows/android.yml.
+import groovy.json.JsonSlurper
+
 plugins {
     id 'com.android.application'
 }
@@ -8,7 +10,9 @@ plugins {
 // Release signing comes from the environment (GitHub secrets), never from the repository.
 def keystorePath = System.getenv('AVILONX_KEYSTORE')
 def keystorePassword = System.getenv('AVILONX_KEYSTORE_PASSWORD')
-def buildNumber = (System.getenv('VERSION_CODE') ?: '1') as int
+// The app version lives in /android-app.json, which the website also reads to
+// offer the Update button. Raise versionCode there for every new APK.
+def appInfo = new JsonSlurper().parse(rootProject.file('../android-app.json'))
 
 android {
     namespace 'site.avilonx.app'
@@ -18,8 +22,9 @@ android {
         applicationId 'site.avilonx.app'
         minSdk 21
         targetSdk 35
-        versionCode buildNumber
-        versionName "1.0.${buildNumber}"
+        versionCode appInfo.versionCode as int
+        versionName appInfo.versionName
+        resValue 'string', 'launch_url', "https://www.avilonx.site/pages/login/index.html?app=android&appVersion=${appInfo.versionCode}"
     }
 
     signingConfigs {
