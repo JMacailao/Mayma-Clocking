@@ -26,7 +26,7 @@ const PARTS=[
 
 // Super Admin: which parts of the database setup are done, and what to run.
 export async function render(view){
-  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">DATABASE</span><h2>Setup checklist</h2><p>Every AvilonX feature needs its part of the database. Green = done. If anything is red, run <strong>avilonx-update.sql</strong> in the Supabase SQL Editor (it is safe to run again), then press Check again.</p></div><button class="button secondary" type="button" data-recheck>Check again</button></div>
+  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">DATABASE</span><h2>Setup checklist</h2><p>Anything red? Run <strong>avilonx-update.sql</strong> in the Supabase SQL Editor, then press Check again.</p></div><button class="button secondary" type="button" data-recheck>Check again</button></div>
   <section class="panel"><div data-setup-list><p class="small">Checking…</p></div></section>
   <section class="panel"><h3>How to update the database</h3><ol class="setup-steps"><li>Open Supabase → your project → <strong>SQL Editor</strong> → <strong>New query</strong>.</li><li>Paste the whole of <strong>avilonx-update.sql</strong> (from the AvilonX files) and press <strong>Run</strong>.</li><li>Come back here and press <strong>Check again</strong>.</li></ol><p class="small">A brand-new database first needs <strong>schema.sql</strong> and <strong>supabase-auth.sql</strong>, once.</p></section>`;
   const list=view.querySelector('[data-setup-list]');
