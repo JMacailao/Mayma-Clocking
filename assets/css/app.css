@@ -126,7 +126,6 @@ video#camera[hidden]{display:none}
 .login-layout.results-mode .login-aside{display:none}
 .login-card.results-mode .public-results-content{max-width:1280px;margin:0 auto}
 .public-results-filter{margin-bottom:12px}
-.public-results-note{margin:0 0 18px;color:var(--muted);font-size:12px;line-height:1.5}
 .public-results-error{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .public-results-error[hidden],.public-results-toolbar[hidden]{display:none}
 .public-results-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:18px 0 10px}
@@ -895,7 +894,6 @@ body.login-page{min-height:100vh;background:#f3f6f9}
 .login-results .public-results-filter .button{width:100%}
 .login-results .public-results-empty{display:grid;justify-items:center;gap:12px;padding:34px 12px;font-size:18px;color:#4b5f73}
 .results-podium{width:clamp(120px,14vw,170px);height:auto}
-.login-results .public-results-note{margin:18px 0 0;padding-top:18px;border-top:1px solid var(--line);font-size:14px}
 @media (max-width:900px){.login-grid{grid-template-columns:1fr}.login-results .public-results-filter{grid-template-columns:1fr}}
 @media (max-width:520px){.login-header{padding:10px 14px}.login-header .brand-logo{width:56px;height:auto}.login-install .install-app-button{min-height:40px;padding:0 14px;font-size:13px}}
 .login-header .brand{gap:14px;font:800 26px Manrope}
@@ -1168,7 +1166,6 @@ dialog.radar-scan[open]{display:flex;flex-direction:column}
 .radar-reader.is-ok::before{background:var(--radar);box-shadow:0 0 6px var(--radar)}
 .radar-reader.is-bad{color:#ffb4b4}.radar-reader.is-bad::before{background:#ff5d5d}
 .public-rank{display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#0b2345;color:#fff;font-variant-numeric:tabular-nums}
-.public-results-legend{margin:8px 0 10px;color:#5b6b7c}
 
 /* Results on phones (public and admin): compact cards instead of the table.
    Screens only, so Print / PDF keeps the table. */

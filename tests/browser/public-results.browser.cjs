@@ -27,7 +27,7 @@ module.exports = async (page, { open, check, OUT }) => {
   check(/11:00:00\sAM/.test(body), `arrival shows seconds (${(body.match(/\d{1,2}:\d{2}(:\d{2})?\s[AP]M/) || [''])[0]})`);
   const lastRow = await page.locator('[data-public-results-table] tbody tr').last().innerText();
   check(/PH-9/.test(lastRow) && /\bDQ\b/.test(lastRow) && !/\b1\b\s*\n?\s*Lipa/.test(lastRow), `a disqualified bird is listed last, tagged DQ, not ranked (${lastRow.replace(/\s+/g, ' ').slice(0, 90)})`);
-  check(await page.locator('[data-public-results-legend]').isVisible(), 'explains the columns');
+  check(!/Rank by speed|remain provisional/.test(await page.locator('.public-results-content').innerText()), 'no long explanations');
   const order = (await page.locator('[data-public-results-table] tbody tr').allInnerTexts()).map(t => (t.match(/PH-\d/) || [''])[0]);
   check(order.join(',') === 'PH-1,PH-3,PH-2,PH-9', `rows grouped by race, each race's ranks in order (${order.join(',')})`);
   await page.screenshot({ path: `${OUT}/public-results.png`, fullPage: true });
@@ -44,10 +44,10 @@ module.exports = async (page, { open, check, OUT }) => {
   await page.screenshot({ path: `${OUT}/public-results-phone.png`, fullPage: true });
   await page.setViewportSize({ width: 1300, height: 900 });
 
-  // A failed search hides the legend and toolbar of the previous one.
+  // A failed search hides the toolbar and race headers of the previous one.
   await page.evaluate(() => { window.FAKE.rpc.public_race_results = { __error: { message: 'offline' } }; });
   await page.click('[data-public-results-form] [type=submit]'); await page.waitForTimeout(400);
-  check(!(await page.locator('[data-public-results-legend]').isVisible()) && !(await page.locator('[data-public-results-toolbar]').isVisible()) && !(await page.locator('[data-public-race-summaries]').isVisible()), 'error: legend, toolbar and race headers hidden');
+  check(!(await page.locator('[data-public-results-toolbar]').isVisible()) && !(await page.locator('[data-public-race-summaries]').isVisible()), 'error: toolbar and race headers hidden');
 
   // Before entry-remarks.sql is re-run (no race headers function): results still show.
   await page.evaluate(rows => { window.FAKE.rpc.public_race_results = rows; delete window.FAKE.rpc.public_race_summaries; }, rows);
