@@ -1,12 +1,9 @@
 // Clocking videos: a member adds a short video to a clocking (Clocking history,
 // or the receipt after clocking); the club plays it on Show up.
-const { execFileSync } = require('child_process');
 const path = require('path');
 module.exports = async (page, { open, check, sample, toast, OUT }) => {
-  // Small real videos (webm: the test browser has no H.264).
-  const short = path.join(OUT, 'clip-3s.webm'), long = path.join(OUT, 'clip-40s.webm');
-  const make = (file, seconds) => execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `testsrc=duration=${seconds}:size=160x120:rate=5`, '-c:v', 'libvpx', '-b:v', '20k', file]);
-  make(short, 3); make(long, 40);
+  // Small real videos (webm: the test browser has no H.264), made with ffmpeg testsrc.
+  const short = path.join(__dirname, '..', 'fixtures', 'clip-3s.webm'), long = path.join(__dirname, '..', 'fixtures', 'clip-40s.webm');
   const member = sample + `F.identity={profile:{role:'member',member_id:7,club_id:1}};F.rpc.member_save_clock_video=a=>({status:'saved',replaced_path:null});`;
 
   await open('/repo/pages/member/history/page.js', member);
