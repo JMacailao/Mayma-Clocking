@@ -47,13 +47,17 @@ test('admin and member navigation keep shell nodes mounted during delayed conten
   }
 });
 
-test('both bars have five items and a raised clocking action; admin has More', () => {
+test('every role has a bottom bar: four pages plus More, current page marked', () => {
   const {context:c}=setup();
-  for (const role of ['admin','member']) {
-    const html=c.bottomNav('clocking',role);
-    assert.equal((html.match(/class="member-bottom-link /g)||[]).length,5);
-    assert.match(html,/is-clock/);assert.match(html,/aria-current="page"/);
-    if(role==='admin')assert.match(html,/data-open-menu/);
+  for (const [role,inBar,notInBar] of [['admin','clocking','members'],['member','clocking','pigeons'],['superadmin','clubs','setup']]) {
+    const html=c.bottomNav(inBar,role);
+    assert.equal((html.match(/class="member-bottom-link[ "]/g)||[]).length,5,role);
+    assert.equal((html.match(/<a class="member-bottom-link"/g)||[]).length,4,role);
+    assert.match(html,/data-open-menu[^>]*aria-controls="app-sidebar"/);
+    assert.match(html,/aria-current="page"/);assert.doesNotMatch(html,/is-active/);
+    // A page reached through More highlights More instead.
+    const other=c.bottomNav(notInBar,role);
+    assert.doesNotMatch(other,/aria-current/);assert.match(other,/member-bottom-link is-active" data-open-menu/);
   }
 });
 

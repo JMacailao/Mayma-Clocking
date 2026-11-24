@@ -69,22 +69,17 @@ function adminNav(active,canManageAccounts) {
 function memberNav(active) {
   return navGroups([['',[['dashboard','My races','pages/member/dashboard/index.html','home'],['history','My clocking history','pages/member/history/index.html','history'],['clocking','Clocking','pages/member/clocking/index.html','clocking'],['pigeons','My pigeons','pages/member/pigeons/index.html','bird'],['results','Results','pages/member/results/index.html','trend'],['settings','Settings','pages/member/settings/index.html','settings']]]],active);
 }
+// Phones: the four main pages of each role, plus More, which opens the full
+// menu (every page, language and sign out). Same links as the sidebar.
+const BOTTOM_NAV={
+  member:[['dashboard','My races','pages/member/dashboard/index.html','home'],['clocking','Clocking','pages/member/clocking/index.html','clocking'],['history','History','pages/member/history/index.html','history'],['results','Results','pages/member/results/index.html','trend']],
+  admin:[['overview','Overview','pages/admin/dashboard/index.html','home'],['races','Races','pages/admin/races/index.html','clock'],['clocking','Clocking','pages/admin/clocking/index.html','clocking'],['results','Results','pages/admin/results/index.html','trend']],
+  superadmin:[['clubs','Clubs','pages/superadmin/clubs/index.html','users'],['sticker-register','Stickers','pages/superadmin/stickers/register/index.html','sticker'],['nfc-register','NFC','pages/superadmin/nfc/index.html','nfc'],['rfid-register','Readers','pages/superadmin/readers/index.html','wifi']]
+};
+const bottomIcon=name=>`<span class="member-bottom-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none">${ICON_PATHS[name]||ICON_PATHS.list}</svg></span>`;
 function bottomNav(active, role) {
-  let links=[
-    ['dashboard','My races','pages/member/dashboard/index.html','<svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>'],
-    ['history','My clocking history','pages/member/history/index.html','<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2M5 4 3.5 6M19 4l1.5 2"/></svg>'],
-    ['clocking','Clocking','pages/member/clocking/index.html','<svg viewBox="0 0 24 24" fill="none"><path d="M5 4v16M8 4v16M12 4v16M15 4v16M19 4v16"/><path d="M3 7h2M17 17h4"/></svg>'],
-    ['results','Results','pages/member/results/index.html','<svg viewBox="0 0 24 24" fill="none"><path d="M5 19V5M5 19h15"/><path d="m8 15 3-4 3 2 4-6"/><circle cx="18" cy="7" r="1"/></svg>'],
-    ['settings','Settings','pages/member/settings/index.html','<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.1.8-1.5 2.6-1.3-.6a7.7 7.7 0 0 1-1.7 1l-.2 1.5h-3l-.2-1.5a7.7 7.7 0 0 1-1.7-1l-1.3.6-1.5-2.6 1.2-.9a7 7 0 0 1 0-2l-1.2-.9 1.5-2.6 1.3.6a7.7 7.7 0 0 1 1.7-1l.2-1.5h3l.2 1.5a7.7 7.7 0 0 1 1.7 1l1.3-.6 1.5 2.6-1.2.9a7 7 0 0 1 0 2Z"/></svg>']
-  ];
-  if(role==='admin')links=[
-    ['overview','Overview','pages/admin/dashboard/index.html',links[0][3]],
-    ['races','Races','pages/admin/races/index.html',links[1][3]],
-    ['clocking','Clocking','pages/admin/clocking/index.html',links[2][3]],
-    ['results','Results','pages/admin/results/index.html',links[3][3]],
-    ['menu','More',null,'<svg viewBox="0 0 24 24" fill="none"><path d="M5 6h14M5 12h14M5 18h14"/></svg>']
-  ];
-  return `<nav class="member-bottom-nav" aria-label="${role==='admin'?'Admin':'Member'} navigation">${links.map(([key,label,href,icon])=>`<${href?'a':'button type="button"'} class="member-bottom-link ${key==='clocking'?'is-clock':''}" ${href?`href="${url(href)}"`:'data-open-menu aria-expanded="false"'} ${active===key?'aria-current="page"':''} aria-label="${label}"><span class="member-bottom-icon" aria-hidden="true">${icon}</span><span class="member-bottom-label">${label}</span></${href?'a':'button'}>`).join('')}</nav>`;
+  const links=BOTTOM_NAV[role]||[],inBar=links.some(([key])=>key===active);
+  return `<nav class="member-bottom-nav" aria-label="Main">${links.map(([key,label,href,icon])=>`<a class="member-bottom-link" href="${url(href)}" ${active===key?'aria-current="page"':''}>${bottomIcon(icon)}<span class="member-bottom-label">${label}</span></a>`).join('')}<button type="button" class="member-bottom-link${inBar?'':' is-active'}" data-open-menu aria-expanded="false" aria-controls="app-sidebar"><span class="member-bottom-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M5 12h14M5 17h14"/></svg></span><span class="member-bottom-label">More</span></button></nav>`;
 }
 async function guard(role,active) {
   try {
@@ -96,7 +91,8 @@ async function guard(role,active) {
     if(identity.profile.role!==role&&!staffOnAdminPage) { location.href=homeFor(identity.profile.role); return null; }
     body.classList.toggle('member-body',role==='member');
     body.classList.toggle('admin-body',role==='admin');
-    document.querySelector('#app-shell').innerHTML=`<aside class="sidebar"><a class="brand" href="${homeFor(role)}"><img class="brand-logo" src="${url('assets/images/clocking-logo.png')}" alt="AvilonX pigeon clock logo" width="72" height="48"><span>AvilonX<span class="brand-sub">RACE CLOCKING</span></span></a>${role==='superadmin'||identity.profile.role==='staff'?`<div class="nav-label">${role==='superadmin'?'SUPERADMIN':'STAFF'}</div>`:''}<nav>${role==='superadmin'?superadminNav(active):role==='admin'?adminNav(active,identity.profile.role==='admin'):memberNav(active)}</nav><div class="sidebar-bottom"><div class="signed-in"><span class="avatar">${escapeHTML((identity.profile.username||'M')[0].toUpperCase())}</span><span class="signed-email">${escapeHTML(identity.profile.username||'Account')}</span></div>${languageSwitchHtml()}<button class="nav-link signout" id="sign-out">${navIcon('signout')}<span>Sign out</span></button></div></aside><main class="main"><div class="nav-backdrop" id="nav-backdrop"></div><header class="topbar"><div class="topbar-left"><button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open menu">☰</button><div><div class="eyebrow">${escapeHTML(role==='superadmin'?'SUPERADMIN':(identity.club?.name||'PIGEON RACING CLUB').toUpperCase())}</div><h1>${escapeHTML(document.body.dataset.title||'Race clocking')}</h1></div></div><div class="topbar-right"><span class="live-dot"></span><span>Supabase connected</span><span class="timezone">PH · UTC+8</span></div></header><div class="page-content"><div data-message class="notice" hidden></div><section class="page-view" data-view="${escapeHTML(body.dataset.view)}"></section><footer>Clock receipts are recorded by Supabase server time and remain provisional until verified by the club.</footer></div></main>${['member','admin'].includes(role)?bottomNav(active,role):''}`;
+    document.querySelector('#app-shell').innerHTML=`<aside class="sidebar" id="app-sidebar"><a class="brand" href="${homeFor(role)}"><img class="brand-logo" src="${url('assets/images/clocking-logo.png')}" alt="AvilonX pigeon clock logo" width="72" height="48"><span>AvilonX<span class="brand-sub">RACE CLOCKING</span></span></a>${role==='superadmin'||identity.profile.role==='staff'?`<div class="nav-label">${role==='superadmin'?'SUPERADMIN':'STAFF'}</div>`:''}<nav>${role==='superadmin'?superadminNav(active):role==='admin'?adminNav(active,identity.profile.role==='admin'):memberNav(active)}</nav><div class="sidebar-bottom"><div class="signed-in"><span class="avatar">${escapeHTML((identity.profile.username||'M')[0].toUpperCase())}</span><span class="signed-email">${escapeHTML(identity.profile.username||'Account')}</span></div>${languageSwitchHtml()}<button class="nav-link signout" id="sign-out">${navIcon('signout')}<span>Sign out</span></button></div></aside><main class="main"><div class="nav-backdrop" id="nav-backdrop"></div><header class="topbar"><div class="topbar-left"><button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open menu">☰</button><div><div class="eyebrow">${escapeHTML(role==='superadmin'?'SUPERADMIN':(identity.club?.name||'PIGEON RACING CLUB').toUpperCase())}</div><h1>${escapeHTML(document.body.dataset.title||'Race clocking')}</h1></div></div><div class="topbar-right"><span class="live-dot"></span><span>Supabase connected</span><span class="timezone">PH · UTC+8</span></div></header><div class="page-content"><div data-message class="notice" hidden></div><section class="page-view" data-view="${escapeHTML(body.dataset.view)}"></section><footer>Clock receipts are recorded by Supabase server time and remain provisional until verified by the club.</footer></div></main>${bottomNav(active,role)}`;
+    body.classList.add('has-bottom-nav');
     document.querySelector('#menu-toggle').onclick=()=>setMenu(!body.classList.contains('nav-open'));document.querySelector('#nav-backdrop').onclick=()=>setMenu(false);document.querySelector('[data-open-menu]')?.addEventListener('click',()=>setMenu(!body.classList.contains('nav-open')));document.querySelector('#sign-out').addEventListener('click',async(event)=>{const button=event.currentTarget;if(button.disabled)return;button.disabled=true;button.setAttribute('aria-busy','true');button.querySelector('.nav-icon').textContent='…';try{await Promise.race([releaseDevice().then(signOutUser),new Promise(resolve=>setTimeout(resolve,1800))]);}catch(error){console.warn('Supabase local sign-out failed; redirecting to sign-in:',error);}finally{location.replace(url('pages/login/index.html'));}});
     bindLanguageSwitch(document.querySelector('#app-shell'));startTranslation();
     return identity;
@@ -385,6 +381,8 @@ async function navigateRoute(route,{push=true,identity=null}={}){
     link.classList.toggle('active',active);
     if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
   });
+  // More is highlighted when the page is not one of the bottom bar's own.
+  document.querySelector('.member-bottom-nav [data-open-menu]')?.classList.toggle('is-active',!document.querySelector('.member-bottom-nav a[aria-current="page"]'));
   const notice=document.querySelector('[data-message]');if(notice){notice.hidden=true;notice.textContent='';}
   const view=document.createElement('section');view.className='page-view';view.dataset.view=route.view;
   view.setAttribute('aria-busy','true');

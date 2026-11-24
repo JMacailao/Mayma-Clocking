@@ -14,6 +14,7 @@ export async function render(view) {
     <section class="panel schedule-list"><div class="table-scroll"><table><thead><tr><th>Race</th><th>Release point</th><th>Release time</th><th>Pigeons</th><th>Status</th></tr></thead><tbody data-schedule-rows></tbody></table></div></section>
     <aside class="panel schedule-editor" data-schedule-editor hidden>
       <div class="schedule-editor-head"><h3 data-editor-title>Edit schedule</h3><button class="schedule-editor-close" type="button" data-close-editor aria-label="Close">×</button></div>
+      <section class="race-details" data-race-details aria-label="Race details" hidden></section>
       <form id="race-form" class="schedule-form">
         <label class="field"><span>Race name</span><input name="name" maxlength="180" required></label>
         <label class="field"><span>Release point</span><select name="race_point_id" required><option value="">Choose a location</option>${points.map(p=>`<option value="${p.id}">${escapeHTML(p.location)}${p.sector?` · ${escapeHTML(p.sector)}`:''}</option>`).join('')}</select><small class="small" data-point-note hidden>Locked: pigeons are registered. To correct it, edit it on Race points.</small></label>
@@ -42,6 +43,13 @@ export async function render(view) {
   const expirySelect=form.elements.nfc_expiry_days,expiryCustom=form.elements.nfc_expiry_custom;
   const setExpiry=days=>{const preset=[...expirySelect.options].some(option=>option.value===String(days??''));expirySelect.value=days==null?'':preset?String(days):'custom';expiryCustom.hidden=expirySelect.value!=='custom';expiryCustom.value=expirySelect.value==='custom'?String(days):'';};
   expirySelect.addEventListener('change',()=>{expiryCustom.hidden=expirySelect.value!=='custom';if(!expiryCustom.hidden)expiryCustom.focus();});
+  // The chosen race at a glance: name, release point and time, pigeons, status.
+  const details=view.querySelector('[data-race-details]');
+  const drawDetails=race=>{
+    details.hidden=!race;if(!race){details.innerHTML='';return;}
+    const rows=[['Race',`<strong>${escapeHTML(race.name||'—')}</strong>${race.is_practice?' <span class="tag practice">Practice</span>':''}`],['Release point',escapeHTML(race.release_location||'—')],['Release time',escapeHTML(race.release_at_utc?formatDate(race.release_at_utc):'Not set')],['Pigeons',String(pigeonCount(race.id))],['Status',stateTag(race.status)]];
+    details.innerHTML=`<dl class="race-details-panel">${rows.map(([label,value])=>`<div class="race-details-row"><dt class="race-details-label">${label}</dt><dd class="race-details-value">${value}</dd></div>`).join('')}</dl>`;
+  };
   function openEditor(race){
     selectedId=race?.id??null;form.reset();
     title.textContent=race?'Edit schedule':'Create schedule';saveButton.textContent=race?'Save changes':'Create schedule';
@@ -53,7 +61,7 @@ export async function render(view) {
       const [date='',time='']=utcToPhDateTimeLocal(race.release_at_utc).split('T');releaseDateInput.value=date;releaseTimeInput.value=time;
     }
     if(!race)setExpiry(null);
-    validateDateRange();editor.hidden=false;layout.classList.add('has-editor');drawRows();
+    drawDetails(race);validateDateRange();editor.hidden=false;layout.classList.add('has-editor');drawRows();
     if(matchMedia('(max-width:980px)').matches)editor.scrollIntoView({behavior:'smooth',block:'start'});
   }
   const closeEditor=()=>{selectedId=null;editor.hidden=true;layout.classList.remove('has-editor');drawRows();};
