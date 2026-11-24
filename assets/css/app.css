@@ -1186,6 +1186,8 @@ dialog.radar-scan[open]{display:flex;flex-direction:column}
   .pc-pill{display:inline-block;padding:1px 10px;border-radius:999px;background:#edf1f5;color:#5b6b7c;font-size:12px;font-weight:600}
   .pc-pill.is-ok{background:#e3f4ea;color:#1c7a45}
   .pc-pill.is-dq{background:#fde7e7;color:#b42323}
+  .pc-pill.is-open{background:#e8f0fb;color:#1f5fbf}
+  .pc-head .pc-pill{margin-left:auto;flex:none}
   .pc-status{color:#1f5fbf;font-weight:600}
   .pc-status.is-closed{color:#122f49;text-decoration:none;font-weight:600}
   .panel .public-cards{border-top:0;background:none}
