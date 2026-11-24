@@ -182,6 +182,17 @@ DO $$ DECLARE v record; BEGIN
   ASSERT has_function_privilege('anon', 'public.public_race_results(bigint, date)', 'EXECUTE'), 'visitors (not signed in) can read the public results';
   ASSERT NOT v.disqualified, 'a verified bird is not DQ';
 END $$;
+-- Public race headers: release point, coordinates, release time and birds clocked / entered.
+DO $$ DECLARE v record; BEGIN
+  SELECT * INTO v FROM public.public_race_summaries(
+    (SELECT id FROM public.clubs LIMIT 1),
+    (SELECT ((release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date FROM public.races WHERE name = 'Race P'))
+  WHERE race_name = 'Race P';
+  ASSERT v.release_location = 'Lucena City' AND v.release_latitude = 14.5995 AND v.release_longitude = 120.9842, 'header shows the release point and coordinates';
+  ASSERT v.release_at_utc IS NOT NULL AND v.race_status = 'closed', 'header shows release time and status';
+  ASSERT v.birds_entered = 1 AND v.birds_clocked = 1, 'header counts birds clocked of entered';
+  ASSERT has_function_privilege('anon', 'public.public_race_summaries(bigint, date)', 'EXECUTE'), 'visitors can read the race headers';
+END $$;
 -- A bird clocked in a closed race that never showed up is listed as DQ, not ranked.
 INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, source, verification)
   SELECT id, 'PH-2', now() AT TIME ZONE 'UTC', 'barcode', 'provisional' FROM public.race_entries WHERE barcode = '902';

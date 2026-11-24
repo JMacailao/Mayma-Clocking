@@ -2,7 +2,7 @@
 module.exports=`
 const now=Date.now(),iso=ms=>new Date(ms).toISOString().replace('T',' ').replace('Z','');
 const today=new Date(now+8*3600e3).toISOString().slice(0,10);
-F.tables.races=[{id:5,name:'Batangas Derby',status:'open',release_location:'Batangas',release_at_utc:iso(now-2*3600e3),open_date:today,end_date:today,is_practice:false,club_id:1},{id:4,name:'Practice toss',status:'closed',release_location:'Lipa',release_at_utc:iso(now-30*3600e3),open_date:today,end_date:today,is_practice:true,club_id:1}];
+F.tables.races=[{id:5,name:'Batangas Derby',status:'open',release_location:'Batangas',release_latitude:13.7565,release_longitude:121.0583,release_at_utc:iso(now-2*3600e3),open_date:today,end_date:today,is_practice:false,club_id:1},{id:4,name:'Practice toss',status:'closed',release_location:'Lipa',release_latitude:13.9411,release_longitude:121.1631,release_at_utc:iso(now-30*3600e3),open_date:today,end_date:today,is_practice:true,club_id:1}];
 F.tables.members=[{id:7,member_no:'M-01',full_name:'Jeremiah Macailao',loft_name:'Sky Loft'},{id:8,member_no:'M-02',full_name:'Ana Cruz',loft_name:'Sea Loft'}];
 F.tables.pigeons=[{id:1,bird_name:'Blue Lightning',color:'Blue bar',member_id:7,ring_number:'PH-1',status:'active',nfc_tag:'843519DB',photo_path:'1/7/a.jpg',bond_type:'rfid'},{id:2,bird_name:'Red Rocket',color:'Red check',member_id:8,ring_number:'PH-2',status:'active',nfc_tag:null,photo_path:'1/8/b.jpg',bond_type:'ring'},{id:3,bird_name:'Storm',color:'Grizzle',member_id:7,ring_number:'PH-3',status:'active',nfc_tag:'6C811F4A',photo_path:'1/7/c.jpg',bond_type:'rfid'}];
 F.tables.race_entries=[

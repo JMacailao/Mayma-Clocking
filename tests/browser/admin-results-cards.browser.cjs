@@ -2,6 +2,13 @@
 module.exports = async (page, { open, check, sample, OUT }) => {
   await open('/repo/pages/admin/results/page.js', sample);
   check(await page.locator('#results-table .table-scroll').isVisible() && !(await page.locator('#results-table .public-cards').isVisible()), 'desktop: table, no cards');
+  const heads = await page.locator('#results-table .race-summary').allInnerTexts();
+  const derby = (heads.find(h => /Batangas Derby/.test(h)) || '').replace(/\s+/g, ' ');
+  check(heads.length === 2 && /Batangas/.test(derby) && /° N, .*° E/.test(derby) && /2\/3 birds/.test(derby) && /Open/.test(derby), `a header per race: location, coordinates, release time, clocked/entered (${derby})`);
+  await page.selectOption('#race-filter', '4');
+  const practice = await page.locator('#results-table .race-summary').allInnerTexts();
+  check(practice.length === 1 && /Practice toss/.test(practice[0]) && /1\/1/.test(practice[0]) && /Closed · final/.test(practice[0]), 'one race chosen: only its header');
+  await page.selectOption('#race-filter', 'all');
   await page.setViewportSize({ width: 390, height: 800 });
   const cards = page.locator('#results-table .public-card');
   check(await cards.count() === 4 && !(await page.locator('#results-table .table-scroll').isVisible()), 'phone: one card per entry instead of the table');
