@@ -669,6 +669,7 @@ video#camera[hidden]{display:none}
 .showup-status.is-verified{color:#0f8758}
 .showup-status.is-waiting{color:#a86600}
 .showup-status.is-disqualified,.showup-status.is-rejected{color:var(--red)}
+.showup-status.is-not_needed{color:var(--muted)}
 .showup-row.is-disqualified td{background:#fff6f5}
 @media(max-width:560px){.showup-controls .field{min-width:0;width:100%}}
 .showup-manual input{width:100%;min-height:44px;border:1px solid #dce5ed;border-radius:7px;background:#fff;color:var(--ink);padding:0 12px;font-size:14px;outline:none}.showup-manual input:focus{border-color:#009fa8;box-shadow:0 0 0 3px #009fa817}
@@ -800,9 +801,10 @@ body.raceday-tv-on{overflow:hidden}
   .table-scroll{overflow:visible!important}
 }
 .schedule-practice{display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px dashed #c4b5fd;border-radius:10px;background:#faf7ff;font-size:13px;cursor:pointer}
-.schedule-practice input{margin-top:3px}
+.schedule-practice input{flex:none;width:18px;height:18px;min-height:0;margin:2px 0 0;padding:0;accent-color:var(--green)}
 .schedule-practice span{display:grid;gap:2px;color:var(--muted)}
 .schedule-practice strong{color:var(--ink)}
+.schedule-showup{border-color:#a7d3b9;background:#f3fbf6}
 .results-actions{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
 .results-actions .field{margin:0}
 
@@ -1186,6 +1188,8 @@ dialog.radar-scan[open]{display:flex;flex-direction:column}
   .pc-pill{display:inline-block;padding:1px 10px;border-radius:999px;background:#edf1f5;color:#5b6b7c;font-size:12px;font-weight:600}
   .pc-pill.is-ok{background:#e3f4ea;color:#1c7a45}
   .pc-pill.is-dq{background:#fde7e7;color:#b42323}
+  .pc-pill.is-open{background:#e8f0fb;color:#1f5fbf}
+  .pc-head .pc-pill{margin-left:auto;flex:none}
   .pc-status{color:#1f5fbf;font-weight:600}
   .pc-status.is-closed{color:#122f49;text-decoration:none;font-weight:600}
   .panel .public-cards{border-top:0;background:none}
@@ -1213,3 +1217,12 @@ dialog.radar-scan[open]{display:flex;flex-direction:column}
   .race-summary dl{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 14px}
 }
 @media print{.race-summary{break-inside:avoid}}
+
+/* Clocking videos: member buttons and the player dialog (Show up, Clocking history). */
+.video-actions{display:inline-flex;flex-wrap:wrap;gap:4px 12px}
+.clock-video-dialog{width:min(720px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:14px;border:0;border-radius:14px;background:#fff;color:var(--ink);overscroll-behavior:contain}
+.clock-video-dialog::backdrop{background:rgba(9,22,38,.6);overflow:hidden;overscroll-behavior:contain}
+.clock-video-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.clock-video-head h2{margin:0;font-size:16px;overflow-wrap:anywhere}
+.clock-video-dialog video{display:block;width:100%;height:auto;max-height:calc(100dvh - 140px);border-radius:10px;background:#000}
+.clock-video-dialog .small{margin:8px 0 0}

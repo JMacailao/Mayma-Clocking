@@ -14,7 +14,7 @@ export async function render(view) {
 }
 
 // Phones only (CSS swaps them for the table): one compact card per entry.
-const PILLS={verified:['is-ok','✓ Verified'],waiting:['','Waiting'],disqualified:['is-dq','DQ'],rejected:['is-dq','Rejected']};
+const PILLS={verified:['is-ok','✓ Verified'],waiting:['','Waiting'],disqualified:['is-dq','DQ'],rejected:['is-dq','Rejected'],not_needed:['','No show up']};
 const flight=seconds=>{if(!(seconds>0))return '';const t=Math.round(seconds);return [Math.floor(t/3600),Math.floor(t%3600/60),t%60].map(n=>String(n).padStart(2,'0')).join(':');};
 function resultCards(list){
  if(!list.length)return '';

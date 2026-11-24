@@ -1,6 +1,7 @@
 import { supabase, escapeHTML, formatDate, message, number, ringLabel, formatDateSeconds } from '../../../assets/js/shared.js';
 import { normalizeNfcUid, formatNfcUid, phoneNfcSupported, startPhoneNfc, NFC_HELP, listenForReaderKeys, listenForDeviceScans, usbReaderStatus } from '../../../assets/js/nfc.js';
 import { birdPhotoUrls } from '../birds/photos.js';
+import { clockVideos, playClockVideo } from '../../../assets/js/clock-video.js';
 
 const READER_KEY='avilonx.reader';
 const asUtc=value=>value?new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(String(value))?String(value).replace(' ','T'):`${String(value).replace(' ','T')}Z`):null;
@@ -11,6 +12,7 @@ export function showUpState(clock,entry,race){
   if(!clock)return {key:'none',label:'Not clocked'};
   if(clock.verification==='verified')return {key:'verified',label:clock.shown_up_at?`Verified ${formatDate(clock.shown_up_at)}`:'Verified'};
   if(clock.verification==='rejected')return {key:'rejected',label:'Rejected'};
+  if(race?.requires_show_up===false)return {key:'not_needed',label:'No show up needed'};
   if(race?.status==='closed')return {key:'disqualified',label:'Disqualified: no show-up'};
   return {key:'waiting',label:'Waiting · until the race is closed'};
 }
@@ -21,13 +23,14 @@ export function showUpState(clock,entry,race){
 export async function render(view,identity,setPageCleanup=()=>{}) {
   const load=async()=>{
     const [{data:races,error:a},{data:entries,error:b},{data:clocks,error:c},{data:members,error:d}]=await Promise.all([
-      supabase.from('races').select('id,name,status,release_at_utc').order('id',{ascending:false}),
+      supabase.from('races').select('*').order('id',{ascending:false}),
       supabase.from('race_entries').select('*'),
       supabase.from('clock_events').select('*'),
       supabase.from('members').select('id,member_no,full_name,loft_name')
     ]);if(a||b||c||d)throw a||b||c||d;
     let birds=[];try{const {data,error}=await supabase.from('pigeons').select('id,bird_name,color,photo_path');if(!error)birds=data||[];}catch{/* bird-bonding.sql not run */}
-    return {races,entries,clocks,members,birds};
+    const videos=await clockVideos((clocks||[]).map(clock=>clock.id));
+    return {races,entries,clocks,members,birds,videos};
   };
   let state=await load();
   let photos=await birdPhotoUrls(state.birds.map(bird=>bird.photo_path));
@@ -53,7 +56,8 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
     const rows=state.entries.filter(entry=>!raceId||entry.race_id===raceId).map(entry=>{const clock=state.clocks.find(item=>item.race_entry_id===entry.id);if(!clock)return null;const race=state.races.find(item=>item.id===entry.race_id),member=state.members.find(item=>item.id===entry.member_id),bird=state.birds.find(item=>item.id===entry.pigeon_id);const seconds=race?.release_at_utc?(asUtc(clock.received_at_utc)-asUtc(race.release_at_utc))/1000:null;return {entry,clock,race,member,bird,speed:seconds>0?entry.distance_m*60/seconds:null,show:showUpState(clock,entry,race)};}).filter(Boolean).sort((x,y)=>(y.speed||0)-(x.speed||0));
     const counts={verified:0,waiting:0,disqualified:0,rejected:0};rows.forEach(row=>{counts[row.show.key]=(counts[row.show.key]||0)+1;});
     view.querySelector('[data-showup-counts]').textContent=`${counts.verified} verified · ${counts.waiting} waiting · ${counts.disqualified} disqualified`;
-    view.querySelector('[data-showup-table]').innerHTML=rows.length?`<div class="table-scroll"><table><thead><tr><th>Ring · bird</th>${raceId?'':'<th>Race</th>'}<th>Member</th><th>Clocked</th><th>Speed · m/min</th><th>Show up</th></tr></thead><tbody>${rows.map(row=>`<tr class="showup-row is-${row.show.key}"><td data-label="Ring · bird"><strong>${escapeHTML(ringLabel(row.entry.pigeon_ring,row.entry.remarks))}</strong>${row.bird?`<br><span class="small">${escapeHTML(row.bird.bird_name)} · ${escapeHTML(row.bird.color)}</span>`:''}</td>${raceId?'':`<td data-label="Race">${escapeHTML(row.race?.name||'—')}</td>`}<td data-label="Member">${escapeHTML(row.member?.full_name||'—')}</td><td data-label="Clocked">${escapeHTML(formatDateSeconds(row.clock.received_at_utc))}</td><td data-label="Speed">${row.speed?number(row.speed):'—'}</td><td data-label="Show up"><span class="showup-status is-${row.show.key}">${escapeHTML(row.show.label)}</span></td></tr>`).join('')}</tbody></table></div>`:'<p class="small">No clocked pigeons in this race yet.</p>';
+    view.querySelector('[data-showup-table]').innerHTML=rows.length?`<div class="table-scroll"><table><thead><tr><th>Ring · bird</th>${raceId?'':'<th>Race</th>'}<th>Member</th><th>Clocked</th><th>Speed · m/min</th><th>Show up</th><th>Video</th></tr></thead><tbody>${rows.map(row=>`<tr class="showup-row is-${row.show.key}"><td data-label="Ring · bird"><strong>${escapeHTML(ringLabel(row.entry.pigeon_ring,row.entry.remarks))}</strong>${row.bird?`<br><span class="small">${escapeHTML(row.bird.bird_name)} · ${escapeHTML(row.bird.color)}</span>`:''}</td>${raceId?'':`<td data-label="Race">${escapeHTML(row.race?.name||'—')}</td>`}<td data-label="Member">${escapeHTML(row.member?.full_name||'—')}</td><td data-label="Clocked">${escapeHTML(formatDateSeconds(row.clock.received_at_utc))}</td><td data-label="Speed">${row.speed?number(row.speed):'—'}</td><td data-label="Show up"><span class="showup-status is-${row.show.key}">${escapeHTML(row.show.label)}</span></td><td data-label="Video">${state.videos.has(row.clock.id)?`<button class="text-button" type="button" data-play-video="${row.clock.id}">▶ Play</button>`:'—'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="small">No clocked pigeons in this race yet.</p>';
+    view.querySelectorAll('[data-play-video]').forEach(button=>button.onclick=()=>{const id=Number(button.dataset.playVideo),row=rows.find(item=>item.clock.id===id);playClockVideo(state.videos.get(id),`${ringLabel(row.entry.pigeon_ring,row.entry.remarks)} · ${row.member?.full_name||''}`);});
   };
   raceSelect.onchange=drawTable;drawTable();
 
