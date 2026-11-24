@@ -160,6 +160,16 @@ DO $$ BEGIN
   ASSERT (SELECT distance_m FROM public.race_entries WHERE barcode = '903') = 84355.165, 'changing a race''s release coordinates recalculates its entries';
 END $$;
 
+-- Two race points with the same name: an unlinked race of that name may be the
+-- other point's, so editing one of them leaves it alone.
+INSERT INTO public.race_points (location, sector, latitude, longitude, club_id) SELECT 'Twin', x.sector, 12.0, 121.0, c.id FROM public.clubs c, (VALUES ('A'), ('B')) AS x(sector);
+INSERT INTO public.races (name, release_location, release_latitude, release_longitude, club_id, open_date, end_date)
+  SELECT 'Race T', 'Twin', 12.0, 121.0, id, current_date, current_date FROM public.clubs;
+UPDATE public.race_points SET latitude = 12.5 WHERE location = 'Twin' AND sector = 'A';
+DO $$ BEGIN
+  ASSERT (SELECT race_point_id IS NULL AND release_latitude = 12.0 FROM public.races WHERE name = 'Race T'), 'a same-named point does not claim unlinked races';
+END $$;
+
 -- Public results (home page): rank in the race, race status and Show up verification.
 DO $$ DECLARE v record; BEGIN
   SELECT * INTO v FROM public.public_race_results(

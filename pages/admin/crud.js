@@ -315,10 +315,18 @@ function bindGeneric(view,table,fieldsList,columns,defaults={},withAccounts=fals
 async function confirmRacePointMove(point,data){
   const moved=data.location!==point.location||Number(data.latitude)!==Number(point.latitude)||Number(data.longitude)!==Number(point.longitude);
   if(!moved)return '';
-  const {data:races,error}=await supabase.from('races').select('id,name,race_point_id,release_location');if(error)return '';
-  const affected=(races||[]).filter(race=>Number(race.race_point_id)===Number(point.id)||(race.race_point_id==null&&race.release_location===point.location));
+  // Same as the database (race-point-recalc.sql): races linked to this point, and
+  // unlinked races of the same club named like it, only if no other point has that name.
+  const [{data:races,error},{data:twins,error:twinError}]=await Promise.all([
+    supabase.from('races').select('id,name,race_point_id,release_location,club_id'),
+    supabase.from('race_points').select('id').eq('location',point.location).neq('id',point.id)
+  ]);
+  if(error||twinError){message(`Could not check which races use this race point, so nothing was saved: ${dbError(error||twinError)}`,'error');return null;}
+  const byName=!(twins||[]).length;
+  const affected=(races||[]).filter(race=>Number(race.race_point_id)===Number(point.id)||(byName&&race.race_point_id==null&&race.release_location===point.location&&(point.club_id==null||Number(race.club_id)===Number(point.club_id))));
   if(!affected.length)return '';
-  const {data:entries}=await supabase.from('race_entries').select('id').in('race_id',affected.map(race=>race.id));
+  const {data:entries,error:entryError}=await supabase.from('race_entries').select('id').in('race_id',affected.map(race=>race.id));
+  if(entryError){message(`Could not count the entries of these races, so nothing was saved: ${dbError(entryError)}`,'error');return null;}
   const n=affected.length,m=(entries||[]).length;
   const what=`${n} race${n===1?'':'s'} (${affected.slice(0,5).map(race=>race.name).join(', ')}${n>5?'…':''})`;
   if(!confirm(`This race point is used by ${what}.\n\nSaving moves ${n===1?'it':'them'} to the new location and recalculates the distance, speed and rank of ${m} entr${m===1?'y':'ies'}, clocked birds included, also in closed races.\n\nSave?`))return null;

@@ -22,5 +22,12 @@ module.exports = async (page, { open, check, OUT }) => {
   const lastRow = await page.locator('[data-public-results-table] tbody tr').last().innerText();
   check(/PH-9/.test(lastRow) && /\bDQ\b/.test(lastRow) && !/\b1\b\s*\n?\s*Lipa/.test(lastRow), `a disqualified bird is listed last, tagged DQ, not ranked (${lastRow.replace(/\s+/g, ' ').slice(0, 90)})`);
   check(await page.locator('[data-public-results-legend]').isVisible(), 'explains the columns');
+  const order = (await page.locator('[data-public-results-table] tbody tr').allInnerTexts()).map(t => (t.match(/PH-\d/) || [''])[0]);
+  check(order.join(',') === 'PH-1,PH-3,PH-2,PH-9', `rows grouped by race, each race's ranks in order (${order.join(',')})`);
   await page.screenshot({ path: `${OUT}/public-results.png`, fullPage: true });
+
+  // A failed search hides the legend and toolbar of the previous one.
+  await page.evaluate(() => { window.FAKE.rpc.public_race_results = { __error: { message: 'offline' } }; });
+  await page.click('[data-public-results-form] [type=submit]'); await page.waitForTimeout(400);
+  check(!(await page.locator('[data-public-results-legend]').isVisible()) && !(await page.locator('[data-public-results-toolbar]').isVisible()), 'error: legend and toolbar hidden');
 };
