@@ -1170,10 +1170,11 @@ dialog.radar-scan[open]{display:flex;flex-direction:column}
 .public-rank{display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#0b2345;color:#fff;font-variant-numeric:tabular-nums}
 .public-results-legend{margin:8px 0 10px;color:#5b6b7c}
 
-/* Public results on phones: compact cards instead of the table. */
+/* Results on phones (public and admin): compact cards instead of the table.
+   Screens only, so Print / PDF keeps the table. */
 .public-cards{display:none}
-@media (max-width:720px){
-  [data-public-results-table]:has(.public-cards) .table-scroll{display:none}
+@media screen and (max-width:720px){
+  .table-scroll:has(+ .public-cards){display:none}
   .public-cards{display:block;margin:0;padding:0;list-style:none;border-top:1px solid var(--line);background:#fff}
   .public-card{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;line-height:1.45;color:#354f66}
   .public-card.is-dq{background:#fdf7f7}
@@ -1190,4 +1191,8 @@ dialog.radar-scan[open]{display:flex;flex-direction:column}
   .pc-pill.is-dq{background:#fde7e7;color:#b42323}
   .pc-status{color:#1f5fbf;font-weight:600}
   .pc-status.is-closed{color:#122f49;text-decoration:none;font-weight:600}
+  .panel .public-cards{border-top:0;background:none}
+  .panel .public-card{padding:10px 2px}
+  .panel .public-card:first-child{padding-top:0}
+  .panel .public-card:last-child{border-bottom:0;padding-bottom:0}
 }
