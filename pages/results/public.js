@@ -10,7 +10,7 @@ async function mountPublicResults(panel) {
  const setError=text=>{errorText.textContent=text;errorBox.hidden=!text;};
  const draw=()=>{
   const direction=sortOrder.value==='asc'?1:-1;
-  const sorted=rows.slice().sort((a,b)=>{if(Boolean(a.disqualified)!==Boolean(b.disqualified))return a.disqualified?1:-1;const av=a.speed_m_per_min,bv=b.speed_m_per_min;if(av==null&&bv!=null)return 1;if(av!=null&&bv==null)return -1;if(av==null&&bv==null)return 0;return (Number(av)-Number(bv))*direction;});
+  const sorted=rows.slice().sort((a,b)=>{const byRace=String(a.race_name||'').localeCompare(String(b.race_name||''));if(byRace)return byRace;if(Boolean(a.disqualified)!==Boolean(b.disqualified))return a.disqualified?1:-1;const av=a.speed_m_per_min,bv=b.speed_m_per_min;if(av==null&&bv!=null)return 1;if(av!=null&&bv==null)return -1;if(av==null&&bv==null)return 0;return (Number(av)-Number(bv))*direction;});
   count.textContent=`${rows.length} result${rows.length===1?'':'s'}`;
   table.innerHTML=tableRows(sorted,[{key:'rank',label:'Rank',render:r=>r.rank?`<strong class="public-rank">${escapeHTML(String(r.rank))}</strong>`:'—'},{key:'race_name',label:'Race'},{key:'loft_name',label:'Loft'},{key:'distance_m',label:'Distance',render:r=>distanceKm(r.distance_m)},{key:'pigeon_ring',label:'Pigeon ring',render:r=>escapeHTML(r.pigeon_ring||'—')},{key:'barcode',label:'Code',render:r=>escapeHTML(r.barcode||'—')},{key:'arrival_at_utc',label:'Arrival · PH',render:r=>escapeHTML(formatDateSeconds(r.arrival_at_utc))},{key:'flight_seconds',label:'Flight',render:r=>escapeHTML(formatFlight(r.flight_seconds))},{key:'speed_m_per_min',label:`Speed · m/min ${direction<0?'↓':'↑'}`,render:r=>r.speed_m_per_min==null?'—':number(r.speed_m_per_min)},{key:'race_status',label:'Status',render:r=>r.disqualified?'<span class="tag rejected" title="Disqualified: not brought to the club for Show up before the race closed">DQ</span>':r.race_status==='closed'?'<span class="tag closed">Closed · final</span>':'<span class="tag">Open</span>'},{key:'verification',label:'Verified',render:r=>r.verification==='verified'?'<span class="tag verified">✓ Verified</span>':r.disqualified?'<span class="tag pending">Not verified</span>':'<span class="tag pending">Provisional</span>'}], 'No results were found for that club and date.',false);
  };
@@ -29,7 +29,7 @@ async function mountPublicResults(panel) {
   event.preventDefault();const button=form.querySelector('[type="submit"]');button.disabled=true;button.textContent='Loading results…';setError('');rows=[];toolbar.hidden=true;table.innerHTML='<p class="public-results-empty">Loading results…</p>';
   const {data,error}=await supabase.rpc('public_race_results',{p_club_id:Number(clubSelect.value),p_race_date:form.elements.race_date.value});
   button.disabled=false;button.textContent='Show results';
-  if(error){setError('Could not load these results. Check your connection and try again.');table.innerHTML='';console.error('Could not load public race results:',error);return;}
+  if(error){setError('Could not load these results. Check your connection and try again.');table.innerHTML='';toolbar.hidden=true;panel.querySelector('[data-public-results-legend]').hidden=true;console.error('Could not load public race results:',error);return;}
   rows=(data||[]).map(row=>({...row,speed_m_per_min:row.speed_m_per_min==null?null:Number(row.speed_m_per_min)}));sortOrder.value='desc';toolbar.hidden=false;panel.querySelector('[data-public-results-legend]').hidden=!rows.length;draw();
  };
  await loadClubs();

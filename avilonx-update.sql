@@ -3047,7 +3047,8 @@ CREATE TRIGGER races_recalculate_distances
 
 -- A race point's name or coordinates changed: the races using it follow (which
 -- recalculates their entries). Races made before races were linked to a race
--- point are found by the point's old name in the same club, and linked.
+-- point are found by the point's old name in the same club, and linked (only
+-- when no other race point of the club has that name).
 CREATE OR REPLACE FUNCTION public._race_point_moved()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
@@ -3060,7 +3061,11 @@ BEGIN
            release_latitude = NEW.latitude,
            release_longitude = NEW.longitude
      WHERE (r.race_point_id = NEW.id
-            OR (r.race_point_id IS NULL AND r.release_location = OLD.location AND r.club_id = NEW.club_id))
+            OR (r.race_point_id IS NULL AND r.release_location = OLD.location AND r.club_id = NEW.club_id
+                -- Only when no other point of the club has that name: otherwise
+                -- the race may belong to the other point, so it is left alone.
+                AND NOT EXISTS (SELECT 1 FROM public.race_points AS p
+                                 WHERE p.id <> NEW.id AND p.club_id = NEW.club_id AND p.location = OLD.location)))
        AND (r.release_location IS DISTINCT FROM NEW.location
             OR r.release_latitude IS DISTINCT FROM NEW.latitude
             OR r.release_longitude IS DISTINCT FROM NEW.longitude);
