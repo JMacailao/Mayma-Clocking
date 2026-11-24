@@ -832,7 +832,6 @@ body.raceday-tv-on{overflow:hidden}
   .text-button{min-height:40px;padding:8px 6px;font-size:14px}
   .reader-choice-options label{min-height:52px}
   .entry-chip{min-height:38px;font-size:13px}
-  .page-view h2{font-size:24px}
   .lang-switch button{min-height:38px;font-size:13px}
 }
 
@@ -1207,3 +1206,16 @@ dialog.radar-scan[open]{display:flex;flex-direction:column}
 /* Modals fit any screen and scroll inside; the page behind does not scroll. */
 dialog:modal:not(.radar-scan){max-inline-size:calc(100vw - 24px);max-block-size:calc(100dvh - 24px);overflow:auto;overscroll-behavior:contain}
 dialog::backdrop{background:rgba(15,23,42,.5);overflow:hidden;overscroll-behavior:contain}
+
+/* Member speed forecast: arrival time at the loft per speed (like the club SMS). */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.forecast-race{max-width:420px;margin:0 0 12px}
+.forecast-meta{margin:0 0 14px}
+.forecast-table{width:100%;min-width:0;max-width:520px;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.forecast-table th,.forecast-table td{padding:8px 12px;border-bottom:1px solid #eef2f6;text-align:left;font-size:14px;white-space:nowrap}
+.forecast-table thead th{font-size:11px}
+.forecast-table tbody th{color:var(--ink);font-weight:600;text-transform:none;letter-spacing:0}
+.forecast-table td:last-child,.forecast-table th:last-child{text-align:right}
+.forecast-table strong{font-weight:600;color:var(--ink)}
+.forecast-empty{margin:0}
+@media(max-width:720px){.forecast-table th,.forecast-table td{padding:8px 6px}.forecast-race{max-width:none}}
