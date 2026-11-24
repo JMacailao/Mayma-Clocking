@@ -5,7 +5,7 @@ export async function render(view,identity){
   const clubId=identity?.profile?.club_id;
   const {data:club,error}=await supabase.from('clubs').select('*').eq('id',clubId).maybeSingle();
   const missing=error||!club||!('rfid_entry_sticker' in club);
-  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">ADMINISTRATION</span><h2>Club settings</h2><p>How ${escapeHTML(club?.name||'your club')} works. Only the club administrator can change these.</p></div></div>
+  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">ADMINISTRATION</span><h2>Club settings</h2><p>Only the club administrator can change these.</p></div></div>
   ${missing?'<div class="notice error">Club settings are not set up yet. Run <strong>avilonx-update.sql</strong> in the Supabase SQL Editor, then reload this page.</div>':''}
   <section class="panel settings-panel"><h3>Race entries</h3>
     <fieldset class="settings-choice" ${missing?'disabled':''}><legend>Sticker for RFID entries</legend>

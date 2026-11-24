@@ -5,7 +5,7 @@ import { formatSerial, lastTagCell, missingReaderSql, readerSqlNotice, readerSta
 // number and assign each to a club. Unregistered readers are refused.
 export async function render(view,_cleanup,{pendingKey=null}={}) {
   const [{data:devices,error},{data:clubs,error:clubError}]=await Promise.all([supabase.rpc('superadmin_list_rfid_devices'),supabase.rpc('superadmin_list_clubs')]);
-  const heading=`<div class="split-heading"><div><span class="eyebrow">EXTERNAL READERS</span><h2>Register RFID reader</h2><p>Register each ESP8266 RFID reader by its serial number and assign it to a club before it is used. Unregistered readers are refused.</p></div><a class="button secondary" href="${pageUrl('tools/nfc-reader/acr122u-avilonx-helper.zip')}" download>Download ACR122U helper</a></div>`;
+  const heading=`<div class="split-heading"><div><span class="eyebrow">EXTERNAL READERS</span><h2>Register RFID reader</h2><p>Register each reader by serial number and assign it to a club.</p></div><a class="button secondary" href="${pageUrl('tools/nfc-reader/acr122u-avilonx-helper.zip')}" download>Download ACR122U helper</a></div>`;
   if(error){if(missingReaderSql(error)){view.innerHTML=heading+readerSqlNotice;return;}throw error;}
   if(clubError)throw clubError;
   const clubOptions=(selected,placeholder)=>`${placeholder?`<option value="">${placeholder}</option>`:''}${(clubs||[]).map(club=>`<option value="${club.id}" ${club.id===selected?'selected':''}>${escapeHTML(club.name)}</option>`).join('')}`;
