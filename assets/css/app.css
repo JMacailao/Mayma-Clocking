@@ -126,7 +126,6 @@ video#camera[hidden]{display:none}
 .login-layout.results-mode .login-aside{display:none}
 .login-card.results-mode .public-results-content{max-width:1280px;margin:0 auto}
 .public-results-filter{margin-bottom:12px}
-.public-results-note{margin:0 0 18px;color:var(--muted);font-size:12px;line-height:1.5}
 .public-results-error{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .public-results-error[hidden],.public-results-toolbar[hidden]{display:none}
 .public-results-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:18px 0 10px}
@@ -895,7 +894,6 @@ body.login-page{min-height:100vh;background:#f3f6f9}
 .login-results .public-results-filter .button{width:100%}
 .login-results .public-results-empty{display:grid;justify-items:center;gap:12px;padding:34px 12px;font-size:18px;color:#4b5f73}
 .results-podium{width:clamp(120px,14vw,170px);height:auto}
-.login-results .public-results-note{margin:18px 0 0;padding-top:18px;border-top:1px solid var(--line);font-size:14px}
 @media (max-width:900px){.login-grid{grid-template-columns:1fr}.login-results .public-results-filter{grid-template-columns:1fr}}
 @media (max-width:520px){.login-header{padding:10px 14px}.login-header .brand-logo{width:56px;height:auto}.login-install .install-app-button{min-height:40px;padding:0 14px;font-size:13px}}
 .login-header .brand{gap:14px;font:800 26px Manrope}
@@ -1168,12 +1166,12 @@ dialog.radar-scan[open]{display:flex;flex-direction:column}
 .radar-reader.is-ok::before{background:var(--radar);box-shadow:0 0 6px var(--radar)}
 .radar-reader.is-bad{color:#ffb4b4}.radar-reader.is-bad::before{background:#ff5d5d}
 .public-rank{display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#0b2345;color:#fff;font-variant-numeric:tabular-nums}
-.public-results-legend{margin:8px 0 10px;color:#5b6b7c}
 
-/* Public results on phones: compact cards instead of the table. */
+/* Results on phones (public and admin): compact cards instead of the table.
+   Screens only, so Print / PDF keeps the table. */
 .public-cards{display:none}
-@media (max-width:720px){
-  [data-public-results-table]:has(.public-cards) .table-scroll{display:none}
+@media screen and (max-width:720px){
+  .table-scroll:has(+ .public-cards){display:none}
   .public-cards{display:block;margin:0;padding:0;list-style:none;border-top:1px solid var(--line);background:#fff}
   .public-card{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;line-height:1.45;color:#354f66}
   .public-card.is-dq{background:#fdf7f7}
@@ -1190,4 +1188,28 @@ dialog.radar-scan[open]{display:flex;flex-direction:column}
   .pc-pill.is-dq{background:#fde7e7;color:#b42323}
   .pc-status{color:#1f5fbf;font-weight:600}
   .pc-status.is-closed{color:#122f49;text-decoration:none;font-weight:600}
+  .panel .public-cards{border-top:0;background:none}
+  .panel .public-card{padding:10px 2px}
+  .panel .public-card:first-child{padding-top:0}
+  .panel .public-card:last-child{border-bottom:0;padding-bottom:0}
 }
+
+/* Race header on Results and the public results: release point, coordinates,
+   release time and birds clocked of entered. */
+.race-summaries{display:grid;gap:10px;margin:0 0 14px}
+.race-summaries[hidden]{display:none}
+.race-summary{padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.race-summary h3{margin:0 0 8px;color:var(--ink);font-size:16px;line-height:1.3}
+.race-summary-status{display:inline-block;margin-left:6px;padding:1px 9px;border-radius:999px;background:#e8f0fb;color:#1f5fbf;font-size:11px;font-weight:700;vertical-align:2px}
+.race-summary-status.is-closed{background:#edf1f5;color:#354f66}
+.race-summary dl{display:grid;grid-template-columns:repeat(4,minmax(0,auto));justify-content:start;gap:6px 28px;margin:0}
+.race-summary-item{min-width:0}
+.race-summary dt{color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.race-summary dd{margin:1px 0 0;color:#354f66;font-size:13px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.race-summary-item.is-count strong{color:var(--ink);font-size:16px}
+.race-summary-item.is-count span{color:var(--muted);font-size:12px}
+@media (max-width:720px){
+  .race-summary{padding:10px 12px}
+  .race-summary dl{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 14px}
+}
+@media print{.race-summary{break-inside:avoid}}

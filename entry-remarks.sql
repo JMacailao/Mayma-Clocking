@@ -117,4 +117,46 @@ GRANT EXECUTE ON FUNCTION public.public_race_results(bigint, date) TO anon, auth
 COMMENT ON FUNCTION public.public_race_results(bigint, date) IS
   'Public race results for a club and Philippines-local race date: rank, race status, Show up verification and DQ; no member or account data.';
 
+
+-- Header of each race on the public results: release point (name and
+-- coordinates), release time, status, and how many birds are entered and
+-- clocked (clocks the club rejected are not counted), e.g. 9/10. No member data.
+CREATE OR REPLACE FUNCTION public.public_race_summaries(p_club_id bigint, p_race_date date)
+RETURNS TABLE(
+  race_name text,
+  release_location text,
+  release_latitude numeric,
+  release_longitude numeric,
+  release_at_utc timestamp without time zone,
+  race_status text,
+  birds_entered bigint,
+  birds_clocked bigint
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT
+    r.name::text,
+    r.release_location::text,
+    r.release_latitude::numeric,
+    r.release_longitude::numeric,
+    r.release_at_utc,
+    r.status::text,
+    (SELECT count(*) FROM public.race_entries AS e WHERE e.race_id = r.id),
+    (SELECT count(DISTINCT e.id) FROM public.race_entries AS e
+       JOIN public.clock_events AS c ON c.race_entry_id = e.id
+      WHERE e.race_id = r.id AND c.verification <> 'rejected')
+  FROM public.races AS r
+  WHERE r.club_id = p_club_id
+    AND ((r.release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date = p_race_date
+    AND NOT r.is_practice
+  ORDER BY r.name;
+$function$;
+REVOKE ALL ON FUNCTION public.public_race_summaries(bigint, date) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.public_race_summaries(bigint, date) TO anon, authenticated;
+COMMENT ON FUNCTION public.public_race_summaries(bigint, date) IS
+  'Public race headers for a club and Philippines-local race date: release point, coordinates, release time, status, birds clocked / entered; no member data.';
+
 NOTIFY pgrst, 'reload schema';
