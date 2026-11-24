@@ -1,0 +1,51 @@
+// AvilonX for Android: a Trusted Web Activity that opens https://www.avilonx.site
+// full screen in Chrome, so phone NFC, the camera, notifications and sign-in
+// work exactly as on the website. Built by .github/workflows/android.yml.
+plugins {
+    id 'com.android.application'
+}
+
+// Release signing comes from the environment (GitHub secrets), never from the repository.
+def keystorePath = System.getenv('AVILONX_KEYSTORE')
+def keystorePassword = System.getenv('AVILONX_KEYSTORE_PASSWORD')
+def buildNumber = (System.getenv('VERSION_CODE') ?: '1') as int
+
+android {
+    namespace 'site.avilonx.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'site.avilonx.app'
+        minSdk 21
+        targetSdk 35
+        versionCode buildNumber
+        versionName "1.0.${buildNumber}"
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword keystorePassword
+                keyAlias 'avilonx'
+                keyPassword keystorePassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (keystorePath) signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}

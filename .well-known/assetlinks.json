@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "site.avilonx.app",
+      "sha256_cert_fingerprints": ["55:AA:8C:02:E7:1E:80:FC:69:4A:E0:1E:28:06:49:14:EA:69:A7:78:46:27:F1:31:08:F9:26:A8:80:DF:DE:0B"]
+    }
+  }
+]
