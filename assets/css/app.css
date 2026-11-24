@@ -1167,5 +1167,36 @@ dialog.radar-scan[open]{display:flex;flex-direction:column}
 .radar-reader::before{content:"";width:9px;height:9px;border-radius:50%;background:#8fd9ab;flex:none}
 .radar-reader.is-ok::before{background:var(--radar);box-shadow:0 0 6px var(--radar)}
 .radar-reader.is-bad{color:#ffb4b4}.radar-reader.is-bad::before{background:#ff5d5d}
-.public-rank{display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:#0b2345;color:#fff;font-variant-numeric:tabular-nums}
 .public-results-legend{margin:8px 0 10px;color:#5b6b7c}
+
+/* Public results: one 24px line per bird, a table on every screen size. */
+.public-table{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;font-size:13px;line-height:24px;font-variant-numeric:tabular-nums;background:#fff}
+.public-table th,.public-table td{height:24px;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;border-bottom:1px solid #edf2f6}
+.public-table thead th{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--line);background:#fff}
+.public-table .public-race th{background:#eef3f8;color:var(--ink);font-size:12px;font-weight:700;letter-spacing:0;text-transform:none}
+.public-table .public-race th span{margin-left:6px;color:var(--muted);font-weight:600}
+.public-table .pr-rank{width:34px;text-align:right;font-weight:700}
+.public-table .pr-time{width:98px}
+.public-table .pr-speed{width:84px;text-align:right}
+.public-table .pr-mark{width:34px;text-align:center}
+.public-table tr.is-dq td{color:#8a97a5}
+.public-mark{display:inline-block;min-width:18px;height:16px;padding:0 3px;border-radius:4px;background:#edf1f5;color:#5b6b7c;font-size:10px;font-weight:700;line-height:16px;text-align:center;vertical-align:middle}
+.public-mark.is-ok{background:#e3f4ea;color:#1c7a45}
+.public-mark.is-dq{background:#fde7e7;color:#b42323}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media (max-width:560px){
+  .public-table{font-size:12px}
+  .public-table th,.public-table td{padding:0 4px}
+  .public-table{font-size:11.5px}
+  .public-table th,.public-table td{padding:0 3px}
+  .public-table .pr-rank{width:22px}
+  .public-table .pr-time{width:80px}
+  .public-table .pr-speed{width:46px}
+  .public-table .pr-mark{width:32px}
+  .public-mark{min-width:16px;padding:0 2px;font-size:9.5px}
+  .public-results-toolbar{flex-direction:row;align-items:center;gap:8px}
+  .public-results-toolbar .field{width:auto}
+  .public-results-toolbar .field>span{display:none}
+  .public-results-toolbar select{min-height:34px;padding:2px 28px 2px 8px;font-size:16px}
+  .login-layout.results-mode .login-card{padding:20px 12px}
+}
