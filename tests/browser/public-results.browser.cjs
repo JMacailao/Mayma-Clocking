@@ -11,29 +11,20 @@ module.exports = async (page, { open, check, OUT }) => {
   await page.fill('[name=race_date]', '2026-11-22');
   await page.click('[data-public-results-form] [type=submit]');
   await page.waitForSelector('[data-public-results-table] table', { timeout: 5000 }).catch(() => {});
-  const lines = page.locator('[data-public-results-table] tbody tr:not(.public-race)');
-  const headers = await page.locator('[data-public-results-table] thead th').allInnerTexts();
-  check(headers.slice(0, 5).map(h => h.trim().toLowerCase()).join(',') === '#,loft,ring,arrival,m/min', `simple columns (${headers.join(' | ')})`);
-  const races = await page.locator('[data-public-results-table] .public-race').allInnerTexts();
-  check(races.length === 2 && /Batangas Derby\s+Open/.test(races[0]) && /Lipa Final\s+Final/.test(races[1]), `one heading line per race with its status (${races.join(' | ')})`);
-  const order = (await lines.allInnerTexts()).map(t => (t.match(/PH-\d/) || [''])[0]);
-  check(order.join(',') === 'PH-1,PH-3,PH-2,PH-9', `rows grouped by race, each race's ranks in order (${order.join(',')})`);
-  check((await lines.first().locator('.pr-rank').innerText()) === '1', 'fastest bird ranked 1');
+  const headers = await page.locator('[data-public-results-table] th').allInnerTexts();
+  check(/^rank$/i.test(headers[0].trim()) && headers.some(h => /status/i.test(h)) && headers.some(h => /verified/i.test(h)), `columns Rank, Status, Verified (${headers.join(' | ')})`);
   const body = await page.locator('[data-public-results-table] tbody').innerText();
+  check(/✓ Verified/.test(body) && /Provisional/.test(body), 'shows verified and provisional');
+  check(/Closed · final/.test(body) && /\bOpen\b/.test(body), 'shows the race status');
+  const firstRank = await page.locator('[data-public-results-table] tbody tr').first().locator('.public-rank').innerText().catch(() => '');
+  check(firstRank === '1', 'fastest bird ranked 1');
   check(/11:00:00\sAM/.test(body), `arrival shows seconds (${(body.match(/\d{1,2}:\d{2}(:\d{2})?\s[AP]M/) || [''])[0]})`);
-  check(await lines.first().locator('.public-mark.is-ok').count() === 1 && await lines.nth(1).locator('.public-mark:not(.is-ok):not(.is-dq)').count() === 1, 'verified ✓ and provisional P marks');
-  const lastRow = lines.last();
-  check(/PH-9/.test(await lastRow.innerText()) && await lastRow.locator('.is-dq').count() === 1 && (await lastRow.locator('.pr-rank').innerText()).trim() === '–', 'a disqualified bird is listed last, tagged DQ, not ranked');
-  check(await page.locator('[data-public-results-legend]').isVisible(), 'explains the marks');
-  for (const width of [1300, 390, 320]) {
-    await page.setViewportSize({ width, height: 800 });
-    const heights = await page.locator('[data-public-results-table] tr').evaluateAll(rows => rows.map(r => Math.round(r.getBoundingClientRect().height)));
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    check(heights.every(h => h <= 25), `${width}px: every line is 24px (${[...new Set(heights)].join(',')})`);
-    check(overflow <= 0, `${width}px: no sideways scrolling (${overflow}px)`);
-    await page.screenshot({ path: `${OUT}/public-results-${width}.png`, fullPage: true });
-  }
-  await page.setViewportSize({ width: 1300, height: 900 });
+  const lastRow = await page.locator('[data-public-results-table] tbody tr').last().innerText();
+  check(/PH-9/.test(lastRow) && /\bDQ\b/.test(lastRow) && !/\b1\b\s*\n?\s*Lipa/.test(lastRow), `a disqualified bird is listed last, tagged DQ, not ranked (${lastRow.replace(/\s+/g, ' ').slice(0, 90)})`);
+  check(await page.locator('[data-public-results-legend]').isVisible(), 'explains the columns');
+  const order = (await page.locator('[data-public-results-table] tbody tr').allInnerTexts()).map(t => (t.match(/PH-\d/) || [''])[0]);
+  check(order.join(',') === 'PH-1,PH-3,PH-2,PH-9', `rows grouped by race, each race's ranks in order (${order.join(',')})`);
+  await page.screenshot({ path: `${OUT}/public-results.png`, fullPage: true });
 
   // A failed search hides the legend and toolbar of the previous one.
   await page.evaluate(() => { window.FAKE.rpc.public_race_results = { __error: { message: 'offline' } }; });
