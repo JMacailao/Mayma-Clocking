@@ -1,6 +1,7 @@
 import { supabase, escapeHTML, fail } from './shared.js';
 import { startTranslation, languageSwitchHtml, bindLanguageSwitch } from './i18n.js';
 import { startUpdateCheck } from './update-check.js';
+import { checkAndroidUpdate } from './android-app.js';
 import { watchDevice, releaseDevice } from './device-session.js';
 const signOutUser = async() => {const {error}=await supabase.auth.signOut({scope:'local'});if(error)throw error;};
 
@@ -130,6 +131,7 @@ async function renderPage(view,role,identity,page=body.dataset.view,setCleanup=f
 }
 async function main(){
   startUpdateCheck();
+  checkAndroidUpdate().catch(()=>{});
   if(body.dataset.view==='login'){try{const pageModule=await import('../../pages/login/page.js');await pageModule.render();}catch(error){fail(error);}return;}
   const role=body.dataset.role,active=body.dataset.active,identity=await guard(role,active);
   if(!identity)return;
