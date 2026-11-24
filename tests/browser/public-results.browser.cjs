@@ -26,6 +26,18 @@ module.exports = async (page, { open, check, OUT }) => {
   check(order.join(',') === 'PH-1,PH-3,PH-2,PH-9', `rows grouped by race, each race's ranks in order (${order.join(',')})`);
   await page.screenshot({ path: `${OUT}/public-results.png`, fullPage: true });
 
+  check(!(await page.locator('.public-cards').isVisible()), 'desktop: table, no cards');
+  // Phones: one compact card per bird instead of the table.
+  await page.setViewportSize({ width: 390, height: 800 });
+  const cards = page.locator('.public-card');
+  check(await cards.count() === 4 && !(await page.locator('[data-public-results-table] .table-scroll').isVisible()), 'phone: cards instead of the table');
+  const first = await cards.first().innerText();
+  check(/BLUE LOFT/.test(first) && /PH-1 P1/.test(first) && /Batangas Derby/.test(first) && /1,500 m\/min/.test(first) && /✓ Verified/.test(first) && /Open/.test(first), `phone: card shows loft, ring, race, speed, verified, status (${first.replace(/\s+/g, ' ')})`);
+  check(/DQ/.test(await cards.last().innerText()) && (await cards.last().locator('.pc-rank').innerText()) === '–', 'phone: DQ card last, not ranked');
+  check(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'phone: no sideways scrolling');
+  await page.screenshot({ path: `${OUT}/public-results-phone.png`, fullPage: true });
+  await page.setViewportSize({ width: 1300, height: 900 });
+
   // A failed search hides the legend and toolbar of the previous one.
   await page.evaluate(() => { window.FAKE.rpc.public_race_results = { __error: { message: 'offline' } }; });
   await page.click('[data-public-results-form] [type=submit]'); await page.waitForTimeout(400);
