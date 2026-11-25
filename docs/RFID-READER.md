@@ -39,13 +39,18 @@ The simplest loft reader: an **ESP32-S3** board with two USB-C ports (e.g.
 ESP32-S3 DevKitC-1, "N16R8 dual Type-C") and a **USB 125 kHz desktop reader** (the
 kind that types the tag number and Enter, like a keyboard). Nothing else to wire.
 
+It has its **own, smaller sketch**:
+`tools/rfid-reader/avilonx-usb-reader/avilonx-usb-reader.ino` (no extra libraries
+needed). The main sketch also works with this setup, if you want to add an OLED or
+clock module later.
+
 1. **Connect:** the reader's USB plug → a **USB-A to USB-C OTG adapter** → the
    board's port marked **USB** (or OTG). Power and upload through the other port,
    marked **COM** or **UART**.
 2. **Arduino IDE:** Board **ESP32S3 Dev Module**, **USB Mode: Hardware CDC and
    JTAG**, **USB CDC On Boot: Disabled**, **Partition Scheme: Huge APP (3MB No
-   OTA/1MB SPIFFS)**. Libraries: MFRC522 and U8g2 (needed to compile even if
-   unused; nothing extra for the USB reader). Upload through the COM port.
+   OTA/1MB SPIFFS)**. With the small sketch nothing else is needed (the main
+   sketch also needs the MFRC522 and U8g2 libraries). Upload through the COM port.
 3. **Check:** the Serial Monitor (115200, COM port) says *USB 125 kHz reader
    connected*, and the reader's light is on. **If the light stays off**, the board
    is not giving 5 V to its USB port: bridge the small **USB-OTG / IN-OUT** pads
