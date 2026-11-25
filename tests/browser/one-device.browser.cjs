@@ -13,12 +13,12 @@ module.exports = async (page, { app, open, check, BASE, toast }) => {
   check(!(await rpcCalls('claim_account_device')).some(a => a.p_force), 'Cancel: the other device is not signed out');
   // OK signs the other device out and continues here.
   page.once('dialog', d => d.accept());
-  await page.click('#login-form button[type=submit]'); await page.waitForURL(/dashboard/, { timeout: 8000 }).catch(() => {});
-  check(/admin\/dashboard/.test(page.url()), 'OK: signed in here');
+  await page.click('#login-form button[type=submit]'); await page.waitForFunction(() => /admin\/dashboard/.test(sessionStorage.getItem('avilonx.route') || ''), null, { timeout: 8000 }).catch(() => {});
+  check(/admin\/dashboard/.test(await page.evaluate(() => sessionStorage.getItem('avilonx.route'))), 'OK: signed in here');
   // On the device that was taken over: signed out within the next check.
   await app(base + `F.session={user:{id:'u1'}};F.rpc.check_account_device={status:'replaced',device_label:'Safari on iPhone'};F.tables.races=[];F.tables.members=[];F.tables.race_points=[];F.tables.race_entries=[];`);
-  await page.goto(`${BASE}/repo/pages/admin/dashboard/index.html`); await page.waitForURL(/signedout=device/, { timeout: 8000 }).catch(() => {});
-  check(/login\/index\.html\?signedout=device/.test(page.url()), 'the replaced device is sent to sign in');
+  await page.goto(`${BASE}/repo/pages/admin/dashboard/index.html`); await page.waitForFunction(() => sessionStorage.getItem('avilonx.route') === 'pages/login/index.html', null, { timeout: 8000 }).catch(() => {});
+  check(await page.evaluate(() => sessionStorage.getItem('avilonx.route')) === 'pages/login/index.html', 'the replaced device is sent to sign in');
   await page.waitForSelector('[data-login-message]:not([hidden])', { timeout: 5000 }).catch(() => {});
   check(/signed in on another device/.test(await page.locator('[data-login-message]').innerText().catch(() => '')), 'and told why');
   // Club settings switch.

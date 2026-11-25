@@ -94,7 +94,7 @@ async function guard(role,active) {
     body.classList.toggle('admin-body',role==='admin');
     document.querySelector('#app-shell').innerHTML=`<aside class="sidebar" id="app-sidebar"><a class="brand" href="${homeFor(role)}"><img class="brand-logo" src="${url('assets/images/clocking-logo.png')}" alt="AvilonX pigeon clock logo" width="72" height="48"><span>AvilonX<span class="brand-sub">RACE CLOCKING</span></span></a>${role==='superadmin'||identity.profile.role==='staff'?`<div class="nav-label">${role==='superadmin'?'SUPERADMIN':'STAFF'}</div>`:''}<nav>${role==='superadmin'?superadminNav(active):role==='admin'?adminNav(active,identity.profile.role==='admin'):memberNav(active)}</nav><div class="sidebar-bottom"><div class="signed-in"><span class="avatar">${escapeHTML((identity.profile.username||'M')[0].toUpperCase())}</span><span class="signed-email">${escapeHTML(identity.profile.username||'Account')}</span></div>${languageSwitchHtml()}<button class="nav-link app-check" type="button" data-app-check hidden>${navIcon('history')}<span>Check for updates <small class="app-version" data-app-version></small></span></button><button class="nav-link signout" id="sign-out">${navIcon('signout')}<span>Sign out</span></button></div></aside><main class="main"><div class="nav-backdrop" id="nav-backdrop"></div><header class="topbar"><div class="topbar-left"><button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open menu">☰</button><div><div class="eyebrow">${escapeHTML(role==='superadmin'?'SUPERADMIN':(identity.club?.name||'PIGEON RACING CLUB').toUpperCase())}</div><h1>${escapeHTML(document.body.dataset.title||'Race clocking')}</h1></div></div><div class="topbar-right"><span class="live-dot"></span><span>Supabase connected</span><span class="timezone">PH · UTC+8</span></div></header><div class="page-content"><div data-message class="notice" hidden></div><section class="page-view" data-view="${escapeHTML(body.dataset.view)}"></section><footer>Clock receipts are recorded by Supabase server time and remain provisional until verified by the club.</footer></div></main>${bottomNav(active,role)}`;
     body.classList.add('has-bottom-nav');
-    document.querySelector('#menu-toggle').onclick=()=>setMenu(!body.classList.contains('nav-open'));document.querySelector('#nav-backdrop').onclick=()=>setMenu(false);document.querySelector('[data-open-menu]')?.addEventListener('click',()=>setMenu(!body.classList.contains('nav-open')));document.querySelector('#sign-out').addEventListener('click',async(event)=>{const button=event.currentTarget;if(button.disabled)return;button.disabled=true;button.setAttribute('aria-busy','true');button.querySelector('.nav-icon').textContent='…';try{await Promise.race([releaseDevice().then(signOutUser),new Promise(resolve=>setTimeout(resolve,1800))]);}catch(error){console.warn('Supabase local sign-out failed; redirecting to sign-in:',error);}finally{location.replace(url('pages/login/index.html'));}});
+    document.querySelector('#menu-toggle').onclick=()=>setMenu(!body.classList.contains('nav-open'));document.querySelector('#nav-backdrop').onclick=()=>setMenu(false);document.querySelector('[data-open-menu]')?.addEventListener('click',()=>setMenu(!body.classList.contains('nav-open')));document.querySelector('#sign-out').addEventListener('click',async(event)=>{const button=event.currentTarget;if(button.disabled)return;forgetRoute();button.disabled=true;button.setAttribute('aria-busy','true');button.querySelector('.nav-icon').textContent='…';try{await Promise.race([releaseDevice().then(signOutUser),new Promise(resolve=>setTimeout(resolve,1800))]);}catch(error){console.warn('Supabase local sign-out failed; redirecting to sign-in:',error);}finally{location.replace(url('pages/login/index.html'));}});
     bindLanguageSwitch(document.querySelector('#app-shell'));bindAppUpdateButton(document.querySelector('#app-shell'));startTranslation();
     return identity;
   } catch(error){fail(error);return null;}
@@ -132,7 +132,7 @@ async function renderPage(view,role,identity,page=body.dataset.view,setCleanup=f
 async function main(){
   startUpdateCheck();
   checkAndroidUpdate().catch(()=>{});
-  if(body.dataset.view==='login'){try{const pageModule=await import('../../pages/login/page.js');await pageModule.render();}catch(error){fail(error);}return;}
+  if(body.dataset.view==='login'){try{const pageModule=await import('../../pages/login/page.js');await pageModule.render();showSiteOnly('pages/login/index.html');}catch(error){fail(error);}return;}
   const role=body.dataset.role,active=body.dataset.active,identity=await guard(role,active);
   if(!identity)return;
   // One device per account: sign out here when another device took the account over.
@@ -368,12 +368,24 @@ function setMenu(open){
   body.classList.toggle('nav-open',open);
   document.querySelectorAll('#menu-toggle,[data-open-menu]').forEach(button=>button.setAttribute('aria-expanded',String(open)));
 }
+// The address bar shows only the site (www.avilonx.site/). The page in use is kept
+// in the history entry and in this tab's session, so Back, Forward and Refresh
+// still return to it (index.html sends a refreshed tab back to it).
+const ROUTE_KEY='avilonx.route';
+let currentPath=null;
+function showSiteOnly(path){
+  currentPath=path;
+  try{sessionStorage.setItem(ROUTE_KEY,path);}catch{/* storage unavailable */}
+  try{history.replaceState({appRoute:true,path},'',url(''));}catch{/* history unavailable */}
+}
+const forgetRoute=()=>{try{sessionStorage.removeItem(ROUTE_KEY);}catch{/* storage unavailable */}};
 let navigationToken=0;
 async function navigateRoute(route,{push=true,identity=null}={}){
   if(!route||route.role!==body.dataset.role)return;
   const token=++navigationToken;
   const cleanup=currentPageCleanup;currentPageCleanup=()=>{};cleanup();
-  if(push)history.pushState({appRoute:true},'',url(route.path));
+  if(push)history.pushState({appRoute:true,path:route.path},'',url(''));
+  showSiteOnly(route.path);
   setMenu(false);
   body.dataset.title=route.title;body.dataset.view=route.view;body.dataset.active=route.active;
   document.title=route.documentTitle;
@@ -417,10 +429,10 @@ document.addEventListener('click',event=>{
   if(!route||route.role!==body.dataset.role||!document.querySelector('.page-view'))return;
   event.preventDefault();navigateRoute(route);
 });
-window.addEventListener('popstate',()=>{
-  const route=routeFor(location.href);
+window.addEventListener('popstate',event=>{
+  const route=event?.state?.path?routeFor(url(event.state.path)):routeFor(location.href);
   if(route&&route.role===body.dataset.role)navigateRoute(route,{push:false});
 });
-window.addEventListener('app:refresh',()=>navigateRoute(routeFor(location.href),{push:false}));
+window.addEventListener('app:refresh',()=>navigateRoute(routeFor(currentPath?url(currentPath):location.href),{push:false}));
 document.addEventListener('keydown',event=>{if(event.key==='Escape')setMenu(false);});
 main();
