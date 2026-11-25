@@ -47,7 +47,7 @@ function mountForecast(panel,openRaces,entries,member){
   const mine=race=>entries.find(entry=>entry.race_id===race.id&&Number(entry.distance_m)>0);
   const sorted=openRaces.slice().sort((a,b)=>Number(Boolean(mine(b)))-Number(Boolean(mine(a)))||String(b.release_at_utc||'').localeCompare(String(a.release_at_utc||'')));
   const distanceFor=race=>{const entry=mine(race);if(entry)return Number(entry.distance_m);const ok=[member.latitude,member.longitude,race.release_latitude,race.release_longitude].every(v=>v!==null&&v!==''&&Number.isFinite(Number(v)));return ok?distanceMeters(Number(race.release_latitude),Number(race.release_longitude),Number(member.latitude),Number(member.longitude)):null;};
-  // Compact, like the SMS: one summary line, then speed → arrival in a tight grid.
+  // Compact: one summary line, then speed, arrival and flight time in one table.
   const picker=sorted.length>1?`<select class="forecast-race" data-forecast-race aria-label="Race">${sorted.map(race=>`<option value="${race.id}">${escapeHTML(race.name)}</option>`).join('')}</select>`:'';
   panel.hidden=false;
   panel.innerHTML=`<div class="forecast-head"><h2>Speed forecast <span class="forecast-approx">approx.</span></h2>${picker}</div><div data-forecast-body></div>`;
@@ -55,7 +55,7 @@ function mountForecast(panel,openRaces,entries,member){
     const race=sorted.find(item=>String(item.id)===String(panel.querySelector('[data-forecast-race]')?.value??sorted[0].id))||sorted[0];
     const distance=distanceFor(race),rows=speedForecast(race.release_at_utc,distance);
     const summary=[sorted.length>1?'':`<strong>${escapeHTML(race.name)}</strong>`,race.release_at_utc?`Released ${escapeHTML(formatDateSeconds(race.release_at_utc))}`:'Release not set yet',escapeHTML(race.release_location||''),distance?`${escapeHTML(distanceKm(distance))}${mine(race)?'':' (your loft, not entered yet)'}`:''].filter(Boolean).join(' · ');
-    panel.querySelector('[data-forecast-body]').innerHTML=`<p class="forecast-summary">${summary}</p>${rows.length?`<ol class="forecast-grid" aria-label="Arrival time at your loft for each speed in m/min">${rows.map(row=>`<li title="Flight ${flightClock(row.flightSeconds)}"><span>${escapeHTML(number(row.speed))}</span><strong>${phClock(row.arrivalMs)}</strong></li>`).join('')}</ol>`:`<p class="small forecast-empty">${race.release_at_utc?'Your loft distance is not available yet. Ask your club to check your loft coordinates.':'The forecast appears once the club sets the official release time.'}</p>`}`;
+    panel.querySelector('[data-forecast-body]').innerHTML=`<p class="forecast-summary">${summary}</p>${rows.length?`<table class="forecast-table"><thead><tr><th scope="col">Speed · m/min</th><th scope="col">Arrival</th><th scope="col">Flight</th></tr></thead><tbody>${rows.map(row=>`<tr><th scope="row">${escapeHTML(number(row.speed))}</th><td><strong>${phClock(row.arrivalMs)}</strong></td><td>${flightClock(row.flightSeconds)}</td></tr>`).join('')}</tbody></table>`:`<p class="small forecast-empty">${race.release_at_utc?'Your loft distance is not available yet. Ask your club to check your loft coordinates.':'The forecast appears once the club sets the official release time.'}</p>`}`;
   };
   panel.querySelector('[data-forecast-race]')?.addEventListener('change',draw);
   draw();

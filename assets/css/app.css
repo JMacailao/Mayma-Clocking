@@ -1216,13 +1216,16 @@ dialog::backdrop{background:rgba(15,23,42,.5);overflow:hidden;overscroll-behavio
 .forecast-race{min-height:34px;max-width:100%;padding:0 28px 0 10px;border:1px solid #cbd5e1;border-radius:var(--radius-sm);background:#fff;color:var(--ink);font-size:14px}
 .forecast-summary{margin:0 0 10px;color:var(--muted);font-size:13px;line-height:1.45}
 .forecast-summary strong{color:var(--ink);font-weight:600}
-.forecast-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0 28px;margin:0;padding:6px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--soft);list-style:none;font-variant-numeric:tabular-nums}
-.forecast-grid li{display:flex;align-items:baseline;gap:10px;padding:4px 0;font-size:13px}
-.forecast-grid span{min-width:38px;text-align:right}
-.forecast-grid span{color:var(--muted);font-size:12px}
-.forecast-grid strong{color:var(--ink);font-weight:600}
+.forecast-table{width:100%;min-width:0;max-width:560px;border-collapse:separate;border-spacing:0;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--soft);font-variant-numeric:tabular-nums;overflow:hidden}
+.forecast-table th,.forecast-table td{padding:5px 12px;border-bottom:1px solid #e3e9f1;text-align:left;font-size:13px;white-space:nowrap}
+.forecast-table tr:last-child th,.forecast-table tr:last-child td{border-bottom:0}
+.forecast-table thead th{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.forecast-table tbody th{color:var(--ink);font-weight:600}
+.forecast-table td{color:#475569}
+.forecast-table th:last-child,.forecast-table td:last-child{text-align:right}
+.forecast-table strong{color:var(--ink);font-weight:600}
 .forecast-empty{margin:0}
-@media(max-width:720px){.forecast-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.forecast-race{flex:1 1 100%;font-size:16px}}
+@media(max-width:720px){.forecast-table th,.forecast-table td{padding:5px 10px}.forecast-race{flex:1 1 100%;font-size:16px}}
 
 /* Android app: Check for updates in the menu (shown only inside the app). */
 .nav-link[hidden]{display:none}
