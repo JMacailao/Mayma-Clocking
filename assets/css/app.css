@@ -1230,3 +1230,12 @@ dialog::backdrop{background:rgba(15,23,42,.5);overflow:hidden;overscroll-behavio
 /* Android app: Check for updates in the menu (shown only inside the app). */
 .nav-link[hidden]{display:none}
 .app-version{color:var(--muted);font-size:12px;font-weight:500}
+
+/* Member clocking: Sticker / Eclock tabs (underline + colour for the selected tab). */
+.clock-tab-bar{display:flex;gap:4px;margin:0 0 12px;border-bottom:1px solid var(--line);overflow-x:auto}
+.clock-tab-bar [role="tab"]{position:relative;flex:none;min-height:var(--target);padding:0 18px;border:0;background:none;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer}
+.clock-tab-bar [role="tab"]:hover{color:var(--ink)}
+.clock-tab-bar [aria-selected="true"]{color:var(--green)}
+.clock-tab-bar [aria-selected="true"]::after{content:"";position:absolute;inset:auto 8px -1px;border-bottom:3px solid var(--green);border-radius:3px 3px 0 0}
+.clock-tab-bar [role="tab"]:focus-visible{outline:2px solid var(--green);outline-offset:-2px;border-radius:6px}
+@media(max-width:720px){.clock-tab-bar [role="tab"]{flex:1 1 0}}
