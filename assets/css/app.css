@@ -1239,3 +1239,10 @@ dialog::backdrop{background:rgba(15,23,42,.5);overflow:hidden;overscroll-behavio
 .clock-tab-bar [aria-selected="true"]::after{content:"";position:absolute;inset:auto 8px -1px;border-bottom:3px solid var(--green);border-radius:3px 3px 0 0}
 .clock-tab-bar [role="tab"]:focus-visible{outline:2px solid var(--green);outline-offset:-2px;border-radius:6px}
 @media(max-width:720px){.clock-tab-bar [role="tab"]{flex:1 1 0}}
+
+/* Clocking history: date filter. */
+.history-filter{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 12px;margin:0 0 14px}
+.history-filter .field{flex:0 1 180px;min-width:0}
+.history-filter input{width:100%;min-width:0}
+.history-count{align-self:center}
+@media(max-width:720px){.history-filter .field{flex:1 1 120px}.history-filter .button{flex:0 0 auto}}

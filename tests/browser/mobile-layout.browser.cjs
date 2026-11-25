@@ -18,8 +18,16 @@ module.exports = async (page, { app, check, sample, BASE, OUT }) => {
 
   // Tapping an item navigates and moves the highlight.
   await page.locator('.member-bottom-nav a', { hasText: 'Races' }).click();
-  await page.waitForURL(/admin\/races/); await page.waitForSelector('[data-race-row]');
+  await page.waitForFunction(() => sessionStorage.getItem('avilonx.route') === 'pages/admin/races/index.html'); await page.waitForSelector('[data-race-row]');
+  check(new URL(page.url()).pathname === '/repo/', `the address shows only the site (${page.url()})`);
   check(await page.locator('.member-bottom-link[aria-current="page"]').innerText() === 'Races', 'phone: tapping Races opens it and marks it');
+  // Only the site in the address bar, but Refresh, Back and Forward still work.
+  await page.reload(); await page.waitForSelector('[data-race-row]', { timeout: 8000 }).catch(() => {});
+  check(await page.locator('.topbar h1').innerText() === 'Race schedules' && new URL(page.url()).pathname === '/repo/', 'Refresh: same page, address still only the site');
+  await page.goBack(); await page.waitForTimeout(800);
+  check(await page.locator('.topbar h1').innerText() === 'Overview', `Back: previous page (${await page.locator('.topbar h1').innerText()})`);
+  await page.goForward(); await page.waitForSelector('[data-race-row]', { timeout: 8000 }).catch(() => {});
+  check(await page.locator('.topbar h1').innerText() === 'Race schedules', 'Forward: next page');
   const padding = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.page-content')).paddingBottom));
   check(padding >= 64, `phone: content clears the bar (${padding}px)`);
 
@@ -45,7 +53,7 @@ module.exports = async (page, { app, check, sample, BASE, OUT }) => {
   check(await page.evaluate(() => document.body.classList.contains('nav-open')) && await onScreen(page.locator('#app-sidebar')) && await page.locator('#app-sidebar').getByText('Race entries').isVisible() && await page.locator('#sign-out').isVisible(), 'More opens the menu with every page and Sign out');
   check(await page.locator('.member-bottom-nav [data-open-menu]').getAttribute('aria-expanded') === 'true', 'More reports it is open');
   await page.locator('#app-sidebar').getByText('Race entries').click();
-  await page.waitForURL(/admin\/entries/); await page.waitForTimeout(300);
+  await page.waitForFunction(() => sessionStorage.getItem('avilonx.route') === 'pages/admin/entries/index.html'); await page.waitForTimeout(300);
   check(!(await page.evaluate(() => document.body.classList.contains('nav-open'))) && await page.locator('.member-bottom-nav [data-open-menu]').evaluate(e => e.classList.contains('is-active')), 'a page from More closes the menu and highlights More');
 
   // Tablet and desktop: sidebar, no bottom bar; Race details still shown.
