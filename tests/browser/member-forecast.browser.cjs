@@ -9,10 +9,10 @@ module.exports = async (page, { open, check, OUT, sample }) => {
   const panel = page.locator('[data-forecast]');
   check(await panel.isVisible() && await panel.locator('[data-forecast-race]').count() === 0, 'one open race: forecast without a picker');
   const headers = await panel.locator('.forecast-table thead th').allInnerTexts();
-  check(headers.map(h => h.trim().toLowerCase()).join('|') === 'speed · m/min|flight|arrival', `column headers kept (${headers.join(' | ')})`);
+  check(headers.map(h => h.trim().toLowerCase()).join('|') === 'speed · m/min|arrival|flight', `column headers kept (${headers.join(' | ')})`);
   const rows = await panel.locator('.forecast-table tbody tr').allInnerTexts();
   const first = (rows[0] || '').replace(/\s+/g, ' '), last = (rows.at(-1) || '').replace(/\s+/g, ' ');
-  check(rows.length === 10 && /^1,400 00:26:03 06:36:03$/.test(first) && /^500 01:12:57 07:22:57$/.test(last), `1400 to 500 m/min, as in the SMS (${first} … ${last})`);
+  check(rows.length === 10 && /^1,400 06:36:03 00:26:03$/.test(first) && /^500 07:22:57 01:12:57$/.test(last), `1400 to 500 m/min, as in the SMS (${first} … ${last})`);
   const meta = (await panel.locator('.forecast-summary').innerText()).replace(/\s+/g, ' ');
   check(/Happy valle \(SOCCORO\)/.test(meta) && /36\.477 km/.test(meta) && /Nov 19, 2026, 6:10:00/.test(meta), `release, location and distance shown (${meta})`);
 
