@@ -33,6 +33,30 @@ button is used.
    - a buzzer module that sounds on LOW: `#define BUZZER_ACTIVE_LOW 1`
    - ESP8266 with an older wiring: `#define ESP8266_WIRING 2` or `1` (see below)
 
+## ESP32-S3 + USB 125 kHz reader (only these two)
+
+The simplest loft reader: an **ESP32-S3** board with two USB-C ports (e.g.
+ESP32-S3 DevKitC-1, "N16R8 dual Type-C") and a **USB 125 kHz desktop reader** (the
+kind that types the tag number and Enter, like a keyboard). Nothing else to wire.
+
+1. **Connect:** the reader's USB plug → a **USB-A to USB-C OTG adapter** → the
+   board's port marked **USB** (or OTG). Power and upload through the other port,
+   marked **COM** or **UART**.
+2. **Arduino IDE:** Board **ESP32S3 Dev Module**, **USB Mode: Hardware CDC and
+   JTAG**, **USB CDC On Boot: Disabled**, **Partition Scheme: Huge APP (3MB No
+   OTA/1MB SPIFFS)**. Libraries: MFRC522 and U8g2 (needed to compile even if
+   unused; nothing extra for the USB reader). Upload through the COM port.
+3. **Check:** the Serial Monitor (115200, COM port) says *USB 125 kHz reader
+   connected*, and the reader's light is on. **If the light stays off**, the board
+   is not giving 5 V to its USB port: bridge the small **USB-OTG / IN-OUT** pads
+   near the ports, or use an OTG adapter with its own power.
+4. **Tags:** register the 125 kHz tags in AvilonX with the **same reader on a
+   computer** (Super Admin → Register NFC). The number the reader types (e.g.
+   `0012345678`) is turned into the same tag ID on the ESP32-S3 as on the website.
+
+Without a clock module the tap time comes from the internet (set after power-up);
+an OLED, DS3231 and buzzer can be added later on GPIO8/9 (I2C) and GPIO4.
+
 ## Wiring: ESP32 (recommended)
 
 Everything on **3.3 V** (3V3 pin).

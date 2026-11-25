@@ -79,6 +79,23 @@
     Buzzer:  optional active 3.3 V buzzer module, signal->GPIO4
     LED:     the board's blue LED (GPIO2)
 
+  ESP32-S3 (ESP32-S3 DevKitC-1 or similar, two USB-C ports) with a USB 125 kHz
+  reader (the desktop kind that types the tag number like a keyboard):
+    125 kHz reader: its USB cable into the board's "USB" (OTG) port, using a
+             USB-A to USB-C OTG adapter. Power and upload through the other
+             port ("COM"/"UART"). If the reader's light stays off, the board
+             gives no 5 V to its USB port: bridge the "USB-OTG" (IN-OUT) pads
+             near the ports, or use a powered OTG adapter.
+    OLED:    SDA->GPIO8  SCL->GPIO9
+    DS3231:  SDA->GPIO8  SCL->GPIO9 (same wires as the OLED)
+             (or a DS1302: CLK->GPIO5  DAT->GPIO6  RST->GPIO7)
+    Buzzer:  optional, signal->GPIO4
+    Button:  the board's BOOT button
+    Arduino IDE: Board "ESP32S3 Dev Module", USB Mode "Hardware CDC and JTAG",
+    USB CDC On Boot "Disabled", Partition Scheme "Huge APP (3MB No OTA/1MB
+    SPIFFS)". No extra library for the USB reader. Register the 125 kHz tags in
+    AvilonX with the same reader on a computer: the numbers then match.
+
   The clock is found by itself: a DS3231 (more accurate, shares the OLED's two
   wires) or a DS1302. The blue LED blinks once for a clocked tap and 3 times
   for a refusal; the buzzer beeps once for each tap and twice for a refusal.
@@ -101,6 +118,7 @@
 #define ESP8266_WIRING 3  // ESP8266 only: 3 = recommended (DS3231), 2 = OLED + DS1302, 1 = first wiring
 #define OLED_SH1106 0     // 0 = 0.96" SSD1306 OLED, 1 = 1.3" SH1106 OLED
 #define BUZZER_ACTIVE_LOW 0  // 1 if your buzzer module sounds when its signal is LOW
+#define USB_125KHZ_READER 1  // ESP32-S3 only: a USB 125 kHz reader on the board's USB (OTG) port
 
 #include <Arduino.h>
 #if defined(ESP8266)
@@ -133,11 +151,27 @@
 #include <time.h>
 #include <sys/time.h>
 #include <functional>
-#include <SPI.h>
-#include <MFRC522.h>
 
 #define NO_PIN 255        // not connected
-#if defined(ESP32)
+#if defined(ESP32) && defined(CONFIG_IDF_TARGET_ESP32S3)
+  // ESP32-S3 DevKit: a USB 125 kHz reader on the USB (OTG) port, and/or an RC522.
+  #define USE_USB_READER USB_125KHZ_READER
+  #define USE_RC522 (!USB_125KHZ_READER)
+  #define RFID_SS_PIN  10     // RC522 SDA (only when an RC522 is used)
+  #define RFID_RST_PIN 14     // RC522 RST
+  #define I2C_SDA_PIN 8       // OLED and DS3231
+  #define I2C_SCL_PIN 9
+  #define RTC_CLK_PIN 5       // DS1302 CLK (when there is no DS3231)
+  #define RTC_DAT_PIN 6       // DS1302 DAT
+  #define RTC_RST_PIN 7       // DS1302 RST (CE)
+  #define RESET_BUTTON_PIN 0  // the board's BOOT button
+  #define RESET_BUTTON2_PIN NO_PIN
+  #define BUZZER_PIN 4
+  #define STATUS_LED_PIN 2    // not used: the S3 DevKit's LED is a colour LED on GPIO48
+  #define STATUS_LED_ON HIGH
+  #define USE_STATUS_LED 0
+  #define RFID_WIRING_HINT "SDA GPIO10, SCK GPIO12, MOSI GPIO11, MISO GPIO13, RST GPIO14, 3.3V, GND"
+#elif defined(ESP32)
   #define RFID_SS_PIN  5      // RC522 SDA
   #define RFID_RST_PIN 27     // RC522 RST
   #define I2C_SDA_PIN 21      // OLED and DS3231
@@ -198,6 +232,10 @@
   #define USE_STATUS_LED 1
   #define RFID_WIRING_HINT "SDA D8, SCK D5, MOSI D7, MISO D6, RST D0, 3.3V, GND"
 #endif
+#ifndef USE_RC522
+  #define USE_RC522 1
+  #define USE_USB_READER 0
+#endif
 #define USE_OLED (I2C_SDA_PIN != NO_PIN)
 #define HAS_DS1302 (RTC_CLK_PIN != NO_PIN)
 #define RESET_BUTTON_PULLUP (RESET_BUTTON_PIN != 16)  // GPIO16 has no pull-up: it needs the resistor
@@ -207,6 +245,19 @@
 #if USE_OLED
   #include <Wire.h>
   #include <U8g2lib.h>
+#endif
+#if USE_RC522
+  #include <SPI.h>
+  #include <MFRC522.h>
+#endif
+#if USE_USB_READER
+  #include <usb/usb_host.h>
+#endif
+// The reader's name on the screen and the page.
+#if USE_USB_READER
+  #define READER_LABEL "USB 125kHz"
+#else
+  #define READER_LABEL "RFID RC522"
 #endif
 
 // Factory defaults for the reader hotspot; users can change these on the local website.
@@ -219,7 +270,9 @@ const char* SUPABASE_URL = "https://utfxtwgqdbjkbxlooolr.supabase.co";
 const char* SUPABASE_KEY = "sb_publishable_bUkPWYhRAP0nYd9yL01ObA__PJ3Q4v3";
 
 WebServerType server(80);
+#if USE_RC522
 MFRC522 reader(RFID_SS_PIN, RFID_RST_PIN);  // NO_PIN (255): reset by command
+#endif
 
 // Saved in flash. Fields are only ever appended, so older settings carry over.
 struct Settings {
@@ -332,7 +385,7 @@ const char PAGE[] PROGMEM = R"HTML(
 const $=id=>document.getElementById(id);let previousUID='',updating=false,scanning=false;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 function statusBadge(el,label,good){el.textContent=label;el.className='status '+(good?'good':'bad');}
-async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;if($('rfidState')){$('rfidState').textContent=s.rfid_ok?('OK'+(s.rfid_restarts?' (restarted '+s.rfid_restarts+'x)':'')):'Not answering: check RC522 wiring and 3.3V';$('rfidState').className=s.rfid_ok?'ok':'bad';}$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=(s.clock_synced?'clock is set from '+(/^ds/.test(s.clock_source)?'the '+s.clock_source.slice(0,6).toUpperCase()+' battery clock':'internet time')+', Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)')+(/_unset$/.test(s.clock_source)?'. The '+s.clock_source.slice(0,6).toUpperCase()+' needs internet once to set its time':'')+(s.clock_source==='internet'?'. No DS3231 or DS1302 found: the time is lost if the reader is switched off':'');statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=(s.ap_ssid||'RFID-READER')+(s.ap_on?'':' (off while on your Wi-Fi: press the board button once to turn it on)');$('lan').textContent=s.router_ip?('http://'+s.router_ip+'  or  http://'+s.hostname+'.local'):'Connect the reader to your Wi-Fi first';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';$('avilonxState').textContent=s.avilonx_online?'Online (the club can see this reader)':(s.wifi_connected?'Not reachable yet':'Offline (no internet)');statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const wb=$('waiting');if(wb){const w=s.waiting||[];$('waitingBox').hidden=!w.length;wb.replaceChildren();w.forEach((x,i)=>{const tr=document.createElement('tr');[String(i+1),x.uid,x.time].forEach((v,k)=>{const td=document.createElement('td');td.textContent=v;if(k===1)td.className='tagcode';tr.appendChild(td);});wb.appendChild(tr);});}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
+async function update(){if(updating)return;updating=true;try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('offline');const s=await r.json();$('uid').textContent=s.last_uid;if($('rfidState')){$('rfidState').textContent=s.reader_kind==='usb125'?(s.rfid_ok?'USB 125 kHz reader connected':'USB 125 kHz reader not found: plug it into the USB (OTG) port'):s.rfid_ok?('OK'+(s.rfid_restarts?' (restarted '+s.rfid_restarts+'x)':'')):'Not answering: check RC522 wiring and 3.3V';$('rfidState').className=s.rfid_ok?'ok':'bad';}$('reply').textContent=s.last_reply;$('mode').textContent=s.mode||'—';$('count').textContent=s.total_scans;$('pending').textContent=s.pending;$('serial').textContent=s.serial;$('topSerial').textContent=s.serial;$('clockState').textContent=(s.clock_synced?'clock is set from '+(/^ds/.test(s.clock_source)?'the '+s.clock_source.slice(0,6).toUpperCase()+' battery clock':'internet time')+', Philippine time '+s.reader_time:'clock NOT set yet (connect to the internet once)')+(/_unset$/.test(s.clock_source)?'. The '+s.clock_source.slice(0,6).toUpperCase()+' needs internet once to set its time':'')+(s.clock_source==='internet'?'. No DS3231 or DS1302 found: the time is lost if the reader is switched off':'');statusBadge($('keyStatus'),s.key_saved?'Key saved':'Not saved',s.key_saved);$('ssid').textContent=s.saved_ssid||'Not set';$('apName').textContent=(s.ap_ssid||'RFID-READER')+(s.ap_on?'':' (off while on your Wi-Fi: press the board button once to turn it on)');$('lan').textContent=s.router_ip?('http://'+s.router_ip+'  or  http://'+s.hostname+'.local'):'Connect the reader to your Wi-Fi first';if(!document.activeElement||document.activeElement!==$('apSsidInput'))$('apSsidInput').placeholder=s.ap_ssid||'RFID-READER';$('ip').textContent=s.router_ip||'—';$('avilonxState').textContent=s.avilonx_online?'Online (the club can see this reader)':(s.wifi_connected?'Not reachable yet':'Offline (no internet)');statusBadge($('wifiStatus'),s.wifi_connected?'Connected':'Disconnected',s.wifi_connected);$('topOnline').textContent=s.wifi_connected?'Online':'Local only';$('dot').className='dot'+(s.wifi_connected?' on':'');if(!s.storage_ready)statusBadge($('readyBadge'),'Storage error',false);if(s.last_uid!==previousUID){previousUID=s.last_uid;const el=$('scannerCard');el.classList.remove('scanpulse');void el.offsetWidth;el.classList.add('scanpulse');}const wb=$('waiting');if(wb){const w=s.waiting||[];$('waitingBox').hidden=!w.length;wb.replaceChildren();w.forEach((x,i)=>{const tr=document.createElement('tr');[String(i+1),x.uid,x.time].forEach((v,k)=>{const td=document.createElement('td');td.textContent=v;if(k===1)td.className='tagcode';tr.appendChild(td);});wb.appendChild(tr);});}const body=$('history');body.replaceChildren();const items=s.history||[];$('recentCount').textContent='Latest '+items.length;if(!items.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No scans yet';td.className='muted';tr.appendChild(td);body.appendChild(tr);}else{items.forEach((line,i)=>{const match=line.match(/^([^ ]+)\s+-\s+(.*)$/);const uid=match?match[1]:line;const reply=match?match[2]:'Pending';const tr=document.createElement('tr');[String(i+1),uid,reply].forEach((val,k)=>{const td=document.createElement('td');td.textContent=val;if(k===0){const span=document.createElement('span');span.className='num';span.textContent=val;td.replaceChildren(span);}if(k===1)td.className='tagcode';if(k===2)td.className='record';tr.appendChild(td);});body.appendChild(tr);});}}catch(e){$('topOnline').textContent='Offline';$('dot').className='dot';statusBadge($('wifiStatus'),'Reader unreachable',false);}finally{updating=false;}}
 async function scanNetworks(){if(scanning)return;scanning=true;const btn=$('scanBtn'),select=$('network');btn.disabled=true;select.replaceChildren(new Option('Scanning networks...',''));try{let items=null;for(let i=0;i<15&&!items;i++){const r=await fetch('/api/networks',{cache:'no-store'});if(r.status===202){await wait(1000);continue;}if(!r.ok)throw Error('scan failed');items=await r.json();}if(!items)throw Error('scan timed out');select.replaceChildren(new Option('Choose a Wi-Fi network',''));items.forEach(n=>select.add(new Option(n.ssid+' ('+n.rssi+' dBm)'+(n.open?' - Open':''),n.ssid)));$('message').textContent=items.length?'':'No Wi-Fi networks found. Try again.';}catch(e){select.replaceChildren(new Option('Could not scan',''));$('message').textContent='Wi-Fi scan failed. Try again.';}finally{scanning=false;btn.disabled=false;}}
 async function post(url,form,output){output.textContent='Saving...';try{const r=await fetch(url,{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok)update();}catch(e){output.textContent='Could not save. Check that you are connected to the reader hotspot.';}}
 $('scanBtn').addEventListener('click',scanNetworks);$('forgetWifi').addEventListener('click',async()=>{if(!confirm('Forget the saved Wi-Fi? The reader restarts with only its own hotspot ('+($('apName').textContent.split(' (')[0]||'RFID-READER')+', http://192.168.4.1). The device key and saved taps are kept.'))return;$('message').textContent='Forgetting...';try{const r=await fetch('/wifi/forget',{method:'POST'});$('message').textContent=await r.text();}catch(e){$('message').textContent='Could not reach the reader.';}});$('copySerial').addEventListener('click',()=>{const text=$('serial').textContent;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>{$('copySerial').textContent='Copied';});else window.prompt('Copy device serial',text);});$('wifiForm').addEventListener('submit',e=>{e.preventDefault();post('/wifi/save',e.target,$('message')).then(()=>$('password').value='');});$('keyForm').addEventListener('submit',e=>{e.preventDefault();post('/device/save',e.target,$('keyMessage')).then(()=>$('key').value='');});$('apForm').addEventListener('submit',async e=>{e.preventDefault();const form=e.target,output=$('apMessage'),pw=$('apPasswordInput').value;if(pw!==$('apConfirmInput').value){output.textContent='Passwords do not match.';return;}output.textContent='Saving hotspot credentials...';try{const r=await fetch('/ap/save',{method:'POST',body:new URLSearchParams(new FormData(form))});output.textContent=await r.text();if(r.ok){$('apPasswordInput').value='';$('apConfirmInput').value='';}}catch(err){output.textContent='Could not save; check your connection.';}});update();setInterval(update,1000);scanNetworks();
@@ -429,7 +482,11 @@ void drawWrapped(uint8_t first, const String &text) {
 int neededItems(String *items, int room) {
   int n = 0;
   auto add = [&](const String &text) { if (n < room) items[n++] = text; };
+#if USE_USB_READER
+  if (!rfidOk) { add(F("USB reader NOT FOUND")); add(F(" plug in USB OTG port")); }
+#else
   if (!rfidOk) { add(F("RFID reader NOT FOUND")); add(F(" check RC522 wiring")); }
+#endif
   if (!storageReady) add(F("Storage error!"));
   if (!config.deviceKey[0]) { add(F("Device key: join")); add(String(" ") + config.apSsid); add(F(" open 192.168.4.1")); }
   if (!config.ssid[0]) { add(F("Wi-Fi not set: join")); add(String(" ") + config.apSsid); add(F(" open 192.168.4.1")); }
@@ -463,7 +520,7 @@ void updateDisplay() {
   if ((int32_t)(now - bootScreenUntilMs) < 0) {
     // Start-up: which modules were found.
     drawTitle(F("AvilonX " BOARD_NAME), F("CHECK"));
-    drawLine(0, rfidOk ? F("RFID RC522: OK") : F("RFID RC522: NOT FOUND"));
+    drawLine(0, rfidOk ? F(READER_LABEL ": OK") : F(READER_LABEL ": NOT FOUND"));
     drawLine(1, !rtcPresent ? String(F("Clock module: MISSING")) : String(rtcName()) + (rtcValid ? " clock: OK" : " clock: not set"));
     drawLine(2, storageReady ? F("Storage   : OK") : F("Storage   : ERROR"));
     drawLine(3, config.ssid[0] ? String("Wi-Fi: ") + config.ssid : String(F("Wi-Fi     : not set")));
@@ -1093,7 +1150,9 @@ void handleStatus() {
   result += lastMode == "clock" ? F("Clocking") : lastMode == "register" ? F("Register") : F("");
   result += F("\",\"total_scans\":");
   result += String(totalScans);
-  result += F(",\"rfid_ok\":");
+  result += F(",\"reader_kind\":\"");
+  result += USE_USB_READER ? F("usb125") : F("rc522");
+  result += F("\",\"rfid_ok\":");
   result += rfidOk ? F("true") : F("false");
   result += F(",\"rfid_restarts\":");
   result += String(rfidRestarts);
@@ -1411,6 +1470,7 @@ void sendPending() {
   }
 }
 
+#if USE_RC522
 // True when the RC522 answers with a known chip version (0x00 / 0xFF = no answer).
 bool rfidAnswers() {
   byte version = reader.PCD_ReadRegister(MFRC522::VersionReg);
@@ -1475,6 +1535,28 @@ String pollRfid() {
   lastSeenAt = now;
   return String(hex);
 }
+#else
+void watchRfidReader() {}
+String pollRfid() { return ""; }
+#endif
+
+// The tag number a keyboard-type reader typed, as AvilonX stores it (the same
+// as the website does with a USB reader): a 125 kHz reader's 8-10 digit number
+// becomes 8 hex characters (e.g. 0012345678 -> 00BC614E); a hex ID of 8, 14
+// or 20 characters stays as it is. Anything else: "" (not a tag ID).
+String tagFromTyped(const String &typed) {
+  String raw;
+  for (size_t i = 0; i < typed.length(); i++) { char c = toupper(typed[i]); if (isalnum((unsigned char)c)) raw += c; }
+  bool digits = raw.length() >= 8 && raw.length() <= 10;
+  for (size_t i = 0; digits && i < raw.length(); i++) if (!isdigit((unsigned char)raw[i])) digits = false;
+  if (digits) {
+    unsigned long long value = strtoull(raw.c_str(), nullptr, 10);
+    if (value <= 0xFFFFFFFFULL) { char hex[9]; snprintf(hex, sizeof(hex), "%08lX", (unsigned long)value); return String(hex); }
+  }
+  bool hex = raw.length() == 8 || raw.length() == 14 || raw.length() == 20;
+  for (size_t i = 0; hex && i < raw.length(); i++) if (!isxdigit((unsigned char)raw[i])) hex = false;
+  return hex ? raw : String("");
+}
 
 // A tag was tapped agoMs ago: save it with its time, show it, beep.
 void handleTap(const String &uid, unsigned long agoMs) {
@@ -1522,9 +1604,154 @@ void rfidTask(void *) {
     vTaskDelay(pdMS_TO_TICKS(15));
   }
 }
+void queueTap(const String &uid) {
+  TapItem item = {};
+  strncpy(item.uid, uid.c_str(), sizeof(item.uid) - 1);
+  item.atMs = millis();
+  if (xQueueSend(tapQueue, &item, 0) != pdTRUE) Serial.println(F("Tap queue full: tap dropped."));
+}
+
+#if USE_USB_READER
+// ---- ESP32-S3: a USB 125 kHz reader (keyboard type) on the USB (OTG) port ----
+// The ESP32-S3 is the USB host, like a computer: the reader "types" each tag's
+// number and Enter, and those key presses are read here.
+usb_host_client_handle_t usbClient = nullptr;
+usb_device_handle_t usbDevice = nullptr;
+usb_transfer_t *usbReport = nullptr;
+volatile uint8_t usbNewAddress = 0;
+volatile bool usbGone = false, usbReportBusy = false;
+uint8_t usbInterface = 0;
+uint8_t usbLastKeys[6] = {0};
+String usbTyped;
+unsigned long usbLastKeyMs = 0;
+
+// Keyboard code to character (letters, digits, Enter); 0 for others.
+char usbKeyChar(uint8_t code) {
+  if (code >= 0x04 && code <= 0x1D) return 'A' + (code - 0x04);
+  if (code >= 0x1E && code <= 0x26) return '1' + (code - 0x1E);
+  if (code == 0x27) return '0';
+  if (code >= 0x59 && code <= 0x61) return '1' + (code - 0x59);  // number pad
+  if (code == 0x62) return '0';
+  if (code == 0x28 || code == 0x58 || code == 0x2B) return '\n';  // Enter, pad Enter, Tab
+  return 0;
+}
+void usbFinishTag() {
+  if (!usbTyped.length()) return;
+  String tag = tagFromTyped(usbTyped);
+  if (tag.length()) queueTap(tag);
+  else { Serial.print(F("USB reader typed something that is not a tag ID: ")); Serial.println(usbTyped); }
+  usbTyped = "";
+}
+// One keyboard report: [modifiers, 0, key1..key6] (some readers put a report ID first).
+void usbOnReport(usb_transfer_t *transfer) {
+  usbReportBusy = false;
+  if (transfer->status == USB_TRANSFER_STATUS_COMPLETED && transfer->actual_num_bytes >= 8) {
+    const uint8_t *d = transfer->data_buffer;
+    if (transfer->actual_num_bytes == 9) d++;  // a report ID first: skip it
+    for (int k = 2; k < 8; k++) {
+      uint8_t code = d[k];
+      if (code < 0x04) continue;
+      bool held = false;
+      for (int j = 0; j < 6; j++) if (usbLastKeys[j] == code) held = true;
+      if (held) continue;  // only new key presses
+      char c = usbKeyChar(code);
+      if (c == '\n') usbFinishTag();
+      else if (c && usbTyped.length() < 24) { usbTyped += c; usbLastKeyMs = millis(); }
+    }
+    memcpy(usbLastKeys, d + 2, 6);
+  }
+  if (!usbGone && usbDevice && usb_host_transfer_submit(transfer) == ESP_OK) usbReportBusy = true;
+}
+void usbOnEvent(const usb_host_client_event_msg_t *msg, void *) {
+  if (msg->event == USB_HOST_CLIENT_EVENT_NEW_DEV) usbNewAddress = msg->new_dev.address;
+  else if (msg->event == USB_HOST_CLIENT_EVENT_DEV_GONE) usbGone = true;
+}
+void usbOnControlDone(usb_transfer_t *transfer) { usb_host_transfer_free(transfer); }
+// Opens the reader: finds its keyboard (HID) interface and its report endpoint.
+void usbOpen(uint8_t address) {
+  if (usb_host_device_open(usbClient, address, &usbDevice) != ESP_OK) { usbDevice = nullptr; return; }
+  const usb_config_desc_t *config = nullptr;
+  if (usb_host_get_active_config_descriptor(usbDevice, &config) != ESP_OK) return;
+  const uint8_t *p = (const uint8_t *)config;
+  int total = config->wTotalLength, i = 0, current = -1, alt = 0, chosenAlt = 0;
+  bool hid = false, keyboard = false, chosenKeyboard = false;
+  uint8_t endpoint = 0; uint16_t size = 8; int chosen = -1;
+  while (i + 2 <= total && p[i] >= 2) {
+    if (p[i + 1] == 0x04 && i + 8 <= total) {          // interface
+      current = p[i + 2]; alt = p[i + 3]; hid = p[i + 5] == 0x03; keyboard = hid && p[i + 7] == 0x01;
+    } else if (p[i + 1] == 0x05 && hid && i + 7 <= total && (p[i + 2] & 0x80) && (p[i + 3] & 0x03) == 0x03) {  // interrupt IN
+      if (chosen < 0 || (keyboard && !chosenKeyboard)) {
+        chosen = current; chosenAlt = alt; chosenKeyboard = keyboard; endpoint = p[i + 2]; size = p[i + 4] | (p[i + 5] << 8);
+      }
+    }
+    i += p[i];
+  }
+  if (chosen < 0 || usb_host_interface_claim(usbClient, usbDevice, chosen, chosenAlt) != ESP_OK) {
+    Serial.println(F("USB device is not a keyboard-type reader."));
+    usb_host_device_close(usbClient, usbDevice); usbDevice = nullptr; return;
+  }
+  usbInterface = chosen;
+  // Ask for the simple keyboard report format (readers that know it).
+  usb_transfer_t *control = nullptr;
+  if (usb_host_transfer_alloc(8, 0, &control) == ESP_OK) {
+    const uint8_t setProtocol[8] = {0x21, 0x0B, 0x00, 0x00, (uint8_t)chosen, 0x00, 0x00, 0x00};
+    memcpy(control->data_buffer, setProtocol, 8);
+    control->num_bytes = 8; control->device_handle = usbDevice; control->bEndpointAddress = 0;
+    control->callback = usbOnControlDone; control->context = nullptr;
+    if (usb_host_transfer_submit_control(usbClient, control) != ESP_OK) usb_host_transfer_free(control);
+  }
+  if (usb_host_transfer_alloc(size < 8 ? 8 : size, 0, &usbReport) != ESP_OK) return;
+  usbReport->device_handle = usbDevice; usbReport->bEndpointAddress = endpoint;
+  usbReport->callback = usbOnReport; usbReport->context = nullptr; usbReport->num_bytes = size < 8 ? 8 : size;
+  memset(usbLastKeys, 0, sizeof(usbLastKeys)); usbTyped = "";
+  if (usb_host_transfer_submit(usbReport) == ESP_OK) usbReportBusy = true;
+  rfidOk = true;
+  Serial.println(F("USB 125 kHz reader connected."));
+}
+void usbClose() {
+  if (usbReportBusy) return;   // wait until the last report has come back
+  if (usbReport) { usb_host_transfer_free(usbReport); usbReport = nullptr; }
+  if (usbDevice) { usb_host_interface_release(usbClient, usbDevice, usbInterface); usb_host_device_close(usbClient, usbDevice); usbDevice = nullptr; }
+  usbGone = false; rfidOk = false;
+  Serial.println(F("USB reader unplugged."));
+}
+void usbLibraryTask(void *) {
+  for (;;) { uint32_t flags = 0; usb_host_lib_handle_events(portMAX_DELAY, &flags); }
+}
+void usbClientTask(void *) {
+  usb_host_client_config_t config = {};
+  config.is_synchronous = false;
+  config.max_num_event_msg = 5;
+  config.async.client_event_callback = usbOnEvent;
+  config.async.callback_arg = nullptr;
+  if (usb_host_client_register(&config, &usbClient) != ESP_OK) { Serial.println(F("USB host could not start.")); vTaskDelete(nullptr); }
+  for (;;) {
+    usb_host_client_handle_events(usbClient, pdMS_TO_TICKS(50));
+    if (usbNewAddress && !usbDevice) { uint8_t address = usbNewAddress; usbNewAddress = 0; usbOpen(address); }
+    if (usbGone) usbClose();
+    // Readers that send no Enter: a number that simply stops counts too.
+    if (usbTyped.length() >= 8 && (unsigned long)(millis() - usbLastKeyMs) > 300UL) usbFinishTag();
+  }
+}
+void startUsbReader() {
+  usb_host_config_t config = {};
+  config.skip_phy_setup = false;
+  config.intr_flags = ESP_INTR_FLAG_LEVEL1;
+  if (usb_host_install(&config) != ESP_OK) { Serial.println(F("USB host could not start: check Tools > USB Mode.")); return; }
+  xTaskCreatePinnedToCore(usbLibraryTask, "usblib", 4096, nullptr, 3, nullptr, 0);
+  xTaskCreatePinnedToCore(usbClientTask, "usbreader", 5120, nullptr, 3, nullptr, 0);
+  Serial.println(F("USB host on: plug the 125 kHz reader into the USB (OTG) port."));
+}
+#endif
+
 void startRfidTask() {
   tapQueue = xQueueCreate(32, sizeof(TapItem));
+#if USE_RC522
   xTaskCreatePinnedToCore(rfidTask, "rfid", 4096, nullptr, 2, nullptr, 1);
+#endif
+#if USE_USB_READER
+  startUsbReader();
+#endif
 }
 #endif
 
@@ -1706,6 +1933,7 @@ void setup() {
   beginRtc();
   configTime(0, 0, "pool.ntp.org", "time.google.com");
 
+#if USE_RC522
   SPI.begin();
   reader.PCD_Init();
   delay(10);
@@ -1717,6 +1945,7 @@ void setup() {
     Serial.print(F("RC522 version: 0x")); Serial.println(version, HEX);
     Serial.println(rfidOk ? F("RFID reader ready") : F("RFID reader NOT answering: check the wiring (" RFID_WIRING_HINT ")"));
   }
+#endif
 
   server.on("/", HTTP_GET, []() { server.send_P(200, "text/html", PAGE); });
   server.on("/api/status", HTTP_GET, handleStatus);
