@@ -97,6 +97,15 @@ export const utcToPhDateTimeLocal = (value) => {
 export const peso = (value) => Number(value||0).toLocaleString('en-PH',{maximumFractionDigits:2});
 // Distances are stored in metres; everywhere they are shown in km, to the metre (e.g. 177.865 km).
 export const distanceKm = (meters) => meters===null||meters===undefined||meters===''||!Number.isFinite(Number(meters)) ? '—' : `${(Number(meters)/1000).toLocaleString('en-PH',{minimumFractionDigits:3,maximumFractionDigits:3})} km`;
+// Header of a race on Results and the public results: release point, its
+// coordinates, release time, status and birds clocked of entered (e.g. 9/10).
+export const raceSummaryHtml = (race) => {
+  const coord=(value,pos,neg)=>value==null||value===''||!Number.isFinite(Number(value))?null:`${Math.abs(Number(value)).toFixed(5)}° ${Number(value)<0?neg:pos}`;
+  const lat=coord(race.latitude,'N','S'),lon=coord(race.longitude,'E','W');
+  const entered=Number(race.entered)||0,clocked=Number(race.clocked)||0;
+  const item=(label,value,cls='')=>`<div class="race-summary-item${cls}"><dt>${escapeHTML(label)}</dt><dd>${value}</dd></div>`;
+  return `<section class="race-summary"><h3>${escapeHTML(race.name||'Race')} <span class="race-summary-status${race.status==='closed'?' is-closed':''}">${race.status==='closed'?'Closed · final':'Open'}</span></h3><dl>${item('Location',escapeHTML(race.location||'—'))}${item('Coordinates',lat&&lon?`${escapeHTML(lat)}, ${escapeHTML(lon)}`:'—')}${item('Release time',escapeHTML(formatDateSeconds(race.release_at_utc)))}${item('Clocked',`<strong>${clocked}/${entered}</strong> <span>birds</span>`,' is-count')}</dl></section>`;
+};
 export const number = (value) => value==null?'—':Number(value).toLocaleString('en-PH',{maximumFractionDigits:3});
 // A ring number with the entry's ticked remarks after it, e.g. "12345 P1/P2/P3".
 // Only for showing: the saved ring number stays plain for clocking and matching.
@@ -106,7 +115,7 @@ export const stateTag = (value) => `<span class="tag ${escapeHTML(value)}">${esc
 export function tableRows(items, columns, empty='Nothing here yet.',withActions=true) {
   const actionHeader=withActions?'<th>Actions</th>':'';
   const actionCell=(item,index)=>withActions?`<td class="row-actions" data-label="Actions"><button class="text-button" data-edit="${index}">Edit</button><button class="text-button danger-text" data-delete="${escapeHTML(item.id)}">Delete</button></td>`:'';
-  return `<div class="table-scroll"><table><thead><tr>${columns.map(c=>`<th>${escapeHTML(c.label)}</th>`).join('')}${actionHeader}</tr></thead><tbody>${items.length?items.map((item,index)=>`<tr>${columns.map(c=>`<td data-label="${escapeHTML(c.label)}">${c.render?c.render(item):escapeHTML(item[c.key])}</td>`).join('')}${actionCell(item,index)}</tr>`).join(''):`<tr><td colspan="${columns.length+(withActions?1:0)}" class="empty-cell">${escapeHTML(empty)}</td></tr>`}</tbody></table></div>`;
+  return `<div class="table-scroll" tabindex="0" role="region" aria-label="${escapeHTML(columns.map(c=>c.label).slice(0,3).join(', '))} table"><table><thead><tr>${columns.map(c=>`<th>${escapeHTML(c.label)}</th>`).join('')}${actionHeader}</tr></thead><tbody>${items.length?items.map((item,index)=>`<tr>${columns.map(c=>`<td data-label="${escapeHTML(c.label)}">${c.render?c.render(item):escapeHTML(item[c.key])}</td>`).join('')}${actionCell(item,index)}</tr>`).join(''):`<tr><td colspan="${columns.length+(withActions?1:0)}" class="empty-cell">${escapeHTML(empty)}</td></tr>`}</tbody></table></div>`;
 }
 
 export const pageUrl = (path) => new URL(path,document.body.dataset.appRoot || new URL(document.body.dataset.base || '../../',location.href)).href;

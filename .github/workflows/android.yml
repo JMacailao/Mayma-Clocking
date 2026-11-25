@@ -1,0 +1,85 @@
+# Builds the AvilonX Android app (android/), a Trusted Web Activity for
+# https://www.avilonx.site.
+#
+# Signed release: add two repository secrets (Settings → Secrets and variables →
+# Actions): ANDROID_KEYSTORE_BASE64 (the keystore file, base64) and
+# ANDROID_KEYSTORE_PASSWORD. Each build on main then publishes AvilonX.apk on the
+# Releases page. Without them a debug APK is built (for checking the build only:
+# it cannot be updated in place and opens with an address bar).
+#
+# New APK: raise versionCode (and versionName) in /android-app.json. The app
+# then shows members an Update button once the release is published. A version
+# that is already on Releases is not built again.
+name: android
+
+on:
+  push:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+      - '.well-known/assetlinks.json'
+      - 'android-app.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name=$(jq -r .versionName android-app.json)
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          if gh release view "android-$name" >/dev/null 2>&1; then echo "exists=1" >> "$GITHUB_OUTPUT"; echo "::notice::android-$name is already released: raise versionCode in android-app.json for a new APK."; fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/avilonx.jks"
+            echo "AVILONX_KEYSTORE=$RUNNER_TEMP/avilonx.jks" >> "$GITHUB_ENV"
+            echo "SIGNED=1" >> "$GITHUB_ENV"
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set: building a debug APK only."
+          fi
+
+      - name: Build
+        working-directory: android
+        env:
+          AVILONX_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$SIGNED" ]; then gradle --no-daemon assembleRelease; else gradle --no-daemon assembleDebug; fi
+          mkdir -p ../dist
+          if [ -n "$SIGNED" ]; then cp app/build/outputs/apk/release/app-release.apk ../dist/AvilonX.apk; else cp app/build/outputs/apk/debug/app-debug.apk ../dist/AvilonX-debug.apk; fi
+          ls -l ../dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: avilonx-apk
+          path: dist/*.apk
+
+      - name: Publish on Releases (main, signed)
+        if: env.SIGNED == '1' && github.ref == 'refs/heads/main' && steps.version.outputs.exists != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name="${{ steps.version.outputs.name }}"
+          gh release create "android-$name" dist/AvilonX.apk --latest --title "AvilonX for Android $name" \
+            --notes "Install on Android: download AvilonX.apk on the phone, open it and allow installing from this source. Sign in with your usual club or member account."

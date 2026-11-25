@@ -1,0 +1,3 @@
+# GitHub Pages: publish /.well-known (Android app link check for the AvilonX app).
+include:
+  - .well-known

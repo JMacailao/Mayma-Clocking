@@ -8,7 +8,7 @@ export async function mountTelegram(container){
   container.hidden=false;
   const draw=state=>{
     container.innerHTML=`<div class="panel-heading"><h3>Telegram results</h3>${state.linked?'<span class="telegram-state is-on">Connected</span>':''}</div>
-      <p class="small">Because you have a loft RFID reader, you can get a Telegram message each time one of your pigeons is clocked: the race, time, flight time, speed and how it was clocked.</p>
+      <p class="small">Get a Telegram message each time one of your pigeons is clocked.</p>
       ${!state.ready?'<div class="notice">Telegram is not set up yet. The AvilonX Super Admin turns it on.</div>':state.linked
         ?`<p>Messages go to your Telegram${state.linked_at?` (connected ${escapeHTML(formatDate(state.linked_at))})`:''}.</p><div class="form-actions"><button class="button secondary" type="button" data-telegram-unlink>Disconnect Telegram</button></div>`
         :`<ol class="telegram-steps"><li>Press <strong>Connect Telegram</strong>. Telegram opens the AvilonX bot.</li><li>Press <strong>Start</strong> in Telegram. You get "Connected ✅".</li><li>Come back here and press <strong>Check</strong>.</li></ol><div class="form-actions"><button class="button primary" type="button" data-telegram-link>Connect Telegram</button><button class="button secondary" type="button" data-telegram-refresh>Check</button></div>`}`;

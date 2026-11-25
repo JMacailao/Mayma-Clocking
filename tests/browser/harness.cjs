@@ -21,7 +21,7 @@ try{const fn=${JSON.stringify(url.searchParams.get('fn') || 'render')};const cb=
 </script></body></html>`);
   }
   if (p === '/qa/fake-setup.js') { res.writeHead(200, { 'content-type': 'text/javascript' }); return res.end(`window.FAKE={tables:{},rpc:{}};(function(F){${setupCode}})(window.FAKE);`); }
-  const file = p.startsWith('/repo/') ? path.join(REPO, p.slice(6)) : p.startsWith('/qa/') ? path.join(HERE, p.slice(4)) : null;
+  const file = p.startsWith('/repo/') ? path.join(REPO, p.slice(6), p.endsWith('/') ? 'index.html' : '') : p.startsWith('/qa/') ? path.join(HERE, p.slice(4)) : null;
   if (!file || !file.startsWith(REPO)) { res.writeHead(404); return res.end(); }
   fs.readFile(file, (err, data) => { if (err) { res.writeHead(404); return res.end(); } res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' }); res.end(data); });
 });

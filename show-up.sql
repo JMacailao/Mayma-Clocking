@@ -64,7 +64,9 @@ BEGIN
     RETURN jsonb_build_object('status', 'error', 'entry_id', v_entry.id, 'pigeon_ring', v_entry.pigeon_ring, 'race', v_race.name,
       'message', 'The result for ring ' || v_entry.pigeon_ring || ' was rejected by the club.');
   END IF;
-  IF public.clock_is_disqualified(v_clock.verification, v_race.status) THEN
+  -- Races without a show-up (entry-remarks.sql: requires_show_up) never disqualify.
+  IF COALESCE((to_jsonb(v_race) ->> 'requires_show_up')::boolean, true)
+     AND public.clock_is_disqualified(v_clock.verification, v_race.status) THEN
     RETURN jsonb_build_object('status', 'disqualified', 'entry_id', v_entry.id, 'pigeon_ring', v_entry.pigeon_ring, 'race', v_race.name,
       'message', 'Too late: ' || v_race.name || ' is closed and ring ' || v_entry.pigeon_ring || ' did not show up before it closed. This result is disqualified.');
   END IF;

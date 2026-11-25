@@ -7,10 +7,12 @@ export const flightText=seconds=>{if(!(seconds>0))return '';const s=Math.round(s
 export const clockedWith=clock=>!clock?'':clock.source==='barcode'?'Sticker':clock.source==='admin_manual'?'Club':clock.time_source==='reader'?'Loft RFID reader':'NFC tag';
 
 // Disqualified = the race is closed and the clock was never verified on Show up.
+// Races with Show up needed unticked never wait or disqualify.
 export function showUpKey(clock,race){
   if(!clock)return 'none';
   if(clock.verification==='verified')return 'verified';
   if(clock.verification==='rejected')return 'rejected';
+  if(race?.requires_show_up===false)return 'not_needed';
   return race?.status==='closed'?'disqualified':'waiting';
 }
 
@@ -29,7 +31,7 @@ export function raceRows(race,entries,clocks,members,birds=[]){
   return rows.sort((a,b)=>(a.rank||1e9)-(b.rank||1e9)||String(a.entry.pigeon_ring).localeCompare(String(b.entry.pigeon_ring)));
 }
 
-const SHOW_LABEL={verified:'Verified',waiting:'Waiting',disqualified:'Disqualified',rejected:'Rejected',none:''};
+const SHOW_LABEL={verified:'Verified',waiting:'Waiting',disqualified:'Disqualified',rejected:'Rejected',not_needed:'Not needed',none:''};
 
 export async function exportRaceToExcel(race,rows){
   const XLSX=await loadSpreadsheetParser();

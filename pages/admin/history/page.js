@@ -19,7 +19,7 @@ const label=row=>{const data=row.new_data||row.old_data||{};return data.pigeon_r
 
 // Club admins and staff: who changed what, and when.
 export async function render(view){
-  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">RECORDS</span><h2>Change history</h2><p>Every change to race schedules, race entries, clocks and bonded birds: who made it, when, and what changed. Use it to settle disputes.</p></div></div>
+  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">RECORDS</span><h2>Change history</h2><p>Who changed races, entries, clocks and birds, and when.</p></div></div>
   <section class="panel"><div class="history-filters"><label class="field"><span>What</span><select data-table><option value="">Everything</option>${Object.entries(TABLES).map(([key,text])=>`<option value="${key}">${text}s</option>`).join('')}</select></label><label class="field"><span>Search</span><input data-search placeholder="Ring, race, sticker or person"></label></div><div data-history><p class="small">Loading…</p></div><div class="history-more"><button class="button secondary" type="button" data-more hidden>Show older changes</button></div></section>`;
   const box=view.querySelector('[data-history]'),more=view.querySelector('[data-more]'),tableSelect=view.querySelector('[data-table]'),search=view.querySelector('[data-search]');
   let rows=[],limit=PAGE;

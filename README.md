@@ -96,7 +96,10 @@ The separate files, for reference:
       moves every race that uses it (open or closed) and recalculates each entry's
       distance, so speeds and ranks on Results, Race day and the public results
       follow, clocked birds included.
-  20. `race-day.sql` — change history (who changed races, entries, clocks and
+  20. `clock-videos.sql` — after clocking, a member can add a short video (up to
+      30 seconds, 50 MB) of the pigeon arriving; the club sees it on Show up.
+      Videos are kept in the private `clock-videos` Storage bucket.
+  21. `race-day.sql` — change history (who changed races, entries, clocks and
       birds, and when), practice races, instant result pop-ups (Supabase
       Realtime) and the Setup checklist. Run it last.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin

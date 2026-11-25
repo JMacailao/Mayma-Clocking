@@ -42,6 +42,10 @@ ALTER TABLE public.race_entries ADD CONSTRAINT race_entries_remarks_limit CHECK 
 -- Practice races (Race schedules → "Practice race") never appear in the
 -- public results.
 ALTER TABLE public.races ADD COLUMN IF NOT EXISTS is_practice boolean NOT NULL DEFAULT false;
+-- Show up needed (ticked by default): clocked pigeons must be brought to the
+-- club before the race closes, or they are disqualified. Unticked, every
+-- clock counts without a show-up.
+ALTER TABLE public.races ADD COLUMN IF NOT EXISTS requires_show_up boolean NOT NULL DEFAULT true;
 
 -- Public results show each ring with its remarks, e.g. "12345 P1/P2/P3".
 -- Each row also has its rank in its race (by speed), the race's status (open
@@ -64,7 +68,8 @@ RETURNS TABLE(
   rank bigint,
   race_status text,
   verification text,
-  disqualified boolean
+  disqualified boolean,
+  show_up_required boolean
 )
 LANGUAGE sql
 STABLE
@@ -75,7 +80,7 @@ AS $function$
     x.race_name, x.loft_name, x.distance_m, x.pigeon_ring, x.barcode, x.arrival_at_utc, x.flight_seconds, x.speed_m_per_min,
     CASE WHEN x.speed_m_per_min IS NOT NULL AND NOT x.disqualified
       THEN rank() OVER (PARTITION BY x.race_id, x.disqualified ORDER BY x.speed_m_per_min DESC NULLS LAST) END,
-    x.race_status, x.verification, x.disqualified
+    x.race_status, x.verification, x.disqualified, x.show_up_required
   FROM (
     SELECT
       r.id AS race_id,
@@ -98,8 +103,9 @@ AS $function$
       END AS speed_m_per_min,
       r.status::text AS race_status,
       c.verification::text AS verification,
-      -- Disqualified: the race is closed and the pigeon never showed up (Show up).
-      (c.verification = 'provisional' AND r.status = 'closed') AS disqualified
+      -- Disqualified: the race needs a show-up, is closed, and the pigeon never showed up.
+      (c.verification = 'provisional' AND r.status = 'closed' AND r.requires_show_up) AS disqualified,
+      r.requires_show_up AS show_up_required
     FROM public.clubs AS club
     JOIN public.races AS r ON r.club_id = club.id
     JOIN public.race_entries AS e ON e.race_id = r.id
@@ -115,6 +121,48 @@ $function$;
 REVOKE ALL ON FUNCTION public.public_race_results(bigint, date) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.public_race_results(bigint, date) TO anon, authenticated;
 COMMENT ON FUNCTION public.public_race_results(bigint, date) IS
-  'Public race results for a club and Philippines-local race date: rank, race status, Show up verification and DQ; no member or account data.';
+  'Public race results for a club and Philippines-local race date: rank, race status, Show up verification, DQ and whether a show-up is needed; no member or account data.';
+
+
+-- Header of each race on the public results: release point (name and
+-- coordinates), release time, status, and how many birds are entered and
+-- clocked (clocks the club rejected are not counted), e.g. 9/10. No member data.
+CREATE OR REPLACE FUNCTION public.public_race_summaries(p_club_id bigint, p_race_date date)
+RETURNS TABLE(
+  race_name text,
+  release_location text,
+  release_latitude numeric,
+  release_longitude numeric,
+  release_at_utc timestamp without time zone,
+  race_status text,
+  birds_entered bigint,
+  birds_clocked bigint
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT
+    r.name::text,
+    r.release_location::text,
+    r.release_latitude::numeric,
+    r.release_longitude::numeric,
+    r.release_at_utc,
+    r.status::text,
+    (SELECT count(*) FROM public.race_entries AS e WHERE e.race_id = r.id),
+    (SELECT count(DISTINCT e.id) FROM public.race_entries AS e
+       JOIN public.clock_events AS c ON c.race_entry_id = e.id
+      WHERE e.race_id = r.id AND c.verification <> 'rejected')
+  FROM public.races AS r
+  WHERE r.club_id = p_club_id
+    AND ((r.release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date = p_race_date
+    AND NOT r.is_practice
+  ORDER BY r.name;
+$function$;
+REVOKE ALL ON FUNCTION public.public_race_summaries(bigint, date) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.public_race_summaries(bigint, date) TO anon, authenticated;
+COMMENT ON FUNCTION public.public_race_summaries(bigint, date) IS
+  'Public race headers for a club and Philippines-local race date: release point, coordinates, release time, status, birds clocked / entered; no member data.';
 
 NOTIFY pgrst, 'reload schema';

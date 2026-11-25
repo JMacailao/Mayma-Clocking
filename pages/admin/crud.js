@@ -260,7 +260,7 @@ function bindGeneric(view,table,fieldsList,columns,defaults={},withAccounts=fals
     const showImportPreview=(rows,issues)=>{
       pendingImportRows=rows;summary.textContent=`${rows.length} ready · ${issues.length} issue${issues.length===1?'':'s'}`;
       errorsNode.innerHTML=issues.length?`<div class="notice error"><strong>Fix these spreadsheet rows before importing:</strong><ul class="import-issue-list">${issues.slice(0,20).map(issue=>`<li>Row ${escapeHTML(issue.rowNumber)}: ${issue.errors.map(escapeHTML).join(' ')}</li>`).join('')}${issues.length>20?`<li>And ${issues.length-20} more issue(s).</li>`:''}</ul></div>`:'';
-      previewNode.innerHTML=rows.length?`<p class="small">Previewing the first ${Math.min(rows.length,8)} of ${rows.length} members. Coordinates are converted to decimal degrees for storage. Imports create member records only; they do not create login accounts.</p>${tableRows(rows.slice(0,8),[{key:'member_no',label:'Member ID'},{key:'full_name',label:'Full name'},{key:'loft_name',label:'Loft name'},{key:'latitude',label:'Latitude · DD'},{key:'longitude',label:'Longitude · DD'}],'No member rows found.',false)}`:'<p class="small">No valid member rows to preview.</p>';
+      previewNode.innerHTML=rows.length?`<p class="small">Previewing the first ${Math.min(rows.length,8)} of ${rows.length} members. No login accounts are created.</p>${tableRows(rows.slice(0,8),[{key:'member_no',label:'Member ID'},{key:'full_name',label:'Full name'},{key:'loft_name',label:'Loft name'},{key:'latitude',label:'Latitude · DD'},{key:'longitude',label:'Longitude · DD'}],'No member rows found.',false)}`:'<p class="small">No valid member rows to preview.</p>';
       importButton.disabled=!rows.length||issues.length>0;importPanel.hidden=false;importPanel.scrollIntoView({behavior:'smooth',block:'start'});
     };
     openButton.onclick=()=>importFile.click();
@@ -315,10 +315,21 @@ function bindGeneric(view,table,fieldsList,columns,defaults={},withAccounts=fals
 async function confirmRacePointMove(point,data){
   const moved=data.location!==point.location||Number(data.latitude)!==Number(point.latitude)||Number(data.longitude)!==Number(point.longitude);
   if(!moved)return '';
-  const {data:races,error}=await supabase.from('races').select('id,name,race_point_id,release_location');if(error)return '';
-  const affected=(races||[]).filter(race=>Number(race.race_point_id)===Number(point.id)||(race.race_point_id==null&&race.release_location===point.location));
+  // Same as the database (race-point-recalc.sql): races linked to this point, and
+  // unlinked races of the same club named like it, only if no other point has that name.
+  const [{data:races,error},{data:twins,error:twinError}]=await Promise.all([
+    supabase.from('races').select('id,name,race_point_id,release_location,release_latitude,release_longitude,club_id'),
+    supabase.from('race_points').select('id,latitude,longitude').eq('location',point.location).neq('id',point.id)
+  ]);
+  if(error||twinError){message(`Could not check which races use this race point, so nothing was saved: ${dbError(error||twinError)}`,'error');return null;}
+  // Unlinked races: same name AND the point's old coordinates, unless another point
+  // has that same name and those coordinates (then it may be the other point's).
+  const samePlace=item=>Number(item.latitude??item.release_latitude)===Number(point.latitude)&&Number(item.longitude??item.release_longitude)===Number(point.longitude);
+  const byName=!(twins||[]).some(samePlace);
+  const affected=(races||[]).filter(race=>Number(race.race_point_id)===Number(point.id)||(byName&&race.race_point_id==null&&race.release_location===point.location&&samePlace(race)&&(point.club_id==null||Number(race.club_id)===Number(point.club_id))));
   if(!affected.length)return '';
-  const {count}=await supabase.from('race_entries').select('id',{count:'exact',head:true}).in('race_id',affected.map(race=>race.id));
+  const {count,error:entryError}=await supabase.from('race_entries').select('id',{count:'exact',head:true}).in('race_id',affected.map(race=>race.id));
+  if(entryError){message(`Could not count the entries of these races, so nothing was saved: ${dbError(entryError)}`,'error');return null;}
   const n=affected.length,m=count||0;
   const what=`${n} race${n===1?'':'s'} (${affected.slice(0,5).map(race=>race.name).join(', ')}${n>5?'…':''})`;
   if(!confirm(`This race point is used by ${what}.\n\nSaving moves ${n===1?'it':'them'} to the new location and recalculates the distance, speed and rank of ${m} entr${m===1?'y':'ies'}, clocked birds included, also in closed races.\n\nSave?`))return null;
@@ -338,7 +349,7 @@ export async function renderCrud(view,table,canManageAccounts) {
   const formMarkup=(isMembers?genericForm(fields[table]):racePointForm(fields[table])).replace('<div class="form-actions">',`${accountFields}<div class="form-actions">`);
   const formPanel=isMembers?`<section class="panel" data-member-form-panel hidden><div class="panel-heading"><h3 data-form-title>Add a member</h3></div>${formMarkup}</section>`:`<section class="panel race-point-panel">${formMarkup}</section>`;
   const listPanel=`<section class="panel"><div class="panel-heading"><h3>${isMembers?'Member list':'Saved locations'}</h3>${isMembers?'':'<span class="count-pill" data-count>— records</span>'}${isMembers?'<div class="member-list-actions"><button class="button secondary" type="button" data-download-member-template>Excel template</button><button class="button secondary" type="button" data-open-member-import>Import Excel</button><input id="member-import-file" type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden><button class="button primary" type="button" data-add-member>＋ Add member</button></div>':''}</div><div data-table></div></section>`;
-  const importPanel=isMembers?`<section class="panel member-import-panel" data-member-import-panel hidden><div class="panel-heading"><div><h3>Excel import preview</h3><p class="small">Reads the first worksheet using its first row of column headings. Required: Member ID, Full name, Loft name, and coordinates as decimal Latitude/Longitude or hemisphere, degrees, minutes, and seconds.</p></div><span class="count-pill" data-import-summary></span></div><div data-import-errors></div><div data-import-preview></div><div class="form-actions"><button class="button secondary" type="button" data-cancel-member-import>Cancel</button><button class="button primary" type="button" data-confirm-member-import disabled>Import members</button></div></section>`:'';
+  const importPanel=isMembers?`<section class="panel member-import-panel" data-member-import-panel hidden><div class="panel-heading"><div><h3>Excel import preview</h3><p class="small">Required columns: Member ID, Full name, Loft name, Latitude, Longitude (decimal or degrees/minutes/seconds).</p></div><span class="count-pill" data-import-summary></span></div><div data-import-errors></div><div data-import-preview></div><div class="form-actions"><button class="button secondary" type="button" data-cancel-member-import>Cancel</button><button class="button primary" type="button" data-confirm-member-import disabled>Import members</button></div></section>`:'';
   view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">${isMembers?'CLUB DIRECTORY':'RELEASE LOCATIONS'}</span><h2>${isMembers?'Members & lofts':'Race points'}</h2><p>${isMembers?'Maintain member records and loft coordinates.':'Save release points for new race schedules.'}</p></div>${isMembers?'<span class="count-pill" data-count>— records</span>':''}</div>${isMembers?`${listPanel}${importPanel}${formPanel}`:`${formPanel}${listPanel}`}`;
   bindGeneric(view,table,fields[table],columns,{},isMembers&&canManageAccounts);
 }
