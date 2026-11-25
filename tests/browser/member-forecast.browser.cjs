@@ -8,10 +8,11 @@ module.exports = async (page, { open, check, OUT, sample }) => {
   await open('/repo/pages/member/dashboard/page.js', setup);
   const panel = page.locator('[data-forecast]');
   check(await panel.isVisible() && await panel.locator('[data-forecast-race]').count() === 0, 'one open race: forecast without a picker');
-  const rows = await panel.locator('tbody tr').allInnerTexts();
+  const rows = await panel.locator('.forecast-grid li').allInnerTexts();
   const first = (rows[0] || '').replace(/\s+/g, ' '), last = (rows.at(-1) || '').replace(/\s+/g, ' ');
-  check(rows.length === 10 && /^1,400 00:26:03 06:36:03$/.test(first) && /^500 01:12:57 07:22:57$/.test(last), `1400 to 500 m/min, as in the SMS (${first} … ${last})`);
-  const meta = (await panel.locator('.forecast-meta').innerText()).replace(/\s+/g, ' ');
+  check(rows.length === 10 && /^1,400 06:36:03$/.test(first) && /^500 07:22:57$/.test(last), `1400 to 500 m/min, as in the SMS (${first} … ${last})`);
+  check(await panel.locator('.forecast-grid li').first().getAttribute('title') === 'Flight 00:26:03', 'flight time on hover');
+  const meta = (await panel.locator('.forecast-summary').innerText()).replace(/\s+/g, ' ');
   check(/Happy valle \(SOCCORO\)/.test(meta) && /36\.477 km/.test(meta) && /Nov 19, 2026, 6:10:00/.test(meta), `release, location and distance shown (${meta})`);
 
   // Two open races: pick one; a race not entered uses the loft and the release point.
@@ -19,12 +20,16 @@ module.exports = async (page, { open, check, OUT, sample }) => {
   const select = panel.locator('[data-forecast-race]');
   check(await select.count() === 1 && (await select.locator('option').allInnerTexts()).join('|') === 'Batangas Derby|Lucena Special', 'two open races: a picker, entered race first');
   await select.selectOption('6');
-  const meta2 = (await panel.locator('.forecast-meta').innerText()).replace(/\s+/g, ' ');
-  check(/Lucena Special/.test(meta2) && /not entered yet/.test(meta2) && await panel.locator('tbody tr').count() === 10, `the other race: forecast from the loft (${meta2.slice(0, 120)})`);
+  const meta2 = (await panel.locator('.forecast-summary').innerText()).replace(/\s+/g, ' ');
+  check(/Lucena/.test(meta2) && /not entered yet/.test(meta2) && await panel.locator('.forecast-grid li').count() === 10, `the other race: forecast from the loft (${meta2.slice(0, 120)})`);
   check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'phone: fits the screen');
+  const height = (await panel.boundingBox()).height;
+  check(height < 360, `phone: compact (${Math.round(height)}px tall)`);
   await panel.screenshot({ path: `${OUT}/member-forecast-390.png` });
+  await page.setViewportSize({ width: 1300, height: 900 });
+  await panel.screenshot({ path: `${OUT}/member-forecast-1300.png` });
 
   // No release time yet: a short note instead of times.
   await open('/repo/pages/member/dashboard/page.js', setup + `F.tables.races[0].release_at_utc=null;`);
-  check(/once the club sets the official release time/.test(await panel.innerText()) && await panel.locator('tbody tr').count() === 0, 'no release time: explains instead of guessing');
+  check(/once the club sets the official release time/.test(await panel.innerText()) && await panel.locator('.forecast-grid li').count() === 0, 'no release time: explains instead of guessing');
 };
