@@ -3,7 +3,7 @@ module.exports = async (page, { open, check, OUT }) => {
   const rows = [
     { race_name: 'Batangas Derby', loft_name: 'Blue Loft', distance_m: 90000, pigeon_ring: 'PH-1 P1', barcode: '111', arrival_at_utc: '2026-11-22 03:00:00', flight_seconds: 3600, speed_m_per_min: 1500, rank: 1, race_status: 'open', verification: 'verified' },
     { race_name: 'Batangas Derby', loft_name: 'Red Loft', distance_m: 91000, pigeon_ring: 'PH-3', barcode: '333', arrival_at_utc: '2026-11-22 03:05:00', flight_seconds: 3900, speed_m_per_min: 1400, rank: 2, race_status: 'open', verification: 'provisional' },
-    { race_name: 'Lipa Final', loft_name: 'Blue Loft', distance_m: 40000, pigeon_ring: 'PH-2', barcode: '222', arrival_at_utc: '2026-11-22 02:00:00', flight_seconds: 2000, speed_m_per_min: 1200, rank: 1, race_status: 'closed', verification: 'verified', disqualified: false },
+    { race_name: 'Lipa Final', loft_name: 'Blue Loft', distance_m: 40000, pigeon_ring: 'PH-2', barcode: '222', arrival_at_utc: '2026-11-22 02:00:00', flight_seconds: 2000, speed_m_per_min: 1450, rank: 1, race_status: 'closed', verification: 'verified', disqualified: false },
     { race_name: 'Lipa Final', loft_name: 'Green Loft', distance_m: 41000, pigeon_ring: 'PH-9', barcode: '999', arrival_at_utc: '2026-11-22 01:50:00', flight_seconds: 1400, speed_m_per_min: 1757, rank: null, race_status: 'closed', verification: 'provisional', disqualified: true }
   ];
   await open('/repo/pages/results/public.js', `F.rpc.public_result_clubs=[{club_id:1,club_name:'Mayma Club'}];F.rpc.public_race_results=${JSON.stringify(rows)};`, { fn: 'mountPublicResults' });
@@ -22,5 +22,16 @@ module.exports = async (page, { open, check, OUT }) => {
   const lastRow = await page.locator('[data-public-results-table] tbody tr').last().innerText();
   check(/PH-9/.test(lastRow) && /\bDQ\b/.test(lastRow) && !/\b1\b\s*\n?\s*Lipa/.test(lastRow), `a disqualified bird is listed last, tagged DQ, not ranked (${lastRow.replace(/\s+/g, ' ').slice(0, 90)})`);
   check(await page.locator('[data-public-results-legend]').isVisible(), 'explains the columns');
+  const order = (await page.locator('[data-public-results-table] tbody tr').allInnerTexts()).map(t => (t.match(/PH-\d/) || [''])[0]);
+  check(JSON.stringify(order) === '["PH-1","PH-3","PH-2","PH-9"]', `each race kept together, fastest first, DQ last (${order.join(', ')})`);
   await page.screenshot({ path: `${OUT}/public-results.png`, fullPage: true });
+
+  // Before avilonx-update.sql is run, the database gives no rank or status: those columns are hidden.
+  const oldRows = rows.slice(0, 2).map(({ rank, race_status, verification, disqualified, ...r }) => r);
+  await open('/repo/pages/results/public.js', `F.rpc.public_result_clubs=[{club_id:1,club_name:'Mayma Club'}];F.rpc.public_race_results=${JSON.stringify(oldRows)};`, { fn: 'mountPublicResults' });
+  await page.selectOption('[name=club_id]', '1'); await page.fill('[name=race_date]', '2026-11-22');
+  await page.click('[data-public-results-form] [type=submit]');
+  await page.waitForSelector('[data-public-results-table] table', { timeout: 5000 }).catch(() => {});
+  const oldHeaders = (await page.locator('[data-public-results-table] th').allInnerTexts()).join(' | ');
+  check(!/rank|status|verified/i.test(oldHeaders) && !(await page.locator('[data-public-results-legend]').isVisible()), `old database: no misleading Rank/Status/Verified (${oldHeaders})`);
 };

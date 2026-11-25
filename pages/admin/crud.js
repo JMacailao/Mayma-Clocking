@@ -318,8 +318,8 @@ async function confirmRacePointMove(point,data){
   const {data:races,error}=await supabase.from('races').select('id,name,race_point_id,release_location');if(error)return '';
   const affected=(races||[]).filter(race=>Number(race.race_point_id)===Number(point.id)||(race.race_point_id==null&&race.release_location===point.location));
   if(!affected.length)return '';
-  const {data:entries}=await supabase.from('race_entries').select('id').in('race_id',affected.map(race=>race.id));
-  const n=affected.length,m=(entries||[]).length;
+  const {count}=await supabase.from('race_entries').select('id',{count:'exact',head:true}).in('race_id',affected.map(race=>race.id));
+  const n=affected.length,m=count||0;
   const what=`${n} race${n===1?'':'s'} (${affected.slice(0,5).map(race=>race.name).join(', ')}${n>5?'…':''})`;
   if(!confirm(`This race point is used by ${what}.\n\nSaving moves ${n===1?'it':'them'} to the new location and recalculates the distance, speed and rank of ${m} entr${m===1?'y':'ies'}, clocked birds included, also in closed races.\n\nSave?`))return null;
   return ` ${n} race${n===1?'':'s'} moved to the new location; distance, speed and rank recalculated for ${m} entr${m===1?'y':'ies'}.`;

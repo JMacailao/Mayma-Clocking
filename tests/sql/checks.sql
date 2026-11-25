@@ -135,7 +135,7 @@ END $$;
 
 -- Editing a race point recalculates its races and their entries' distances
 -- (also for clocked birds, and races linked only by the point's name).
-INSERT INTO public.barcode_stickers (barcode_number, source) VALUES ('901', 'manual'), ('902', 'manual'), ('903', 'manual');
+INSERT INTO public.barcode_stickers (barcode_number, source) VALUES ('901', 'manual'), ('902', 'manual'), ('903', 'manual'), ('904', 'manual');
 INSERT INTO public.race_points (location, sector, latitude, longitude, club_id) SELECT 'Lucena', 'South', 13.7565, 121.0583, id FROM public.clubs;
 INSERT INTO public.races (name, race_point_id, release_location, release_latitude, release_longitude, club_id, open_date, end_date, release_at_utc, status)
   SELECT x.name, CASE WHEN x.linked THEN p.id END, x.loc, x.lat, x.lon, p.club_id, current_date - 1, current_date, (now() AT TIME ZONE 'UTC') - interval '3 hours', 'closed'
@@ -146,13 +146,26 @@ INSERT INTO public.race_entries (race_id, member_id, pigeon_id, distance_m, barc
   WHERE p.ring_number = 'PH-2';
 INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, source, verification)
   SELECT id, 'PH-2', now() AT TIME ZONE 'UTC', 'barcode', 'verified' FROM public.race_entries WHERE barcode = '901';
-UPDATE public.race_points SET location = 'Lucena City', latitude = 14.5995, longitude = 120.9842 WHERE location = 'Lucena';
+DO $$ BEGIN
+  ASSERT (SELECT count(*) FROM public.race_entries WHERE barcode IN ('901', '902', '903') AND loft_latitude = 13 AND loft_longitude = 121) = 3, 'each entry keeps the loft it was entered with';
+END $$;
+-- Another point with the same name elsewhere, with an older race (not linked) at it.
+INSERT INTO public.race_points (location, sector, latitude, longitude, club_id) SELECT 'Lucena', 'North', 14.1, 121.3, id FROM public.clubs;
+INSERT INTO public.races (name, release_location, release_latitude, release_longitude, club_id, open_date, end_date, release_at_utc, status)
+  SELECT 'Race N', 'Lucena', 14.1, 121.3, id, current_date - 1, current_date, (now() AT TIME ZONE 'UTC') - interval '3 hours', 'closed' FROM public.clubs;
+INSERT INTO public.race_entries (race_id, member_id, pigeon_id, distance_m, barcode)
+  SELECT r.id, p.member_id, p.id, 5, '904' FROM public.races r, public.pigeons p WHERE r.name = 'Race N' AND p.ring_number = 'PH-2';
+-- The member moves loft later: their earlier races keep the old loft.
+UPDATE public.members SET latitude = 10, longitude = 120;
+UPDATE public.race_points SET location = 'Lucena City', latitude = 14.5995, longitude = 120.9842 WHERE location = 'Lucena' AND sector = 'South';
 DO $$ BEGIN
   ASSERT (SELECT count(*) FROM public.races WHERE name IN ('Race P', 'Race L') AND release_location = 'Lucena City'
           AND release_latitude = 14.5995 AND release_longitude = 120.9842 AND race_point_id IS NOT NULL) = 2, 'races using the point (also by name) take its new name and coordinates';
   -- 177864.714 m is what the website's distanceMeters() gives for these points.
   ASSERT (SELECT count(*) FROM public.race_entries WHERE barcode IN ('901', '902') AND distance_m = 177864.714) = 2, 'their entries get the new distance (clocked or not)';
   ASSERT (SELECT distance_m FROM public.race_entries WHERE barcode = '903') = 1, 'a race at another point is not touched';
+  ASSERT (SELECT release_latitude = 14.1 AND release_location = 'Lucena' AND race_point_id IS NULL FROM public.races WHERE name = 'Race N'), 'an older race at another point with the same name is not moved';
+  ASSERT (SELECT distance_m FROM public.race_entries WHERE barcode = '904') = 5, 'nor its entries';
   ASSERT (SELECT count(*) FROM public.audit_log WHERE table_name = 'race_entries' AND action = 'update') >= 2, 'the recalculation is in the change history';
 END $$;
 UPDATE public.races SET release_latitude = 13.7565, release_longitude = 121.0583 WHERE name = 'Race X';
