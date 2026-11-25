@@ -24,7 +24,9 @@ module.exports = async (page, { open, check, sample, OUT }) => {
   // Phone: the filter fits and the cards follow it.
   await open('/repo/pages/member/history/page.js', member, { viewport: { width: 360, height: 800 } });
   await page.fill('[data-history-filter] [name=from]', recent); await page.fill('[data-history-filter] [name=to]', recent);
-  check(await page.locator('.public-card').count() === 1 && await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'phone: cards filtered, fits the screen');
+  check(await page.locator('.public-card').count() === 1, `phone: cards filtered (${await page.locator('.public-card').count()})`);
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  check(over <= 0, `phone: fits the screen (${over}px too wide: ${await page.evaluate(() => [...document.querySelectorAll('.page-view *')].filter(e => e.getBoundingClientRect().right > innerWidth + 1).slice(0, 3).map(e => e.tagName + '.' + e.className).join(' / '))})`);
   await page.screenshot({ path: `${OUT}/history-filter-360.png` });
 
   await open('/repo/pages/member/clocking/page.js', member, { viewport: { width: 390, height: 800 } });
