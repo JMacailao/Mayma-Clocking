@@ -10,7 +10,7 @@ export async function render(view,identity) {
  const [{data:entries,error:a},{data:clocks,error:b},{data:races,error:c}]=await Promise.all([supabase.from('race_entries').select('*').eq('member_id',memberId),supabase.from('clock_events').select('*').order('received_at_utc',{ascending:false}).limit(500),supabase.from('races').select('id,name')]);if(a||b||c)throw a||b||c;
  const ids=new Set(entries.map(e=>e.id));const history=clocks.filter(c=>ids.has(c.race_entry_id)).map(c=>({...c,entry:entries.find(e=>e.id===c.race_entry_id),race:races.find(r=>r.id===entries.find(e=>e.id===c.race_entry_id)?.race_id)}));
  const videos=await clockVideos(history.map(c=>c.id));
- view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">YOUR RECEIPTS</span><h2>Clocking history</h2><p>Recent server-received clockings for your pigeons.</p></div></div><section class="panel"><form class="history-filter" data-history-filter><label class="field"><span>From</span><input type="date" name="from"></label><label class="field"><span>To</span><input type="date" name="to"></label><button class="button secondary" type="reset">Clear</button><span class="small history-count" data-history-count role="status"></span></form><div data-history-list></div></section>`;
+ view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">YOUR RECEIPTS</span><h2>Clocking history</h2><p>Today's clockings for your pigeons. Change the dates to see other days.</p></div></div><section class="panel"><form class="history-filter" data-history-filter><label class="field"><span>From</span><input type="date" name="from"></label><label class="field"><span>To</span><input type="date" name="to"></label><button class="button secondary" type="button" data-history-all>All dates</button><span class="small history-count" data-history-count role="status"></span></form><div data-history-list></div></section>`;
  // Date filter (Philippine dates, both optional). The list redraws as the dates change.
  const COLUMNS=[{key:'received_at_utc',label:'Received · PH',render:r=>escapeHTML(formatDateSeconds(r.received_at_utc))},{key:'race',label:'Race',render:r=>escapeHTML(r.race?.name||'—')},{key:'entry',label:'Ring',render:r=>escapeHTML(r.entry?ringLabel(r.entry.pigeon_ring,r.entry.remarks):'—')},{key:'source',label:'Clocked with',render:r=>escapeHTML(r.source==='barcode'?'Sticker':r.source==='admin_manual'?'Club':r.time_source==='reader'?'Loft reader':'NFC tag')},{key:'verification',label:'Status',render:r=>stateTag(r.verification)},{key:'video',label:'Video',render:r=>videoButtons(r,videos)}];
  const form=view.querySelector('[data-history-filter]'),list=view.querySelector('[data-history-list]');
@@ -19,11 +19,14 @@ export async function render(view,identity) {
   form.elements.to.min=from;form.elements.from.max=to;
   const shown=history.filter(r=>{const day=phDay(r.received_at_utc);return (!from||day>=from)&&(!to||day<=to);});
   const filtered=Boolean(from||to);
-  list.innerHTML=tableRows(shown,COLUMNS,filtered?'No clockings on these dates.':'No receipts have been recorded yet.',false)+receiptCards(shown,videos);
+  list.innerHTML=tableRows(shown,COLUMNS,filtered?(from===to&&from===today?'No clockings today.':'No clockings on these dates.'):'No receipts have been recorded yet.',false)+receiptCards(shown,videos);
   view.querySelector('[data-history-count]').textContent=filtered?`${shown.length} of ${history.length} clocking${history.length===1?'':'s'}`:'';
   bindVideoButtons();
  };
- form.addEventListener('input',draw);form.addEventListener('reset',()=>setTimeout(draw));
+ // Opens on today (Philippine date); All dates clears both dates.
+ const today=PH_DAY.format(new Date());form.elements.from.value=today;form.elements.to.value=today;
+ view.querySelector('[data-history-all]').addEventListener('click',()=>{form.elements.from.value='';form.elements.to.value='';draw();});
+ form.addEventListener('input',draw);
  form.addEventListener('submit',event=>event.preventDefault());
  // Short video of a clocking: add one (camera or library), play it, or replace it.
  const target=clockId=>({clockId,clubId:identity.profile.club_id,memberId});

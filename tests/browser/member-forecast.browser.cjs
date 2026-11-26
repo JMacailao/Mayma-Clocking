@@ -14,7 +14,7 @@ module.exports = async (page, { open, check, OUT, sample }) => {
   const first = (rows[0] || '').replace(/\s+/g, ' '), last = (rows.at(-1) || '').replace(/\s+/g, ' ');
   check(rows.length === 10 && /^1,400 06:36:03 00:26:03$/.test(first) && /^500 07:22:57 01:12:57$/.test(last), `1400 to 500 m/min, as in the SMS (${first} … ${last})`);
   const meta = (await panel.locator('.forecast-summary').innerText()).replace(/\s+/g, ' ');
-  check(/Happy valle \(SOCCORO\)/.test(meta) && /36\.477 km/.test(meta) && /Nov 19, 2026, 6:10:00/.test(meta), `release, location and distance shown (${meta})`);
+  check(/Happy valle \(SOCCORO\)/.test(meta) && /36\.48 km/.test(meta) && /Nov 19, 2026, 6:10:00/.test(meta), `release, location and distance shown (${meta})`);
 
   // Two open races: pick one; a race not entered uses the loft and the release point.
   await open('/repo/pages/member/dashboard/page.js', setup + `F.tables.races.push({id:6,name:'Lucena Special',status:'open',release_location:'Lucena',release_latitude:13.9411,release_longitude:121.6172,release_at_utc:'2026-11-18 23:00:00',open_date:'2026-11-18',end_date:'2026-11-20',club_id:1});`, { viewport: { width: 390, height: 900 } });

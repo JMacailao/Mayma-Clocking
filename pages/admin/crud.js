@@ -1,4 +1,4 @@
-import { supabase, escapeHTML, message, dbError, authError, fail, tableRows, USERNAME_RE, USERNAME_HELP, titleCase, loadSpreadsheetParser, normalizeImportHeader } from '../../assets/js/shared.js';
+import { supabase, escapeHTML, message, dbError, authError, fail, tableRows, USERNAME_RE, USERNAME_HELP, titleCase, loadSpreadsheetParser, normalizeImportHeader, coord2 } from '../../assets/js/shared.js';
 
 const fields={
   members:[['member_no','Member ID','text',true],['full_name','Full name','text',true],['first_name','First name','text'],['middle_name','Middle name','text'],['last_name','Last name','text'],['loft_name','Loft name','text',true],['address','Address','text'],['phone','Phone','text'],['paid','Membership paid','select',true],['latitude','Latitude','coordinates',true],['longitude','Longitude','coordinates',true]],
@@ -188,7 +188,7 @@ function bindCoordinateEditor(form) {
     }
     const latitude=values.find((_,index)=>axes[index].dataset.coordinateAxis==='latitude').value,longitude=values.find((_,index)=>axes[index].dataset.coordinateAxis==='longitude').value;
     const mapUrl=new URL('https://www.google.com/maps/@');mapUrl.searchParams.set('api','1');mapUrl.searchParams.set('map_action','map');mapUrl.searchParams.set('center',`${latitude},${longitude}`);mapUrl.searchParams.set('zoom','17');mapUrl.searchParams.set('basemap','satellite');
-    mapLink.href=mapUrl.toString();mapLink.hidden=false;status.textContent=`Satellite view at ${latitude.toFixed(6)}, ${longitude.toFixed(6)}.`;
+    mapLink.href=mapUrl.toString();mapLink.hidden=false;status.textContent=`Satellite view at ${latitude.toFixed(2)}, ${longitude.toFixed(2)}.`;
     mapTimer=setTimeout(()=>displaySatelliteMap(latitude,longitude),immediate?0:450);
   };
   const set=(key,value)=>{
@@ -260,7 +260,7 @@ function bindGeneric(view,table,fieldsList,columns,defaults={},withAccounts=fals
     const showImportPreview=(rows,issues)=>{
       pendingImportRows=rows;summary.textContent=`${rows.length} ready · ${issues.length} issue${issues.length===1?'':'s'}`;
       errorsNode.innerHTML=issues.length?`<div class="notice error"><strong>Fix these spreadsheet rows before importing:</strong><ul class="import-issue-list">${issues.slice(0,20).map(issue=>`<li>Row ${escapeHTML(issue.rowNumber)}: ${issue.errors.map(escapeHTML).join(' ')}</li>`).join('')}${issues.length>20?`<li>And ${issues.length-20} more issue(s).</li>`:''}</ul></div>`:'';
-      previewNode.innerHTML=rows.length?`<p class="small">Previewing the first ${Math.min(rows.length,8)} of ${rows.length} members. No login accounts are created.</p>${tableRows(rows.slice(0,8),[{key:'member_no',label:'Member ID'},{key:'full_name',label:'Full name'},{key:'loft_name',label:'Loft name'},{key:'latitude',label:'Latitude · DD'},{key:'longitude',label:'Longitude · DD'}],'No member rows found.',false)}`:'<p class="small">No valid member rows to preview.</p>';
+      previewNode.innerHTML=rows.length?`<p class="small">Previewing the first ${Math.min(rows.length,8)} of ${rows.length} members. No login accounts are created.</p>${tableRows(rows.slice(0,8),[{key:'member_no',label:'Member ID'},{key:'full_name',label:'Full name'},{key:'loft_name',label:'Loft name'},{key:'latitude',label:'Latitude · DD',render:r=>coord2(r.latitude)},{key:'longitude',label:'Longitude · DD',render:r=>coord2(r.longitude)}],'No member rows found.',false)}`:'<p class="small">No valid member rows to preview.</p>';
       importButton.disabled=!rows.length||issues.length>0;importPanel.hidden=false;importPanel.scrollIntoView({behavior:'smooth',block:'start'});
     };
     openButton.onclick=()=>importFile.click();
@@ -344,7 +344,7 @@ export async function renderCrud(view,table,canManageAccounts) {
     {key:'loft_name',label:'Loft'},
     {key:'paid',label:'Paid',render:r=>r.paid?'Yes':'No'},
     ...(canManageAccounts?[{key:'username',label:'Login',render:r=>r.username?`${escapeHTML(r.username)} <button class="text-button" data-member-username="${escapeHTML(r.user_id)}" data-current-username="${escapeHTML(r.username)}">Change username</button><button class="text-button" data-reset="${escapeHTML(r.id)}">Reset password</button>`:`<button class="text-button" data-login="${escapeHTML(r.id)}">Create login</button>`}]:[])
-  ]:[{key:'location',label:'Location'},{key:'sector',label:'Sector',render:r=>escapeHTML(r.sector?titleCase(String(r.sector)):'—')},{key:'latitude',label:'Latitude'},{key:'longitude',label:'Longitude'}];
+  ]:[{key:'location',label:'Location'},{key:'sector',label:'Sector',render:r=>escapeHTML(r.sector?titleCase(String(r.sector)):'—')},{key:'latitude',label:'Latitude',render:r=>coord2(r.latitude)},{key:'longitude',label:'Longitude',render:r=>coord2(r.longitude)}];
   const accountFields=isMembers&&canManageAccounts?'<label class="field" data-account-field><span>Login username (optional)</span><input name="account_username" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]{2,31}" autocomplete="off" autocapitalize="none" spellcheck="false"></label><label class="field" data-account-field><span>Login password (8+ characters)</span><input name="account_password" type="password" minlength="8" autocomplete="new-password"></label>':'';
   const formMarkup=(isMembers?genericForm(fields[table]):racePointForm(fields[table])).replace('<div class="form-actions">',`${accountFields}<div class="form-actions">`);
   const formPanel=isMembers?`<section class="panel" data-member-form-panel hidden><div class="panel-heading"><h3 data-form-title>Add a member</h3></div>${formMarkup}</section>`:`<section class="panel race-point-panel">${formMarkup}</section>`;
