@@ -1,3 +1,4 @@
+import { mountBirdImport } from './import.js';
 import { supabase, escapeHTML, message, dbError } from '../../../assets/js/shared.js';
 import { normalizeNfcUid, formatNfcUid, phoneNfcSupported, startPhoneNfc, NFC_HELP, listenForReaderKeys, listenForDeviceScans, usbReaderStatus } from '../../../assets/js/nfc.js';
 
@@ -23,7 +24,7 @@ const friendlyError=error=>{
 // bird name, colour, loft name, its RFID tag and a photo.
 export async function render(view,identity,setPageCleanup=()=>{}) {
   const clubId=identity?.profile?.club_id;
-  const heading='<div class="birds-head"><h2>Band Assignments</h2><button class="button birds-add" type="button" data-bond-new><span aria-hidden="true">＋</span> Bond a bird</button></div>';
+  const heading='<div class="birds-head"><h2>Band Assignments</h2><div class="birds-head-actions"><button class="button secondary" type="button" data-birds-import>Import Excel</button><button class="text-button" type="button" data-birds-template>Template</button><button class="button birds-add" type="button" data-bond-new><span aria-hidden="true">＋</span> Bond a bird</button></div></div><section class="panel birds-import" data-birds-import-panel hidden></section>';
   const [{data:members,error:memberError},{data:birdsData,error:birdError},{data:entryRows}]=await Promise.all([
     supabase.from('members').select('id,member_no,full_name,loft_name').order('member_no'),
     supabase.from('pigeons').select('*').order('created_at',{ascending:false}),
@@ -183,6 +184,8 @@ export async function render(view,identity,setPageCleanup=()=>{}) {
       message(friendlyError(error),'error');
     }finally{saveButton.disabled=false;}
   };
+
+  mountBirdImport({button:view.querySelector('[data-birds-import]'),templateButton:view.querySelector('[data-birds-template]'),panel:view.querySelector('[data-birds-import-panel]'),members,birds,onDone:()=>reload()});
 
   async function reload(){
     const {data,error}=await supabase.from('pigeons').select('*').order('created_at',{ascending:false});

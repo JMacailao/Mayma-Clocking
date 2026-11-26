@@ -37,6 +37,9 @@ async function mountPublicResults(panel) {
   rows=(data||[]).map(row=>({...row,speed_m_per_min:row.speed_m_per_min==null?null:Number(row.speed_m_per_min)}));sortOrder.value='desc';toolbar.hidden=false;draw();
  };
  await loadClubs();
+ // A link with ?results=<club id>&date=<YYYY-MM-DD> (the QR on the basketing sheet) opens those results.
+ const params=new URLSearchParams(location.search),club=params.get('results'),date=params.get('date');
+ if(club&&/^\d+$/.test(club)&&/^\d{4}-\d{2}-\d{2}$/.test(date||'')&&[...clubSelect.options].some(o=>o.value===club)){clubSelect.value=club;form.elements.race_date.value=date;form.requestSubmit();}
 }
 // Phones only (CSS swaps them for the table): one compact card per bird.
 function resultCards(sorted) {
