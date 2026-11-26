@@ -30,7 +30,7 @@ export const readerSqlNotice='<div class="notice error">RFID readers are not set
 // (loft clock) only clocks that member's own pigeons.
 export async function render(view,_identity,setPageCleanup=()=>{}) {
   const {data:devices,error}=await supabase.rpc('admin_list_rfid_devices');
-  const heading=`<div class="split-heading"><div><span class="eyebrow">EXTERNAL READERS</span><h2>RFID readers</h2><p>Your club's RFID readers and what each one does.</p></div><a class="button secondary" href="${pageUrl('tools/nfc-reader/acr122u-avilonx-helper.zip')}" download>Download ACR122U helper</a></div>`;
+  const heading=`<div class="split-heading"><div><h2>RFID readers</h2></div><a class="button secondary" href="${pageUrl('tools/nfc-reader/acr122u-avilonx-helper.zip')}" download>Download ACR122U helper</a></div>`;
   if(error){if(missingReaderSql(error)){view.innerHTML=heading+readerSqlNotice;return;}throw error;}
   view.innerHTML=`${heading}
   <section class="panel narrow"><h3>How readers work</h3><ul class="reader-steps"><li><strong>Club admin reader</strong>: registers pigeons. Tap a pigeon's RFID tag and it fills the RFID tag field on Race entries. It never clocks.</li><li><strong>Member's reader</strong> (loft clock): clocks only that member's own pigeons. It never registers.</li><li>Readers are registered by the <strong>Super Admin</strong>, who also chooses who uses each one. Send them the reader's Device serial (shown at http://192.168.4.1 on the reader's Wi-Fi <strong>RFID-READER</strong>).</li></ul></section>
