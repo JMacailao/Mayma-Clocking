@@ -1,8 +1,10 @@
 import { supabase, escapeHTML, formatDate, stateTag, tableRows, pageUrl as url } from '../../../assets/js/shared.js';
 
-export async function render(view) {
+export async function render(view,identity) {
   const queries=[['members','Registered members'],['race_points','Race points'],['races','Race schedules'],['race_entries','Race entries']];
   const results=await Promise.all(queries.map(async([table,label])=>{const {count,error}=await supabase.from(table).select('*',{count:'exact',head:true});if(error)throw error;return [label,count||0];}));
   const {data:races,error}=await supabase.from('races').select('id,name,status,release_location,release_at_utc').order('id',{ascending:false}).limit(5);if(error)throw error;
   view.innerHTML=`<div class="welcome-row"><div><h2>Your club at a glance</h2></div><a class="button primary" href="${url('pages/admin/races/index.html')}">＋ Create a race</a></div><div class="stats-grid">${results.map(([label,count],i)=>`<article class="stat-card"><div class="stat-label"><span class="stat-glyph">${['♙','⌖','◷','▤'][i]}</span>${label}</div><strong>${count.toLocaleString()}</strong><span class="stat-foot">Current records</span></article>`).join('')}</div><section class="panel"><div class="panel-heading"><div><h2>Recent races</h2></div><a class="quiet-link" href="${url('pages/admin/races/index.html')}">All races ↗</a></div>${tableRows(races||[],[{key:'name',label:'Race'},{key:'release_location',label:'Release point'},{key:'release_at_utc',label:'Release time',render:r=>escapeHTML(formatDate(r.release_at_utc))},{key:'status',label:'Status',render:r=>stateTag(r.status)}],'Create a race schedule to begin.',false)}</section>`;
+  // Staff have no Club settings page: their notification switch is here.
+  if(identity?.profile?.role==='staff'){const panel=document.createElement('section');panel.className='panel narrow';panel.hidden=true;view.append(panel);import('../../../assets/js/push.js').then(({mountPush})=>mountPush(panel,{what:'Get a notification on this phone or computer each time a pigeon in your club is clocked.'})).catch(error=>console.warn('Notification settings unavailable:',error));}
 }

@@ -380,4 +380,61 @@ DO $$ DECLARE v_admin uuid; v_club bigint := (SELECT id FROM public.clubs ORDER 
   ASSERT v_failed, 'not signed in: refused';
 END $$;
 
+-- Push notifications: queued for the pigeon's owner and the club team, only
+-- for people with a subscribed device; race opening tells the club's members.
+DO $$ DECLARE v_member bigint; v_entry bigint; v_club bigint; v_owner uuid; v_admin uuid; v_race bigint; BEGIN
+  SELECT id, club_id INTO v_member, v_club FROM public.members WHERE member_no = '161';
+  SELECT id INTO v_entry FROM public.race_entries WHERE barcode = '222';
+  SELECT id INTO v_owner FROM public.app_profiles WHERE member_id = v_member;
+  IF v_owner IS NULL THEN
+    INSERT INTO auth.users (email) VALUES ('push-member@users.mayma.invalid') RETURNING id INTO v_owner;
+    INSERT INTO public.app_profiles (id, role, username, member_id, club_id, is_active) VALUES (v_owner, 'member', 'pushmember', v_member, v_club, true);
+  END IF;
+  INSERT INTO auth.users (email) VALUES ('push-admin@users.mayma.invalid') RETURNING id INTO v_admin;
+  INSERT INTO public.app_profiles (id, role, username, club_id, is_active) VALUES (v_admin, 'admin', 'pushadmin', v_club, true);
+
+  ASSERT public.push_public_key() IS NULL, 'no keys before the Edge Function made them';
+  ASSERT public.push_save_keys('PUBLICKEY', '{"d":"x"}', 'https://db.example/functions/v1/avilonx-push') = 'PUBLICKEY';
+  ASSERT public.push_save_keys('OTHERKEY', '{"d":"y"}', 'https://db.example/functions/v1/avilonx-push') = 'PUBLICKEY', 'the first keys stay';
+
+  -- Nobody subscribed yet: nothing is queued.
+  INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, source, verification) VALUES (v_entry, 'PH-1', now() AT TIME ZONE 'UTC', 'barcode', 'provisional');
+  ASSERT NOT EXISTS (SELECT 1 FROM public.push_outbox), 'no device, no notification';
+  DELETE FROM public.clock_events WHERE race_entry_id = v_entry;
+
+  PERFORM set_config('request.jwt.claim.sub', v_owner::text, true);
+  PERFORM public.push_subscribe('https://fcm.googleapis.com/fcm/send/member-phone', repeat('B', 87), repeat('a', 22), 'Android · Chrome');
+  ASSERT (public.push_status('https://fcm.googleapis.com/fcm/send/member-phone')->>'this_device')::boolean, 'this device is on';
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  PERFORM public.push_subscribe('https://updates.push.services.mozilla.com/wpush/v2/admin-pc', repeat('C', 87), repeat('b', 22), 'Windows · Firefox');
+  ASSERT NOT (public.push_status('https://fcm.googleapis.com/fcm/send/member-phone')->>'this_device')::boolean, 'someone else''s device is not yours';
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+
+  INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, source, verification) VALUES (v_entry, 'PH-1', now() AT TIME ZONE 'UTC', 'barcode', 'provisional');
+  ASSERT (SELECT count(*) FROM public.push_outbox WHERE user_id = v_owner AND title LIKE '%PH-1 was clocked%' AND url = 'pages/member/history/index.html') = 1, 'the owner is told';
+  ASSERT (SELECT count(*) FROM public.push_outbox WHERE user_id = v_admin AND title LIKE '%PH-1 · %' AND url = 'pages/admin/raceday/index.html') = 1, 'the club team is told';
+  ASSERT (SELECT jsonb_array_length(public.push_take(id)->'subscriptions') FROM public.push_outbox WHERE user_id = v_owner) = 1, 'sent to the owner''s device';
+  PERFORM public.push_done(id, NULL, ARRAY['https://fcm.googleapis.com/fcm/send/member-phone']) FROM public.push_outbox WHERE user_id = v_owner;
+  ASSERT (SELECT public.push_take(id) IS NULL FROM public.push_outbox WHERE user_id = v_owner), 'sent once';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.push_subscriptions WHERE user_id = v_owner), 'a gone device is forgotten';
+  DELETE FROM public.clock_events WHERE race_entry_id = v_entry;
+
+  -- A race opens: the member (subscribed again) is told once.
+  PERFORM set_config('request.jwt.claim.sub', v_owner::text, true);
+  PERFORM public.push_subscribe('https://fcm.googleapis.com/fcm/send/member-phone', repeat('B', 87), repeat('a', 22), 'Android · Chrome');
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  DELETE FROM public.push_outbox;
+  INSERT INTO public.races (name, release_location, release_latitude, release_longitude, status, club_id) VALUES ('Push Derby', 'Lipa', 13.9, 121.1, 'draft', v_club) RETURNING id INTO v_race;
+  ASSERT NOT EXISTS (SELECT 1 FROM public.push_outbox), 'a draft race tells nobody';
+  UPDATE public.races SET status = 'open', release_at_utc = now() AT TIME ZONE 'UTC' WHERE id = v_race;
+  UPDATE public.races SET name = 'Push Derby' WHERE id = v_race;
+  ASSERT (SELECT count(*) FROM public.push_outbox WHERE user_id = v_owner AND title = 'New race open: Push Derby') = 1, 'opening tells the member once';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.push_outbox WHERE user_id = v_admin), 'the admin who opened it is not told';
+
+  DELETE FROM public.races WHERE id = v_race;
+  DELETE FROM public.push_subscriptions; DELETE FROM public.push_outbox;
+  DELETE FROM public.app_profiles WHERE id = v_admin;
+  DELETE FROM auth.users WHERE id = v_admin;
+END $$;
+
 SELECT 'All database checks passed.' AS result;

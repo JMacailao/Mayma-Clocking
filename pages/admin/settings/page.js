@@ -1,6 +1,7 @@
 import { saveClubLogo, clubLogoUrl, showClubLogo } from '../../../assets/js/club-logo.js';
 import { supabase, escapeHTML, message } from '../../../assets/js/shared.js';
 import { mountAccountEmail } from '../../../assets/js/account-email.js';
+import { mountPush } from '../../../assets/js/push.js';
 
 // Club administrator: settings that change how the club works.
 export async function render(view,identity){
@@ -13,6 +14,7 @@ export async function render(view,identity){
     <div class="club-logo-row"><span class="club-logo-preview" data-logo-preview></span><div class="club-logo-actions"><input type="file" accept="image/png,image/jpeg,image/webp" data-logo-file hidden><button class="button secondary" type="button" data-logo-pick>Upload logo</button><button class="text-button danger-text" type="button" data-logo-remove hidden>Remove</button></div></div>
     <p class="small">PNG, JPG or WebP. Shown next to the club name.</p>
   </section>
+  <section class="panel settings-panel" data-push-panel hidden></section>
   <section class="panel settings-panel" data-email-panel></section>
   <section class="panel settings-panel"><h3>Race entries</h3>
     <fieldset class="settings-choice" ${missing?'disabled':''}><legend>Sticker for RFID entries</legend>
@@ -67,5 +69,6 @@ export async function render(view,identity){
     message(`Settings saved: sticker ${value==='optional'?'optional (with a warning)':'required'} for RFID entries; ${single==='on'?'one device per account':'any number of devices per account'}.`,'success');
   };
   // The administrator's own email for Forgot password?.
+  mountPush(view.querySelector('[data-push-panel]'),{what:'Get a notification on this phone or computer each time a pigeon in your club is clocked.'}).catch(error=>console.warn('Notification settings unavailable:',error));
   await mountAccountEmail(view.querySelector('[data-email-panel]'));
 }
