@@ -1,3 +1,4 @@
+import './error-report.js';
 import { supabase, escapeHTML, fail } from './shared.js';
 import { startTranslation, languageSwitchHtml, bindLanguageSwitch } from './i18n.js';
 import { startUpdateCheck } from './update-check.js';

@@ -1,3 +1,4 @@
+import './error-report.js';
 // Landing page (index.html): the winding "How it works" line, today's races,
 // the demo video, the club request form and the English / Tagalog switch.
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';

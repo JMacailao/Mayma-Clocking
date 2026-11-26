@@ -391,3 +391,5 @@ next to what was read, so misread values can be corrected before saving.
 - [docs/TESTING.md](docs/TESTING.md): the automatic tests and how to run them (`npm test`, `npm run test:browser`, `npm run test:sql`).
 - [docs/PASSWORD-RESET.md](docs/PASSWORD-RESET.md): members reset a forgotten password by email (Resend + Edge Function setup).
 - [docs/RFID-READER.md](docs/RFID-READER.md): the loft RFID reader (ESP8266 or ESP32): parts, wiring, OLED screens.
+- [docs/PUSH.md](docs/PUSH.md): push notifications on the website and the Android app (deploy the `avilonx-push` Edge Function).
+- [docs/BACKUP.md](docs/BACKUP.md): daily encrypted database backups, the uptime check and app error reports.

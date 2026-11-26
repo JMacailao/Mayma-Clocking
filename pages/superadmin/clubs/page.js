@@ -32,6 +32,7 @@ export async function render(view) {
     form.reset();await load();message(`Club account created. Username: ${username}`,'success');};
   await load();
   mountRequests(view);
+  mountErrors(view);
   const pushPanel=document.createElement('section');pushPanel.className='panel narrow';pushPanel.hidden=true;view.append(pushPanel);
   mountPush(pushPanel,{what:'Get a notification on this phone or computer when a club asks for AvilonX on the website.'}).catch(error=>console.warn('Notification settings unavailable:',error));
 }
@@ -55,6 +56,29 @@ async function mountRequests(view){
       if(handleError){message(handleError.message,'error');return;}
       load();
     });
+  };
+  await load();
+}
+
+// Errors that broke a page for someone (error-log.sql).
+async function mountErrors(view){
+  const panel=document.createElement('section');panel.className='panel';panel.dataset.appErrors='';view.append(panel);
+  const load=async()=>{
+    const {data,error}=await supabase.rpc('superadmin_client_errors');
+    if(error){panel.hidden=error.code==='PGRST202';panel.innerHTML=`<h3>App errors</h3><div class="notice error">${escapeHTML(error.message)}</div>`;return;}
+    const rows=data||[];
+    panel.innerHTML=`<div class="panel-heading"><h3>App errors</h3><div class="form-actions">${rows.length?'<button class="text-button" type="button" data-clear-errors>Clear all</button>':''}<button class="text-button" type="button" data-reload-errors>Refresh</button></div></div>
+      <p class="small">Errors that broke a page on someone's phone or computer, last 30 days. The same error within 10 minutes is counted once.</p>${tableRows(rows,[
+      {key:'last_at',label:'Last seen',render:r=>escapeHTML(formatDate(r.last_at))},
+      {key:'message',label:'Error',render:r=>`<strong>${escapeHTML(r.message)}</strong>${r.source?`<br><span class="small">${escapeHTML(r.source)}</span>`:''}`},
+      {key:'page',label:'Page',render:r=>escapeHTML(r.page||'—')},
+      {key:'username',label:'Who',render:r=>escapeHTML([r.username,r.club_name].filter(Boolean).join(' · ')||'Not signed in')},
+      {key:'count',label:'Times',render:r=>String(r.count)},
+      {key:'user_agent',label:'Device',render:r=>`<span class="small">${escapeHTML(/Android/.test(r.user_agent)?'Android':/iPhone|iPad/.test(r.user_agent)?'iPhone':/Windows/.test(r.user_agent)?'Windows':/Mac/.test(r.user_agent)?'Mac':'Other')}${r.app_version?` · app ${escapeHTML(r.app_version)}`:''}</span>`}
+    ],'No errors reported. 🎉',false)}`;
+    panel.querySelector('[data-reload-errors]').onclick=load;
+    const clear=panel.querySelector('[data-clear-errors]');
+    if(clear)clear.onclick=async()=>{if(!confirm('Clear every error report?'))return;const {error:clearError}=await supabase.rpc('superadmin_clear_client_errors');if(clearError){message(clearError.message,'error');return;}load();};
   };
   await load();
 }

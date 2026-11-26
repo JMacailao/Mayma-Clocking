@@ -1,3 +1,4 @@
+import '../../assets/js/error-report.js';
 import { supabase, authError, USERNAME_RE, USERNAME_HELP, pageUrl as url } from '../../assets/js/shared.js';
 import { mountPublicResults } from '../results/public.js';
 import { claimDevice } from '../../assets/js/device-session.js';

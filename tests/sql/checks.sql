@@ -484,4 +484,15 @@ DO $$ DECLARE v_admin uuid; v_club bigint; r jsonb; v_a timestamp; v_b timestamp
   DELETE FROM public.app_profiles WHERE id = v_admin; DELETE FROM auth.users WHERE id = v_admin;
 END $$;
 
+-- App error reports: anyone can send; the same error is counted, not repeated.
+DO $$ BEGIN
+  ASSERT has_function_privilege('anon', 'public.log_client_error(text, text, text, text, text)', 'EXECUTE');
+  ASSERT NOT has_function_privilege('anon', 'public.superadmin_client_errors()', 'EXECUTE');
+  PERFORM public.log_client_error('TypeError: x is undefined', 'app.js:1:2', 'pages/member/clocking/index.html', 'Chrome', '1.0.4');
+  PERFORM public.log_client_error('TypeError: x is undefined', 'app.js:1:2', 'pages/member/clocking/index.html', 'Chrome', '1.0.4');
+  PERFORM public.log_client_error('', '', '', '', '');
+  ASSERT (SELECT count(*) FROM public.client_errors) = 1 AND (SELECT count FROM public.client_errors) = 2, 'one row, counted twice';
+  DELETE FROM public.client_errors;
+END $$;
+
 SELECT 'All database checks passed.' AS result;
