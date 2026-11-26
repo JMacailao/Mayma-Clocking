@@ -1257,3 +1257,16 @@ dialog::backdrop{background:rgba(15,23,42,.5);overflow:hidden;overscroll-behavio
   .topbar-right{display:none}
 }
 .split-heading.is-empty,.welcome-row.is-empty,.entries-head.is-empty,.birds-head.is-empty{margin:0}
+/* Touch screens (phones, tablets): every control at least 44 × 44 px, so a
+   fingertip hits it at the loft. Placed last so it wins over the size rules
+   above. A mouse keeps the compact sizes. */
+@media (pointer:coarse){
+  .text-button,.bird-action,.entry-chip,.lang-switch button,.segmented-toggle button,.clock-tab-bar [role="tab"]{min-height:44px}
+  .text-button,.bird-action{min-width:44px}
+  .bird-action{padding:0 4px}
+  .bird-action-sep{margin:0 4px}
+  .schedule-editor-close,.account-dialog-heading .text-button{width:44px;min-width:44px;height:44px;min-height:44px}
+  .toast-sound,.toast-close{display:inline-grid;place-items:center;min-width:44px;min-height:44px}
+  .sticker-zoom .button{min-width:44px}
+  .nav-link{min-height:44px}
+}
