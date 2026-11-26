@@ -8,7 +8,7 @@ import { t } from '../../../assets/js/i18n.js';
 export async function render(view,identity){
   const memberId=identity.profile.member_id;
   if(!memberId)throw new Error('This account is missing its member record. Ask the club administrator.');
-  const heading=`<div class="split-heading"><div><span class="eyebrow">${t('MY LOFT')}</span><h2>${t('My pigeons')}</h2><p>${t('Your birds bonded by the club, with their races and best speed.')}</p></div></div>`;
+  const heading=`<div class="split-heading"><div><h2>${t('My pigeons')}</h2></div></div>`;
   const {data:birdRows,error:birdError}=await supabase.from('pigeons').select('*').eq('member_id',memberId).order('ring_number');
   if(birdError){view.innerHTML=`${heading}<div class="notice">${t('Your club has not set up bird bonding yet.')}</div>`;return;}
   const birds=birdRows||[];

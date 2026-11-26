@@ -5,7 +5,7 @@ export async function render(view,identity){
   const clubId=identity?.profile?.club_id;
   const {data:club,error}=await supabase.from('clubs').select('*').eq('id',clubId).maybeSingle();
   const missing=error||!club||!('rfid_entry_sticker' in club);
-  view.innerHTML=`<div class="split-heading"><div><span class="eyebrow">ADMINISTRATION</span><h2>Club settings</h2><p>Only the club administrator can change these.</p></div></div>
+  view.innerHTML=`<div class="split-heading"><div><h2>Club settings</h2></div></div>
   ${missing?'<div class="notice error">Club settings are not set up yet. Run <strong>avilonx-update.sql</strong> in the Supabase SQL Editor, then reload this page.</div>':''}
   <section class="panel settings-panel"><h3>Race entries</h3>
     <fieldset class="settings-choice" ${missing?'disabled':''}><legend>Sticker for RFID entries</legend>
@@ -22,7 +22,7 @@ export async function render(view,identity){
       <label class="field"><span>Pigeon I.D: letter boxes</span><input type="number" min="0" max="8" step="1" inputmode="numeric" name="form_prefix_boxes" value="${club?.form_prefix_boxes??6}"><small class="small">0 = no letters line</small></label>
       <label class="field"><span>Pigeon I.D: number boxes</span><input type="number" min="1" max="10" step="1" inputmode="numeric" name="form_number_boxes" value="${club?.form_number_boxes??8}"></label>
     </div>
-    <p class="small">Changed the boxes or the remarks? Print the forms again: a form is read with the settings it was printed with.</p>
+    <p class="small">Changed these? Print the forms again.</p>
   </section>
   <section class="panel settings-panel"><h3>Accounts</h3>
     ${club&&!('single_device' in club)?'<div class="notice error">One device per account is not set up yet. Run <strong>avilonx-update.sql</strong> in the Supabase SQL Editor.</div>':''}
