@@ -13,6 +13,12 @@ const ICONS = {
   more: icon('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>'),
   bell: icon('<path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>'),
   chevron: icon('<path d="m7 10 5 5 5-5"/>'),
+  scan: icon('<path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><path d="M8 12h8"/>'),
+  screen: icon('<rect x="3" y="5" width="18" height="12" rx="1.5"/><path d="M9 20h6"/>'),
+  download: icon('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),
+  save: icon('<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7M8 20v-6h8v6"/>'),
+  tag: icon('<path d="M4 12V4h8l8 8-8 8z"/><circle cx="8.5" cy="8.5" r="1.3"/>'),
+  more_older: icon('<path d="M12 5v14M6 13l6 6 6-6"/>'),
 };
 
 // Each page's main action: the label, the page element, and whether the
@@ -25,16 +31,17 @@ const PRIMARY = {
   races: ['Create schedule', '[data-create-schedule]', 'click'],
   entries: ['New entry', '#entry-form', 'focus'],
   'entry-remarks': ['Add remark', '#remark-form', 'focus'],
-  'race-day': ['Big screen', '[data-tv]', 'click'],
-  clocking: ['Start scanning', '[data-radar-open]', 'click'],
-  'show-up': ['Tap a tag', 'input[placeholder^="Or type the tag"]', 'focus'],
-  results: ['Export Excel', '[data-export-race]', 'click'],
-  'change-history': ['Show older changes', '[data-more]:not([hidden])', 'click'],
+  'race-day': ['Big screen', '[data-tv]', 'click', 'screen'],
+  clocking: ['Start scanning', '[data-radar-open]', 'click', 'scan'],
+  'show-up': ['Tap a tag', 'input[placeholder^="Or type the tag"]', 'focus', 'tag'],
+  results: ['Export Excel', '[data-export-race]', 'click', 'download'],
+  'change-history': ['Show older changes', '[data-more]:not([hidden])', 'click', 'more_older'],
   'team-users': ['Add account', '[data-open-team-dialog]', 'click'],
-  'club-settings': ['Save settings', '[data-save-settings]', 'click'],
+  'club-settings': ['Save settings', '[data-save-settings]', 'click', 'save'],
 };
-// Page buttons the toolbar replaces, so they are not shown twice.
-const DUPLICATES = '.schedule-toolbar [data-create-schedule],.birds-head [data-bond-new],.welcome-row>a.button[href*="races"]';
+// Page buttons the toolbar replaces, so they are not shown twice (the toolbar
+// still presses them).
+const DUPLICATES = '.schedule-toolbar [data-create-schedule],.birds-head [data-bond-new],.welcome-row>a.button[href*="races"],[data-add-member],[data-tv],[data-export-race],[data-radar-open]';
 const FILTERS = '.schedule-filter,.birds-filters,.race-filter,.history-filter,.history-filters,.results-actions .field,[data-page-filters]';
 const MORE_TEXT = /^(Export|Print|Big screen|Download|Template|Import)/i;
 
@@ -42,7 +49,7 @@ export function toolbarHtml(identity) {
   const name = identity?.profile?.username || 'Account';
   return `<div class="admin-toolbar" role="toolbar" aria-label="Page tools" data-admin-toolbar>
     <div class="tb-group tb-page">
-      <button class="button tb-primary" type="button" data-tb-primary hidden>${ICONS.plus}<span data-tb-primary-label></span></button>
+      <button class="button tb-primary" type="button" data-tb-primary hidden><span class="tb-primary-icon" data-tb-primary-icon>${ICONS.plus}</span><span class="tb-primary-label" data-tb-primary-label></span></button>
       <button class="button tb-button" type="button" data-tb-refresh title="Refresh">${ICONS.refresh}<span class="tb-label">Refresh</span></button>
       <button class="button tb-button" type="button" data-tb-filters aria-pressed="false" hidden>${ICONS.filter}<span class="tb-label" data-tb-filters-label>Hide filters</span></button>
       <label class="tb-search tb-page-search" data-tb-page-search-wrap hidden>${ICONS.search}<input type="search" data-tb-page-search placeholder="Search this page" aria-label="Search this page"></label>
@@ -126,12 +133,13 @@ export function mountToolbar(identity) {
 export function syncToolbar(view, page) {
   const bar = document.querySelector('[data-admin-toolbar]'); if (!bar || !view) return;
   const $ = selector => bar.querySelector(selector);
-  const [label, selector, mode] = PRIMARY[page] || [];
+  const [label, selector, mode, iconName] = PRIMARY[page] || [];
   const target = mode === 'create-race' ? true : selector && view.querySelector(selector);
   const primary = $('[data-tb-primary]');
   primary.hidden = !target;
   if (target) {
     $('[data-tb-primary-label]').textContent = label;
+    $('[data-tb-primary-icon]').innerHTML = ICONS[iconName] || ICONS.plus;
     primary.title = label; primary.setAttribute('aria-label', label);
     primary.onclick = () => {
       if (mode === 'create-race') { try { sessionStorage.setItem('avilonx.openCreate', '1'); } catch { /* storage unavailable */ } go('pages/admin/races/index.html'); return; }

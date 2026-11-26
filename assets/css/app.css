@@ -1414,3 +1414,106 @@ body.filters-hidden :is(.schedule-filter,.birds-filters,.race-filter,.history-fi
  .tb-find-list{position:absolute;left:0;right:0;width:auto;top:calc(100% + 6px)}
 }
 @media print{.admin-toolbar{display:none}}
+
+/* ===== Compact design =====================================================
+   Less space, more on screen: tighter header, toolbar, panels and tables on
+   computers; two-column cards on phones. Text stays at 12px or more with
+   darker greys, and touch screens keep 44px targets (form-factor rules above). */
+:root{--muted:#55657a}
+.small,.stat-foot,.stat-label,.field,.notice{font-size:12.5px}
+th{color:#55657a}
+
+/* Header: one slim bar (club name above the page title) and one toolbar row. */
+.topbar{height:52px}
+.topbar h1{font-size:15px;margin:0}
+.topbar .eyebrow{font-size:10px;line-height:1.2}
+.app-header .topbar-right{font-size:11px;gap:6px}
+.admin-toolbar{padding-top:6px;padding-bottom:6px;gap:8px;border-bottom-width:1px}
+/* The main action keeps its label everywhere, shortened with an ellipsis if
+   the row is tight (the full label stays as the button's name). */
+.tb-primary{min-inline-size:0;max-inline-size:220px}
+.tb-primary-icon{display:inline-flex;flex:none}
+.tb-primary-label{min-inline-size:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+@media(pointer:fine) and (min-width:721px){
+  :root{--target:34px}
+  .admin-toolbar .button{min-height:32px}
+  .tb-search{height:32px}
+  .tb-round{width:32px;height:32px}
+  .tb-avatar span{width:30px;height:30px}
+}
+
+@media(min-width:721px){
+  /* Page and panels */
+  .page-content{max-width:1600px;padding:16px clamp(16px,2.4vw,32px) 20px}
+  .page-content footer{padding-top:14px}
+  .page-view{min-height:0}
+  .panel{padding:14px 16px;margin-bottom:12px}
+  .panel h3{margin-bottom:10px;font-size:14px}
+  .panel-heading{margin-bottom:10px}
+  .panel-heading h2,.panel-heading h3{font-size:14.5px}
+  .welcome-row,.split-heading{margin-bottom:12px;gap:12px}
+  .welcome-row h2,.split-heading h2{font-size:18px;margin:0}
+  .stats-grid{gap:10px;margin-bottom:12px}
+  .stat-card{padding:10px 14px}
+  .stat-card strong{font-size:20px;margin:2px 0 0}
+  .form-grid{gap:10px 14px}
+  .field{gap:4px}
+  .form-actions{margin-top:2px}
+  .notice{padding:8px 12px;margin-bottom:12px}
+  .callout{padding:9px 12px;margin-bottom:12px}
+
+  /* Tables: shorter rows, and one line per cell (times and names do not
+     break; a wide table scrolls inside its own box). */
+  th{padding:7px 10px}
+  td{padding:7px 10px}
+  /* (only when the table's own box is wide: a narrow table, such as next to
+     an open editor, keeps wrapping instead of hiding columns) */
+  .table-scroll{container-type:inline-size}
+  .empty-cell{padding:18px 10px}
+
+  /* Sidebar */
+  .sidebar{padding:18px 12px 12px}
+  .sidebar .brand{padding:0 8px 18px}
+  .sidebar nav{gap:1px}
+  .nav-link{min-height:32px;padding:5px 10px}
+  .nav-label{padding-bottom:6px}
+
+  /* Forms that used a third of the screen: side by side on wide screens. */
+  .narrow{max-width:760px}
+}
+@container (min-width:760px){
+  .table-scroll :is(td,th){white-space:nowrap}
+}
+@media(min-width:1200px){
+  .page-view:has(> .panel.narrow ~ .panel.narrow),
+  .page-view:has(> .settings-panel ~ .settings-panel){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+  .page-view:has(> .panel.narrow ~ .panel.narrow) > *,
+  .page-view:has(> .settings-panel ~ .settings-panel) > *{grid-column:1/-1;margin-bottom:0;max-width:none}
+  .page-view:has(> .panel.narrow ~ .panel.narrow) > .panel.narrow,
+  .page-view:has(> .settings-panel ~ .settings-panel) > .settings-panel{grid-column:auto}
+}
+
+/* Phones: list cards show their fields in two columns (half as tall); wide
+   items (buttons, empty rows) take the whole width. */
+@media(max-width:720px){
+  /* The main action keeps its icon and label on phones too. */
+  .admin-toolbar .tb-primary .tb-primary-icon{display:inline-flex}
+  .admin-toolbar .tb-primary .tb-primary-label{display:block}
+  .admin-toolbar .tb-primary{flex:0 1 auto;padding:0 12px}
+  /* The round buttons keep their full 44px; the main action's label shortens instead. */
+  .admin-toolbar :is(.tb-round,.tb-global,[data-tb-more-wrap],[data-tb-filters]){flex:none}
+  .topbar{height:auto;min-height:48px}
+  .topbar .eyebrow{display:none}
+  .page-content{padding-top:12px}
+  .panel{padding:12px 13px;margin-bottom:10px}
+  .table-scroll table:not(.bird-table) tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px;padding:6px 12px}
+  .table-scroll table:not(.bird-table) td{display:block;padding:6px 0;border-bottom:0;font-size:14px;line-height:1.35}
+  .table-scroll table:not(.bird-table) td::before{display:block;margin-bottom:2px;font-size:10.5px}
+  .table-scroll table:not(.bird-table) :is(td.row-actions,td[colspan],td.empty-cell,td:has(button,select,input,textarea)){grid-column:1/-1}
+}
+/* Narrowest phones: the N/S, E/W choice is slimmer so the degree, minute and
+   second boxes keep 44px. */
+@media(max-width:360px){
+  .coordinate-values,.dms-grid .coordinate-values{grid-template-columns:50px repeat(3,minmax(0,1fr));gap:4px}
+}
