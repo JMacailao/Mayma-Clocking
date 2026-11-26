@@ -7,7 +7,7 @@ export const PHOTO_BUCKET='pigeon-photos';
 
 // Signed links to private bird photos, one hour.
 export async function birdPhotoUrls(paths){
-  const unique=[...new Set(paths.filter(Boolean))];
+  const unique=[...new Set(paths.filter(path=>path&&path!=='no-photo-yet'))];  // imported birds have no photo yet
   if(!unique.length)return new Map();
   const {data,error}=await supabase.storage.from(PHOTO_BUCKET).createSignedUrls(unique,3600);
   if(error)return new Map();

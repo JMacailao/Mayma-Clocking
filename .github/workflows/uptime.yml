@@ -1,0 +1,68 @@
+# Uptime check every 30 minutes: the website and the Supabase database.
+# When something is down it opens a GitHub issue (GitHub emails the repository
+# owner); when everything is back up it comments and closes it.
+name: Uptime check
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: uptime
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: assets/js/config.js
+          sparse-checkout-cone-mode: false
+      - name: Check the website and the database
+        id: check
+        run: |
+          set -u
+          url=$(sed -n 's/.*SUPABASE_URL = "\(.*\)".*/\1/p' assets/js/config.js)
+          key=$(sed -n 's/.*SUPABASE_KEY = "\(.*\)".*/\1/p' assets/js/config.js)
+          problems=""
+          site=$(curl -s -o page.html -w '%{http_code}' --max-time 20 https://www.avilonx.site/ || true)
+          if [ "$site" != "200" ] || ! grep -q "AvilonX" page.html; then problems="$problems- Website https://www.avilonx.site answered HTTP $site"$'\n'; fi
+          db=$(curl -s -o db.json -w '%{http_code}' --max-time 20 -X POST "$url/rest/v1/rpc/public_result_clubs" \
+            -H "apikey: $key" -H "Authorization: Bearer $key" -H "Content-Type: application/json" -d '{}' || true)
+          if [ "$db" != "200" ]; then problems="$problems- Database (Supabase REST) answered HTTP $db: $(head -c 200 db.json 2>/dev/null)"$'\n'; fi
+          {
+            echo "problems<<EOF"
+            printf '%s' "$problems"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          [ -z "$problems" ] && echo "All up." || printf 'Down:\n%s' "$problems"
+      - name: Open, update or close the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROBLEMS: ${{ steps.check.outputs.problems }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          title="AvilonX is down"
+          open=$(gh api "repos/$REPO/issues?state=open&labels=uptime&per_page=1" --jq '.[0].number // empty')
+          now=$(TZ=Asia/Manila date '+%b %d, %Y %I:%M %p')
+          if [ -n "$PROBLEMS" ]; then
+            body=$(printf 'Checked %s (PH time):\n\n%s\nThis issue closes by itself when everything is back up.' "$now" "$PROBLEMS")
+            if [ -z "$open" ]; then
+              gh api "repos/$REPO/labels" -f name=uptime -f color=d73a4a -f description="Opened by the uptime check" >/dev/null 2>&1 || true
+              gh api "repos/$REPO/issues" -f title="$title" -f body="$body" -f "labels[]=uptime" --jq .html_url
+            else
+              gh api "repos/$REPO/issues/$open/comments" -f body="Still down. $body" --jq .html_url
+            fi
+          elif [ -n "$open" ]; then
+            gh api "repos/$REPO/issues/$open/comments" -f body="Back up at $now (PH time)." >/dev/null
+            gh api -X PATCH "repos/$REPO/issues/$open" -f state=closed >/dev/null
+            echo "Closed issue #$open"
+          fi

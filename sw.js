@@ -28,3 +28,25 @@ self.addEventListener('fetch', event => {
     });
   }));
 });
+
+/* Push notifications (push.sql, avilonx-push): show them, and open the page on tap. */
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { data = {body: event.data?.text() || ''}; }
+  const icon = new URL('assets/images/app-icon-192.png', ROOT).href;
+  event.waitUntil(self.registration.showNotification(data.title || 'AvilonX', {
+    body: data.body || '', icon, badge: icon, tag: data.tag || undefined,
+    data: {url: data.url || ROOT.href}
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  let target = new URL(event.notification.data?.url || ROOT.href, ROOT);
+  if (target.origin !== ROOT.origin) target = ROOT;
+  event.waitUntil((async () => {
+    const open = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
+    const same = open.find(client => client.url.startsWith(ROOT.href));
+    if (same) { await same.focus(); return same.navigate(target.href).catch(() => {}); }
+    return self.clients.openWindow(target.href);
+  })());
+});

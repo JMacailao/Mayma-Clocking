@@ -64,7 +64,7 @@ try{const fn=${JSON.stringify(url.searchParams.get('fn') || 'render')};const cb=
   };
   let crashed = null;
   try { await test(page, ctx); } catch (error) { crashed = error; }
-  const errors = [...new Set(pageErrors)].filter(e => !/AudioContext|vibrate/.test(e));
+  const errors = [...new Set(pageErrors)].filter(e => !/AudioContext|vibrate|\[expected\]/.test(e));  // [expected]: thrown on purpose by a test
   if (errors.length) failures.push(`page errors: ${errors.join(' | ')}`);
   if (crashed) failures.push(`stopped: ${crashed.message.split('\n')[0]}`);
   await browser.close(); server.close();

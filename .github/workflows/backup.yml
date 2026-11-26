@@ -1,0 +1,65 @@
+# Daily database backup (see docs/BACKUP.md).
+# Dumps the Supabase database, encrypts it with BACKUP_PASSPHRASE and keeps it
+# as a workflow artifact for 30 days. The repository is public, so the file is
+# only ever stored encrypted. Needs two repository secrets:
+#   SUPABASE_DB_URL     Supabase → Connect → Session pooler connection string
+#   BACKUP_PASSPHRASE   a long password you keep safe (needed to restore)
+name: Database backup
+
+on:
+  schedule:
+    - cron: "17 18 * * *"   # 02:17 Philippine time, every day
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check the secrets
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Add the SUPABASE_DB_URL and BACKUP_PASSPHRASE repository secrets (see docs/BACKUP.md)."
+            exit 1
+          fi
+      - name: Install pg_dump 17
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+      - name: Dump and encrypt
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          stamp=$(TZ=Asia/Manila date +%Y-%m-%d_%H%M)
+          echo "STAMP=$stamp" >> "$GITHUB_ENV"
+          # The app's data (public) in full, plus the sign-in accounts.
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" --format=custom --no-owner --no-privileges \
+            --schema=public --file=public.dump
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" --format=custom --no-owner --no-privileges --data-only \
+            --table=auth.users --table=auth.identities --file=auth.dump
+          tar -cf - public.dump auth.dump | gzip -9 | \
+            gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 --symmetric --cipher-algo AES256 \
+            --output "avilonx-backup-$stamp.tar.gz.gpg" 3<<<"$BACKUP_PASSPHRASE"
+          rm -f public.dump auth.dump
+          ls -l "avilonx-backup-$stamp.tar.gz.gpg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: avilonx-backup-${{ env.STAMP }}
+          path: avilonx-backup-*.tar.gz.gpg
+          retention-days: 30
+          if-no-files-found: error

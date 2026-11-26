@@ -12,9 +12,15 @@ export async function render(view,identity) {
 
  mountForecast(view.querySelector('[data-forecast]'),races,entries,member);
 
+ // Loft reader: online or not, and taps it holds that still have to be sent.
+ mountReaderStatus(view).catch(error=>console.warn('Reader status unavailable:',error));
+
  // Notifications: offer to turn them on, and remind about show-ups once a day.
  const box=view.querySelector('[data-notify-box]');const state=notificationsState();
- if(state==='default'){box.hidden=false;box.innerHTML='<div><strong>Get notified on this phone</strong><span>A notification when your pigeon is clocked, and show-up reminders.</span></div><button class="button primary" type="button">Turn on notifications</button>';box.querySelector('button').onclick=async()=>{const result=await enableNotifications();if(result==='granted'){box.hidden=true;message('Notifications are on for this device.','success');notify('AvilonX notifications are on','You will be notified when your pigeons are clocked.');}else message('Notifications were not allowed. You can allow them in the browser\'s site settings.','error');};}
+ if(state==='default'){box.hidden=false;box.innerHTML='<div><strong>Get notified on this phone</strong><span>A notification when your pigeon is clocked, and show-up reminders.</span></div><button class="button primary" type="button">Turn on notifications</button>';box.querySelector('button').onclick=async()=>{
+  // Server push first (arrives even with the app closed); the in-page notice is the fallback.
+  try{await (await import('../../../assets/js/push.js')).turnOn();box.hidden=true;message('Notifications are on for this device.','success');return;}catch(error){console.warn('Push notifications unavailable:',error);}
+  const result=await enableNotifications();if(result==='granted'){box.hidden=true;message('Notifications are on for this device.','success');notify('AvilonX notifications are on','You will be notified when your pigeons are clocked.');}else message('Notifications were not allowed. You can allow them in the browser\'s site settings.','error');};}
  const showups=reminders.filter(item=>item.kind==='showup');
  if(showups.length&&state==='granted'){const key=`avilonx.showupReminder.${memberId}`,today=new Date().toDateString();let last=null;try{last=localStorage.getItem(key);}catch{/* storage unavailable */}if(last!==today){notify('Show up reminder',showups.map(item=>item.text).join(' '));try{localStorage.setItem(key,today);}catch{/* storage unavailable */}}}
 }
@@ -59,4 +65,18 @@ function mountForecast(panel,openRaces,entries,member){
   };
   panel.querySelector('[data-forecast-race]')?.addEventListener('change',draw);
   draw();
+}
+
+async function mountReaderStatus(view){
+  const {data,error}=await supabase.rpc('member_reader_status');
+  if(error||!data?.length)return;
+  const panel=document.createElement('section');panel.className='panel reader-status';
+  const ago=value=>{if(!value)return 'never';const minutes=Math.round((Date.now()-new Date(value))/60000);return minutes<1?'just now':minutes<60?`${minutes} min ago`:minutes<1440?`${Math.round(minutes/60)} h ago`:formatDate(value);};
+  panel.innerHTML=`<div class="panel-heading"><h3>Your loft reader${data.length>1?'s':''}</h3></div><ul class="reader-status-list">${data.map(reader=>`<li class="${reader.is_online?'is-online':'is-offline'}">
+    <span class="reader-dot" aria-hidden="true"></span>
+    <div><strong>${escapeHTML(reader.name)}</strong> <span class="tag ${reader.is_online?'active':'closed'}">${reader.is_online?'Online':'Offline'}</span>
+    <p class="small">Last contact ${escapeHTML(ago(reader.last_heartbeat_at||reader.last_seen_at))}</p>
+    ${reader.pending_taps>0?`<p class="reader-waiting"><strong>${reader.pending_taps} tap${reader.pending_taps===1?'':'s'} waiting to send.</strong> ${reader.is_online?'Sending now.':'They are saved on the reader and are sent with their real tap time when it is back online, but only until the race is closed.'}</p>`:reader.is_online?'<p class="small">All taps are sent.</p>':'<p class="small">Check the reader\'s power and Wi-Fi. Taps made while it is offline are saved on it and sent later.</p>'}</div></li>`).join('')}</ul>`;
+  const after=view.querySelector('.stats-grid');
+  if(after)after.after(panel);else view.prepend(panel);
 }
