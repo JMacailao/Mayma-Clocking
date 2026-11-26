@@ -257,4 +257,22 @@ DO $$ DECLARE v_user uuid; v_other uuid; v_clock bigint; v_member bigint; v_club
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
 
+-- Club logo: only the club's administrator, only in the club's folder.
+DO $$ DECLARE v_admin uuid; v_club bigint := (SELECT id FROM public.clubs ORDER BY id LIMIT 1); r jsonb; v_failed boolean; BEGIN
+  INSERT INTO auth.users (email) VALUES ('logo-admin@users.mayma.invalid') RETURNING id INTO v_admin;
+  INSERT INTO public.app_profiles (id, role, username, club_id, is_active) VALUES (v_admin, 'admin', 'logoadmin', v_club, true);
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  r := public.admin_set_club_logo(v_club || '/1.png');
+  ASSERT (SELECT logo_path FROM public.clubs WHERE id = v_club) = v_club || '/1.png' AND r->>'replaced_path' IS NULL, 'admin saves the logo';
+  r := public.admin_set_club_logo(v_club || '/2.png');
+  ASSERT r->>'replaced_path' = v_club || '/1.png', 'a new logo returns the old file to delete';
+  v_failed := false; BEGIN PERFORM public.admin_set_club_logo('999/x.png'); EXCEPTION WHEN OTHERS THEN v_failed := true; END;
+  ASSERT v_failed, 'another club''s folder is refused';
+  PERFORM public.admin_set_club_logo(NULL);
+  ASSERT (SELECT logo_path FROM public.clubs WHERE id = v_club) IS NULL, 'logo removed';
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  v_failed := false; BEGIN PERFORM public.admin_set_club_logo(v_club || '/3.png'); EXCEPTION WHEN OTHERS THEN v_failed := true; END;
+  ASSERT v_failed, 'not signed in: refused';
+END $$;
+
 SELECT 'All database checks passed.' AS result;
