@@ -24,6 +24,7 @@ module.exports = async (page, { open, check, sample, OUT }) => {
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.screenshot({ path: `${OUT}/race-create-popup.png` });
   await page.click('[data-close-dialog]');
+  await page.waitForFunction(() => document.querySelector('[data-schedule-editor] #race-form'), null, { timeout: 5000 }).catch(() => {});
   check(!(await page.locator('[data-schedule-dialog]').evaluate(d => d.open)) && await page.locator('[data-schedule-editor] #race-form').count() === 1, 'closing puts the form back');
   await page.click('[data-race-row="5"]');
   check(await page.locator('[data-schedule-editor]').isVisible() && await page.inputValue('#race-form [name="name"]') === 'Batangas Derby', 'clicking a race still edits it beside the list');
