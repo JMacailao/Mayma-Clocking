@@ -21,6 +21,7 @@ const PARTS=[
   ['telegram','Telegram results for loft reader owners'],
   ['race-point-recalc','Editing a race point recalculates the results'],
   ['clock-videos','Short videos of clockings'],
+  ['club-logo','Club logo'],
   ['race-day','Race day: change history, setup checks'],
   ['realtime','Instant result pop-ups (live updates)']
 ];
