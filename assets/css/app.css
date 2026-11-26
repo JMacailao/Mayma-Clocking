@@ -1317,3 +1317,24 @@ dialog::backdrop{background:rgba(15,23,42,.5);overflow:hidden;overscroll-behavio
 .review-item p{margin:4px 0 0}
 @media print{.review-panel{display:none}}
 .birds-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* Race schedules: filter (Today & open / All / From–To) and the Create pop-up */
+.schedule-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.schedule-filter{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.schedule-filter .field{gap:4px;font-size:12px}
+.schedule-filter .field input{min-width:150px}
+.schedule-filter-modes{display:inline-flex;padding:3px;border:1px solid var(--line);border-radius:var(--radius-sm);background:#fff}
+.schedule-filter-modes button{min-height:var(--target);min-width:44px;padding:0 14px;border:0;border-radius:6px;background:none;color:var(--muted);font:600 13px var(--font);cursor:pointer}
+.schedule-filter-modes button[aria-pressed=true]{background:var(--green);color:#fff}
+.schedule-filter .count-pill{align-self:center}
+.schedule-dialog{width:min(560px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:0;border:1px solid var(--line);border-radius:14px;box-shadow:0 30px 60px -20px #0f172a66;overflow:auto}
+.schedule-dialog::backdrop{background:#0f172a80}
+.schedule-dialog .schedule-editor-head{position:sticky;top:0;z-index:1;background:#fff}
+@media(max-width:720px){
+ .schedule-toolbar{align-items:stretch;flex-direction:column}
+ .schedule-filter{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+ .schedule-filter-modes{grid-column:1/-1;justify-self:start}
+ .schedule-filter .field input{min-width:0}
+ .schedule-filter .count-pill{grid-column:1/-1;justify-self:start}
+
+}

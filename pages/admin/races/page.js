@@ -9,7 +9,16 @@ export async function render(view) {
   const pigeonCount=id=>entries.filter(entry=>entry.race_id===id).length;
 
   view.innerHTML=`<div class="split-heading"><div><h2>Race schedules</h2></div></div>
-  <div class="schedule-toolbar"><button class="button primary" type="button" data-create-schedule><span aria-hidden="true">＋</span> Create schedule</button></div>
+  <div class="schedule-toolbar">
+    <button class="button primary" type="button" data-create-schedule><span aria-hidden="true">＋</span> Create schedule</button>
+    <div class="schedule-filter" role="group" aria-label="Show races">
+      <div class="schedule-filter-modes" role="group" aria-label="Quick filter"><button type="button" data-filter-mode="today" aria-pressed="true">Today &amp; open</button><button type="button" data-filter-mode="all" aria-pressed="false">All</button></div>
+      <label class="field"><span>From</span><input type="date" data-filter-from></label>
+      <label class="field"><span>To</span><input type="date" data-filter-to></label>
+      <span class="count-pill" data-filter-count></span>
+    </div>
+  </div>
+  <dialog class="schedule-dialog" data-schedule-dialog aria-labelledby="schedule-dialog-title"><div class="schedule-editor-head"><h3 id="schedule-dialog-title">Create schedule</h3><button class="schedule-editor-close" type="button" data-close-dialog aria-label="Close">×</button></div><div data-dialog-body></div></dialog>
   <div class="schedule-layout" data-schedule-layout>
     <section class="panel schedule-list"><div class="table-scroll"><table><thead><tr><th>Race</th><th>Release point</th><th>Release time</th><th>Pigeons</th><th>Status</th></tr></thead><tbody data-schedule-rows></tbody></table></div></section>
     <aside class="panel schedule-editor" data-schedule-editor hidden>
@@ -33,8 +42,32 @@ export async function render(view) {
   const {open_date:openDateInput,end_date:endDateInput,release_date:releaseDateInput,release_time:releaseTimeInput}=form.elements;
   let selectedId=null;
 
+  // Filter: "Today & open" (default) = races whose dates include today, open
+  // races, and races made today; or races between From and To; or All.
+  const PH_DAY=value=>value?new Date(new Date(`${String(value).replace(' ','T')}${/[zZ]|[+-]\d\d:?\d\d$/.test(String(value))?'':'Z'}`).getTime()+8*3600e3).toISOString().slice(0,10):null;
+  const today=new Date(Date.now()+8*3600e3).toISOString().slice(0,10);
+  const span=race=>{const start=race.open_date||PH_DAY(race.release_at_utc);const end=race.end_date||start;return [start,end];};
+  const filterNodes={from:view.querySelector('[data-filter-from]'),to:view.querySelector('[data-filter-to]'),count:view.querySelector('[data-filter-count]'),modes:[...view.querySelectorAll('[data-filter-mode]')]};
+  let filterMode='today';
+  const shown=()=>races.filter(race=>{
+    if(filterMode==='all')return true;
+    const [start,end]=span(race);
+    if(filterMode==='today')return race.status==='open'||(start&&start<=today&&end>=today)||PH_DAY(race.created_at)===today;
+    const from=filterNodes.from.value||'0000-01-01',to=filterNodes.to.value||'9999-12-31';
+    return Boolean(start)&&start<=to&&end>=from;
+  });
+  const setMode=mode=>{filterMode=mode;filterNodes.modes.forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.filterMode===mode)));if(mode!=='range'){filterNodes.from.value='';filterNodes.to.value='';}drawRows();};
+  filterNodes.modes.forEach(button=>button.onclick=()=>setMode(button.dataset.filterMode));
+  [filterNodes.from,filterNodes.to].forEach(input=>input.addEventListener('change',()=>{
+    if(filterNodes.from.value&&filterNodes.to.value&&filterNodes.to.value<filterNodes.from.value)filterNodes.to.value=filterNodes.from.value;
+    setMode(filterNodes.from.value||filterNodes.to.value?'range':'today');
+  }));
+  const emptyText=()=>!races.length?'No schedules yet. Press Create schedule to add one.':filterMode==='today'?'No races today and none open. Choose dates or All to see other races.':'No races between these dates.';
+
   const drawRows=()=>{
-    rowsNode.innerHTML=races.length?races.map(race=>`<tr class="schedule-row ${race.id===selectedId?'is-selected':''}" data-race-row="${race.id}" tabindex="0" aria-selected="${race.id===selectedId}"><td data-label="Race"><strong>${escapeHTML(race.name)}</strong>${race.is_practice?' <span class="tag practice">Practice</span>':''}${race.requires_show_up===false?' <span class="tag">No show up</span>':''}</td><td data-label="Release point">${escapeHTML(race.release_location||'—')}</td><td data-label="Release time">${escapeHTML(race.release_at_utc?formatDate(race.release_at_utc):'Not set')}</td><td data-label="Pigeons">${pigeonCount(race.id)}</td><td data-label="Status">${stateTag(race.status)}</td></tr>`).join(''):'<tr><td class="empty-cell" colspan="5">No schedules yet. Press Create schedule to add one.</td></tr>';
+    const list=shown();
+    filterNodes.count.textContent=`${list.length} of ${races.length} race${races.length===1?'':'s'}`;
+    rowsNode.innerHTML=list.length?list.map(race=>`<tr class="schedule-row ${race.id===selectedId?'is-selected':''}" data-race-row="${race.id}" tabindex="0" aria-selected="${race.id===selectedId}"><td data-label="Race"><strong>${escapeHTML(race.name)}</strong>${race.is_practice?' <span class="tag practice">Practice</span>':''}${race.requires_show_up===false?' <span class="tag">No show up</span>':''}</td><td data-label="Release point">${escapeHTML(race.release_location||'—')}</td><td data-label="Release time">${escapeHTML(race.release_at_utc?formatDate(race.release_at_utc):'Not set')}</td><td data-label="Pigeons">${pigeonCount(race.id)}</td><td data-label="Status">${stateTag(race.status)}</td></tr>`).join(''):`<tr><td class="empty-cell" colspan="5">${escapeHTML(emptyText())}</td></tr>`;
     rowsNode.querySelectorAll('[data-race-row]').forEach(row=>{const pick=()=>openEditor(races.find(race=>race.id===Number(row.dataset.raceRow)));row.onclick=pick;row.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();pick();}};});
   };
   const validateDateRange=()=>{endDateInput.min=openDateInput.value;const invalid=Boolean(openDateInput.value&&endDateInput.value&&endDateInput.value<openDateInput.value);endDateInput.setCustomValidity(invalid?'End date must be on or after open date.':'');return !invalid;};
@@ -50,7 +83,7 @@ export async function render(view) {
     const rows=[['Race',`<strong>${escapeHTML(race.name||'—')}</strong>${race.is_practice?' <span class="tag practice">Practice</span>':''}`],['Release point',escapeHTML(race.release_location||'—')],['Release time',escapeHTML(race.release_at_utc?formatDate(race.release_at_utc):'Not set')],['Pigeons',String(pigeonCount(race.id))],['Status',stateTag(race.status)]];
     details.innerHTML=`<dl class="race-details-panel">${rows.map(([label,value])=>`<div class="race-details-row"><dt class="race-details-label">${label}</dt><dd class="race-details-value">${value}</dd></div>`).join('')}</dl>`;
   };
-  function openEditor(race){
+  function openEditor(race,{inDialog=false}={}){
     selectedId=race?.id??null;form.reset();
     title.textContent=race?'Edit schedule':'Create schedule';saveButton.textContent=race?'Save changes':'Create schedule';
     const locked=Boolean(race&&pigeonCount(race.id));form.elements.race_point_id.disabled=locked;pointNote.hidden=!locked;
@@ -61,13 +94,26 @@ export async function render(view) {
       const [date='',time='']=utcToPhDateTimeLocal(race.release_at_utc).split('T');releaseDateInput.value=date;releaseTimeInput.value=time;
     }
     if(!race)setExpiry(null);
-    drawDetails(race);validateDateRange();editor.hidden=false;layout.classList.add('has-editor');drawRows();
+    drawDetails(race);validateDateRange();
+    if(inDialog){if(!openDateInput.value){openDateInput.value=today;endDateInput.value=today;}return;}
+    if(dialog?.open)dialog.close();
+    editor.hidden=false;layout.classList.add('has-editor');drawRows();
     if(matchMedia('(max-width:980px)').matches)editor.scrollIntoView({behavior:'smooth',block:'start'});
   }
   const closeEditor=()=>{selectedId=null;editor.hidden=true;layout.classList.remove('has-editor');drawRows();};
 
-  view.querySelector('[data-create-schedule]').onclick=()=>{openEditor(null);form.elements.name.focus();};
-  view.querySelector('[data-close-editor]').onclick=closeEditor;view.querySelector('[data-cancel-editor]').onclick=closeEditor;
+  // Create schedule opens the form in a pop-up; editing keeps it beside the list.
+  const dialog=view.querySelector('[data-schedule-dialog]'),dialogBody=view.querySelector('[data-dialog-body]'),formHome=details.nextElementSibling===form?details:null;
+  const putFormBack=()=>{if(form.parentElement!==editor)(formHome||editor.querySelector('.schedule-editor-head')).after(form);};
+  view.querySelector('[data-create-schedule]').onclick=()=>{
+    if(!editor.hidden)closeEditor();
+    openEditor(null,{inDialog:true});
+    dialogBody.append(form);dialog.showModal();form.elements.name.focus();
+  };
+  view.querySelector('[data-close-dialog]').onclick=()=>dialog.close();
+  dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
+  dialog.addEventListener('close',()=>{putFormBack();selectedId=null;drawRows();});
+  view.querySelector('[data-close-editor]').onclick=closeEditor;view.querySelector('[data-cancel-editor]').onclick=()=>dialog.open?dialog.close():closeEditor();
 
   form.onsubmit=async event=>{
     event.preventDefault();
@@ -96,6 +142,7 @@ export async function render(view) {
     const {error:saveError}=race?await supabase.from('races').update(record).eq('id',race.id):await supabase.from('races').insert(record);
     saveButton.disabled=false;
     if(saveError){message(/nfc_expiry_days/i.test(saveError.message||'')?'RFID tag expiry per race is not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':/is_practice/i.test(saveError.message||'')?'Practice races are not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':/requires_show_up/i.test(saveError.message||'')?'The Show up option is not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':dbError(saveError),'error');return;}
+    if(dialog.open)dialog.close();
     message(race?'Schedule saved.':'Schedule created.','success');window.dispatchEvent(new Event('app:refresh'));
   };
 
@@ -134,5 +181,5 @@ export async function render(view) {
   }
 
   drawRows();
-  if(races.length)openEditor(races[0]);
+  const first=shown()[0];if(first)openEditor(first);
 }
