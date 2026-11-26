@@ -10,7 +10,8 @@ module.exports = async (page, { app, check, sample, BASE, toast }) => {
   check(await page.locator('.photo-viewer').evaluate(d => d.open), 'a photo opens full size'); await page.keyboard.press('Escape');
   check(!(await page.locator('#bird-form [name=photo]').getAttribute('capture')), 'the photo can be chosen from the library (iPhone does not force the camera)');
   // The RFID tag must be registered by the Super Admin first.
-  await page.click('[data-bond-new]'); await page.check('#bird-form [name=nfc_read_with][value=wired]');
+  // Bond a bird is in the club toolbar ([data-tb-primary]).
+  await page.click('[data-tb-primary]'); await page.check('#bird-form [name=nfc_read_with][value=wired]');
   const typeTag = async uid => { await page.fill('#bird-form [name=nfc_tag]', uid); await page.press('#bird-form [name=nfc_tag]', 'Enter'); await page.waitForTimeout(300); };
   await typeTag('AABBCCDD');
   check(/not registered.*Register NFC/.test(await page.locator('[data-tag-check]').innerText()), 'an unregistered tag is refused at once');
@@ -21,7 +22,7 @@ module.exports = async (page, { app, check, sample, BASE, toast }) => {
   await typeTag('11223344');
   check(/registered ✓/.test(await page.locator('[data-tag-check]').innerText()), 'a registered, free tag is accepted');
   await page.click('[data-cancel-edit]');
-  await page.click('[data-bond-new]'); await page.click('[data-bond-tab=ring]');
+  await page.click('[data-tb-primary]'); await page.click('[data-bond-tab=ring]');
   check(!(await page.locator('[name=nfc_tag]').isVisible()), 'ring-only bonding has no RFID field');
   await page.selectOption('#bird-form [name=member_id]', '8'); await page.fill('#bird-form [name=ring_number]', 'PH-9'); await page.fill('#bird-form [name=bird_name]', 'Nine'); await page.selectOption('#bird-form [name=color]', 'Blue bar');
   await page.click('[data-save-bird]'); await page.waitForTimeout(300);

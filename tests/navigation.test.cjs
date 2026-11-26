@@ -17,7 +17,7 @@ function setup(role = 'admin') {
   const location = { href: `https://example.com/Mayma-Clocking/pages/${role}/dashboard/index.html`, origin: 'https://example.com' };
   const context = { URL, console, setTimeout, clearTimeout, body, location, supabase: {}, escapeHTML: String, fail: () => {},
     // Helpers app.js imports from i18n.js and update-check.js.
-    startTranslation: () => {}, languageSwitchHtml: () => '', bindLanguageSwitch: () => {}, startUpdateCheck: () => {}, watchDevice: () => {}, releaseDevice: async () => {},
+    syncToolbar: () => {}, toolbarHtml: () => '', mountToolbar: () => {}, startTranslation: () => {}, languageSwitchHtml: () => '', bindLanguageSwitch: () => {}, startUpdateCheck: () => {}, watchDevice: () => {}, releaseDevice: async () => {},
     history: { pushState(_, __, href) { location.href = href; } },
     document: { body, createElement: element, querySelector: key => nodes[key], querySelectorAll: () => [], addEventListener: (key, fn) => listeners[key] = fn },
     window: { scrollTo() {}, addEventListener: (key, fn) => listeners[key] = fn } };

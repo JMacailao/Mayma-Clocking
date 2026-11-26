@@ -48,7 +48,8 @@ export async function render(view) {
   const today=new Date(Date.now()+8*3600e3).toISOString().slice(0,10);
   const span=race=>{const start=race.open_date||PH_DAY(race.release_at_utc);const end=race.end_date||start;return [start,end];};
   const filterNodes={from:view.querySelector('[data-filter-from]'),to:view.querySelector('[data-filter-to]'),count:view.querySelector('[data-filter-count]'),modes:[...view.querySelectorAll('[data-filter-mode]')]};
-  let filterMode='today';
+  // Found with the toolbar's Find: show every race so it is in the list.
+  let filterMode='today';try{if(sessionStorage.getItem('avilonx.racesShowAll')){filterMode='all';sessionStorage.removeItem('avilonx.racesShowAll');}}catch{/* storage unavailable */}
   const shown=()=>races.filter(race=>{
     if(filterMode==='all')return true;
     const [start,end]=span(race);
@@ -180,6 +181,10 @@ export async function render(view) {
     }catch{return true;}
   }
 
+  filterNodes.modes.forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.filterMode===filterMode)));
   drawRows();
+  // Overview's "Create a race" (club toolbar) opens the pop-up right away.
+  let openCreate=false;try{openCreate=Boolean(sessionStorage.getItem('avilonx.openCreate'));sessionStorage.removeItem('avilonx.openCreate');}catch{/* storage unavailable */}
+  if(openCreate){view.querySelector('[data-create-schedule]').click();return;}
   const first=shown()[0];if(first)openEditor(first);
 }
