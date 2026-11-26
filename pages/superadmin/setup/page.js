@@ -1,4 +1,5 @@
 import { supabase, escapeHTML } from '../../../assets/js/shared.js';
+import { mountAccountEmail } from '../../../assets/js/account-email.js';
 
 // What each setup part adds, in the order avilonx-update.sql runs them.
 const PARTS=[
@@ -18,6 +19,7 @@ const PARTS=[
   ['race-tag-expiry','RFID tag expiry per race'],
   ['club-settings','Club settings (sticker for RFID entries)'],
   ['account-devices','One device per account'],
+  ['password-reset','Forgot password by email'],
   ['telegram','Telegram results for loft reader owners'],
   ['race-point-recalc','Editing a race point recalculates the results'],
   ['clock-videos','Short videos of clockings'],
@@ -29,6 +31,7 @@ const PARTS=[
 // Super Admin: which parts of the database setup are done, and what to run.
 export async function render(view){
   view.innerHTML=`<div class="split-heading"><div><h2>Setup checklist</h2><p>Anything red? Run <strong>avilonx-update.sql</strong> in the Supabase SQL Editor, then press Check again.</p></div><button class="button secondary" type="button" data-recheck>Check again</button></div>
+  <section class="panel narrow" data-email-panel></section>
   <section class="panel"><div data-setup-list><p class="small">Checking…</p></div></section>
   <section class="panel"><h3>How to update the database</h3><ol class="setup-steps"><li>Open Supabase → your project → <strong>SQL Editor</strong> → <strong>New query</strong>.</li><li>Paste the whole of <strong>avilonx-update.sql</strong> (from the AvilonX files) and press <strong>Run</strong>.</li><li>Come back here and press <strong>Check again</strong>.</li></ol><p class="small">A brand-new database first needs <strong>schema.sql</strong> and <strong>supabase-auth.sql</strong>, once.</p></section>`;
   const list=view.querySelector('[data-setup-list]');
@@ -40,5 +43,7 @@ export async function render(view){
     list.innerHTML=`<p class="setup-summary ${missing?'is-bad':'is-ok'}">${missing?`${missing} part${missing===1?' is':'s are'} not set up. Run avilonx-update.sql.`:'Everything is set up.'}</p><ul class="setup-list">${PARTS.map(([key,label])=>`<li class="${data?.[key]?'is-ok':'is-bad'}"><span class="setup-mark" aria-hidden="true">${data?.[key]?'✓':'✕'}</span><span><strong>${escapeHTML(label)}</strong><span class="small">${escapeHTML(key==='realtime'?'Turned on by race-day.sql':`${key}.sql`)}</span></span><span class="setup-state">${data?.[key]?'Done':'Not set up'}</span></li>`).join('')}</ul>`;
   };
   view.querySelector('[data-recheck]').onclick=check;
+  // The Super Admin's own email for Forgot password?.
+  mountAccountEmail(view.querySelector('[data-email-panel]')).catch(error=>console.warn(error));
   await check();
 }

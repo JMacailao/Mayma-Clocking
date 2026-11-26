@@ -133,6 +133,7 @@ async function renderPage(view,role,identity,page=body.dataset.view,setCleanup=f
 async function main(){
   startUpdateCheck();
   checkAndroidUpdate().catch(()=>{});
+  if(body.dataset.view==='reset-password'){try{const pageModule=await import('../../pages/reset-password/page.js');await pageModule.render();}catch(error){fail(error);}return;}
   if(body.dataset.view==='login'){try{const pageModule=await import('../../pages/login/page.js');await pageModule.render();showSiteOnly('pages/login/index.html');}catch(error){fail(error);}return;}
   const role=body.dataset.role,active=body.dataset.active,identity=await guard(role,active);
   if(!identity)return;

@@ -10,6 +10,7 @@ module.exports = async (page, { open, check, sample, OUT }) => {
   await page.screenshot({ path: `${OUT}/member-dashboard-phone.png`, fullPage: true });
 
   await open('/repo/pages/member/history/page.js', member, { viewport: { width: 390, height: 800 } });
+  await page.click('[data-history-all]'); await page.waitForTimeout(100);
   const cards = await page.locator('.public-card').allInnerTexts();
   const first = (cards[0] || '').replace(/\s+/g, ' ');
   check(cards.length === 2 && /PH-1 P1/.test(first) && /Batangas Derby/.test(first) && /Clocked with Loft reader/.test(first) && /✓ Verified/.test(first), `phone history: a card per receipt (${first})`);

@@ -21,7 +21,7 @@ module.exports = async (page, { open, check, OUT }) => {
   check(/✓ Verified/.test(body) && /Provisional/.test(body), 'shows verified and provisional');
   check(/Closed · final/.test(body) && /\bOpen\b/.test(body), 'shows the race status');
   const headers2 = await page.locator('[data-public-race-summaries] .race-summary').allInnerTexts();
-  check(headers2.length === 2 && /Batangas Derby/.test(headers2[0]) && /Batangas City/.test(headers2[0]) && /13\.75650° N, 121\.05830° E/.test(headers2[0]) && /9:30:00\sAM/.test(headers2[0]) && /9\/10/.test(headers2[0]) && /2\/4/.test(headers2[1]) && /Closed · final/.test(headers2[1]), `race headers: location, coordinates, release time, clocked/entered (${headers2.map(h => h.replace(/\s+/g, ' ')).join(' | ')})`);
+  check(headers2.length === 2 && /Batangas Derby/.test(headers2[0]) && /Batangas City/.test(headers2[0]) && /13\.76° N, 121\.06° E/.test(headers2[0]) && /9:30:00\sAM/.test(headers2[0]) && /9\/10/.test(headers2[0]) && /2\/4/.test(headers2[1]) && /Closed · final/.test(headers2[1]), `race headers: location, coordinates, release time, clocked/entered (${headers2.map(h => h.replace(/\s+/g, ' ')).join(' | ')})`);
   const firstRank = await page.locator('[data-public-results-table] tbody tr').first().locator('.public-rank').innerText().catch(() => '');
   check(firstRank === '1', 'fastest bird ranked 1');
   check(/11:00:00\sAM/.test(body), `arrival shows seconds (${(body.match(/\d{1,2}:\d{2}(:\d{2})?\s[AP]M/) || [''])[0]})`);

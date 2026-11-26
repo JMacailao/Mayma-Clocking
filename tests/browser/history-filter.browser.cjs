@@ -5,11 +5,14 @@ module.exports = async (page, { open, check, sample, OUT }) => {
   await open('/repo/pages/member/history/page.js', member);
   const rows = () => page.locator('[data-history-list] tbody tr').allInnerTexts();
   const phDay = offsetDays => new Date(Date.now() + 8 * 3600e3 - offsetDays * 86400e3).toISOString().slice(0, 10);
-  const all = await rows();
-  check(all.length === 2, `all clockings at first (${all.length})`);
-
   // The sample has one clocking 40 minutes ago and one 29 hours ago.
   const recent = new Date(Date.now() - 40 * 60e3 + 8 * 3600e3).toISOString().slice(0, 10), older = new Date(Date.now() - 29 * 3600e3 + 8 * 3600e3).toISOString().slice(0, 10);
+  // Opens on today's date only.
+  const today = phDay(0), first = await rows();
+  check(await page.inputValue('[data-history-filter] [name=from]') === today && await page.inputValue('[data-history-filter] [name=to]') === today, 'opens with today in both dates');
+  check(first.length === (recent === today ? 1 : 0) && (recent !== today || /Batangas Derby/.test(first[0])), `opens with only today's clockings (${first.length})`);
+  await page.click('[data-history-all]'); await page.waitForTimeout(100);
+  check((await rows()).length === 2 && await page.locator('[data-history-count]').innerText() === '', 'All dates: every clocking');
   await page.fill('[data-history-filter] [name=from]', recent); await page.fill('[data-history-filter] [name=to]', recent);
   let shown = await rows();
   check(shown.length === 1 && /Batangas Derby/.test(shown[0]) && /1 of 2/.test(await page.locator('[data-history-count]').innerText()), `one day: only its clockings (${shown.length})`);
@@ -18,8 +21,8 @@ module.exports = async (page, { open, check, sample, OUT }) => {
   check(shown.length === 1 && /Practice toss/.test(shown[0]), 'another day: its clocking');
   await page.fill('[data-history-filter] [name=from]', phDay(-30)); await page.fill('[data-history-filter] [name=to]', '');
   check(/No clockings on these dates/.test((await rows()).join(' ')), 'no match: says so');
-  await page.click('[data-history-filter] [type=reset]'); await page.waitForTimeout(100);
-  check((await rows()).length === 2 && await page.locator('[data-history-count]').innerText() === '', 'Clear: everything again');
+  await page.click('[data-history-all]'); await page.waitForTimeout(100);
+  check((await rows()).length === 2 && await page.locator('[data-history-count]').innerText() === '', 'All dates: everything again');
 
   // Phone: the filter fits and the cards follow it.
   await open('/repo/pages/member/history/page.js', member, { viewport: { width: 360, height: 800 } });

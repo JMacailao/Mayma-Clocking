@@ -42,7 +42,7 @@ export async function exportRaceToExcel(race,rows){
     'Member no.':row.member?.member_no||'',
     Member:row.member?.full_name||'',
     Loft:row.member?.loft_name||'',
-    'Distance (km)':row.entry.distance_m==null?'':Math.round(Number(row.entry.distance_m))/1000,
+    'Distance (km)':row.entry.distance_m==null?'':Math.round(Number(row.entry.distance_m)/10)/100,
     'Arrival (PH time)':row.clock?formatDateSeconds(row.clock.received_at_utc):'Not clocked',
     'Flight time':flightText(row.seconds),
     'Speed (m/min)':row.speed?Math.round(row.speed*1000)/1000:'',

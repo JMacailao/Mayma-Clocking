@@ -105,6 +105,7 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
     'rfid-tag-in-use', EXISTS (SELECT 1 FROM pg_proc AS p JOIN pg_namespace AS n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'require_rfid_tag_free'),
     'club-settings', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'clubs' AND column_name = 'rfid_entry_sticker'),
     'account-devices', to_regclass('public.account_devices') IS NOT NULL,
+    'password-reset', to_regclass('public.account_email_tokens') IS NOT NULL,
     'telegram', to_regclass('public.telegram_outbox') IS NOT NULL,
     'race-tag-expiry', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'races' AND column_name = 'nfc_expiry_days'),
     'bird-ring-only', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'pigeons' AND column_name = 'bond_type'),

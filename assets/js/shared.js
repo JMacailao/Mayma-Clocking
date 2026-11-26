@@ -95,12 +95,15 @@ export const utcToPhDateTimeLocal = (value) => {
   return Number.isNaN(date.valueOf())?'':new Date(date.valueOf()+8*60*60*1000).toISOString().slice(0,16);
 };
 export const peso = (value) => Number(value||0).toLocaleString('en-PH',{maximumFractionDigits:2});
-// Distances are stored in metres; everywhere they are shown in km, to the metre (e.g. 177.865 km).
-export const distanceKm = (meters) => meters===null||meters===undefined||meters===''||!Number.isFinite(Number(meters)) ? '—' : `${(Number(meters)/1000).toLocaleString('en-PH',{minimumFractionDigits:3,maximumFractionDigits:3})} km`;
+// Distances are stored in metres (speeds use the full distance); everywhere they
+// are shown in km rounded to 2 decimals (e.g. 177.86 km).
+export const distanceKm = (meters) => meters===null||meters===undefined||meters===''||!Number.isFinite(Number(meters)) ? '—' : `${(Math.round(Number(meters)/10)/100).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2})} km`;
+// Coordinates are kept exactly but shown rounded to 2 decimals (e.g. 13.76).
+export const coord2 = (value) => value===null||value===undefined||value===''||!Number.isFinite(Number(value)) ? '—' : Number(value).toFixed(2);
 // Header of a race on Results and the public results: release point, its
 // coordinates, release time, status and birds clocked of entered (e.g. 9/10).
 export const raceSummaryHtml = (race) => {
-  const coord=(value,pos,neg)=>value==null||value===''||!Number.isFinite(Number(value))?null:`${Math.abs(Number(value)).toFixed(5)}° ${Number(value)<0?neg:pos}`;
+  const coord=(value,pos,neg)=>value==null||value===''||!Number.isFinite(Number(value))?null:`${Math.abs(Number(value)).toFixed(2)}° ${Number(value)<0?neg:pos}`;
   const lat=coord(race.latitude,'N','S'),lon=coord(race.longitude,'E','W');
   const entered=Number(race.entered)||0,clocked=Number(race.clocked)||0;
   const item=(label,value,cls='')=>`<div class="race-summary-item${cls}"><dt>${escapeHTML(label)}</dt><dd>${value}</dd></div>`;
@@ -132,4 +135,12 @@ export function loadSpreadsheetParser(){
     document.head.append(script);
   }).catch(error=>{spreadsheetParserPromise=null;document.querySelector('[data-sheetjs]')?.remove();throw error;});
   return spreadsheetParserPromise;
+}
+
+// Sends the link that confirms a member's email (Edge Function
+// avilonx-password-reset). Returns a sentence for the notice, starting with a space.
+export async function sendEmailConfirm(memberId){
+  const {data,error}=await supabase.functions.invoke('avilonx-password-reset',{body:{action:'confirm',member_id:memberId??null}});
+  if(error){let detail='';try{detail=(await error.context?.json?.())?.error||'';}catch{/* no details */}return ` Confirmation email not sent: ${detail||'password reset by email is not set up yet (see docs/PASSWORD-RESET.md).'}`;}
+  return data?.confirmed?` ${data.email} is already confirmed.`:` A confirmation link was sent to ${data?.email||'the email'}; it must be opened before password resets can use it.`;
 }

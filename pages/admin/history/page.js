@@ -1,9 +1,9 @@
 import { supabase, escapeHTML, formatDateSeconds, distanceKm } from '../../../assets/js/shared.js';
 
-const TABLES={races:'Race schedule',race_entries:'Race entry',clock_events:'Clock',pigeons:'Bonded bird'};
+const TABLES={races:'Race schedule',race_entries:'Race entry',clock_events:'Clock',pigeons:'Bonded bird',password_reset:'Password reset'};
 const ACTIONS={insert:'Added',update:'Changed',delete:'Deleted'};
 // Fields worth showing, with friendly names; others are left out of the list.
-const FIELDS={name:'Name',status:'Status',release_at_utc:'Release',release_location:'Release point',open_date:'Open date',end_date:'End date',is_practice:'Practice',pigeon_ring:'Ring',ring_number:'Ring',barcode:'Sticker',nfc_tag:'RFID tag',nfc_expires_at:'Tag expires',remarks:'Remarks',distance_m:'Distance',member_id:'Member',received_at_utc:'Clocked at',verification:'Verification',source:'Clocked with',bird_name:'Bird name',color:'Colour',loft_name:'Loft',bond_type:'Bond',category:'Category',pooling:'Pooling'};
+const FIELDS={name:'Name',status:'Status',release_at_utc:'Release',release_location:'Release point',open_date:'Open date',end_date:'End date',is_practice:'Practice',pigeon_ring:'Ring',ring_number:'Ring',barcode:'Sticker',nfc_tag:'RFID tag',nfc_expires_at:'Tag expires',remarks:'Remarks',distance_m:'Distance',member_id:'Member',received_at_utc:'Clocked at',verification:'Verification',source:'Clocked with',bird_name:'Bird name',color:'Colour',loft_name:'Loft',bond_type:'Bond',category:'Category',pooling:'Pooling',event:'What',member:'Member',email:'Email'};
 const PAGE=100;
 
 const show=(value,key)=>key==='distance_m'&&value!==null&&value!==undefined&&value!==''?distanceKm(value):value===null||value===undefined||value===''?'—':Array.isArray(value)?(value.join(', ')||'—'):typeof value==='boolean'?(value?'Yes':'No'):String(value);

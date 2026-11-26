@@ -1,5 +1,6 @@
 import { saveClubLogo, clubLogoUrl, showClubLogo } from '../../../assets/js/club-logo.js';
 import { supabase, escapeHTML, message } from '../../../assets/js/shared.js';
+import { mountAccountEmail } from '../../../assets/js/account-email.js';
 
 // Club administrator: settings that change how the club works.
 export async function render(view,identity){
@@ -12,6 +13,7 @@ export async function render(view,identity){
     <div class="club-logo-row"><span class="club-logo-preview" data-logo-preview></span><div class="club-logo-actions"><input type="file" accept="image/png,image/jpeg,image/webp" data-logo-file hidden><button class="button secondary" type="button" data-logo-pick>Upload logo</button><button class="text-button danger-text" type="button" data-logo-remove hidden>Remove</button></div></div>
     <p class="small">PNG, JPG or WebP. Shown next to the club name.</p>
   </section>
+  <section class="panel settings-panel" data-email-panel></section>
   <section class="panel settings-panel"><h3>Race entries</h3>
     <fieldset class="settings-choice" ${missing?'disabled':''}><legend>Sticker for RFID entries</legend>
       <label><input type="radio" name="rfid_entry_sticker" value="required"><span><strong>Required</strong>Every RFID entry also needs the pigeon's sticker. The entry cannot be saved without it.</span></label>
@@ -64,4 +66,6 @@ export async function render(view,identity){
     if(saveError){message(/admin_update_club_settings|function/i.test(saveError.message||'')?'Club settings are not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':saveError.message,'error');return;}
     message(`Settings saved: sticker ${value==='optional'?'optional (with a warning)':'required'} for RFID entries; ${single==='on'?'one device per account':'any number of devices per account'}.`,'success');
   };
+  // The administrator's own email for Forgot password?.
+  await mountAccountEmail(view.querySelector('[data-email-panel]'));
 }

@@ -389,4 +389,5 @@ next to what was read, so misread values can be corrected before saving.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): folders, shared code, pages and how to add one.
 - [docs/DATABASE.md](docs/DATABASE.md): the database setup files.
 - [docs/TESTING.md](docs/TESTING.md): the automatic tests and how to run them (`npm test`, `npm run test:browser`, `npm run test:sql`).
+- [docs/PASSWORD-RESET.md](docs/PASSWORD-RESET.md): members reset a forgotten password by email (Resend + Edge Function setup).
 - [docs/RFID-READER.md](docs/RFID-READER.md): the loft RFID reader (ESP8266 or ESP32): parts, wiring, OLED screens.
