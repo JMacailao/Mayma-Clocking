@@ -1,0 +1,164 @@
+/* AvilonX public landing page (index.html). Uses the tokens and .button/.brand from app.css. */
+.lp{--orange:#f05a00;--deep:#001f3a;background:#fff;color:var(--ink)}
+.lp main{display:block}
+.lp-container{width:min(100% - 40px,1180px);margin-inline:auto}
+.lp h1,.lp h2,.lp h3{font-family:var(--font);letter-spacing:-.03em;margin:0}
+
+/* Header */
+.lp-header{position:sticky;top:0;z-index:20;background:#ffffffd9;backdrop-filter:saturate(1.6) blur(12px);-webkit-backdrop-filter:saturate(1.6) blur(12px);border-bottom:1px solid #e2e8f0b3;padding-top:env(safe-area-inset-top)}
+.lp-header-row{display:flex;align-items:center;gap:24px;min-height:68px}
+.lp-header .brand-logo{width:54px;height:auto}
+.lp-nav{display:flex;gap:4px;margin-left:auto}
+.lp-nav a{padding:8px 12px;border-radius:8px;color:#475569;font-weight:500;font-size:14px;transition:background .15s,color .15s}
+.lp-nav a:hover{background:var(--soft);color:var(--ink)}
+.lp-signin{padding-inline:18px}
+
+/* Hero */
+.lp-hero{position:relative;overflow:hidden;padding:72px 0 88px;background:radial-gradient(900px 480px at 85% 10%,#e0ecf7 0,transparent 70%),radial-gradient(600px 400px at 0% 100%,#fff1e6 0,transparent 70%),#fff}
+.lp-hero-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:56px;align-items:center}
+.lp-pill{display:inline-flex;align-items:center;gap:9px;padding:6px 14px 6px 12px;border:1px solid var(--line);border-radius:999px;background:#fff;color:#475569;font-size:13px;font-weight:500;box-shadow:0 1px 2px #0f172a0a}
+.lp-hero h1{font-size:clamp(44px,6vw,76px);line-height:1;font-weight:700;letter-spacing:-.055em;margin:22px 0 20px}
+.lp-hero h1 em{font-style:normal;background:linear-gradient(90deg,var(--green),#0a6bb8 60%,var(--orange));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lp-hero-copy>p{max-width:520px;margin:0 0 30px;font-size:17px;line-height:1.7;color:var(--muted)}
+.lp-cta{display:flex;flex-wrap:wrap;gap:12px}
+.lp-big{min-height:50px;padding:0 22px;font-size:15px;border-radius:12px}
+.lp-big.primary{box-shadow:0 8px 20px -8px #00345f99}
+.lp-proof{display:flex;flex-wrap:wrap;gap:12px 36px;list-style:none;padding:0;margin:40px 0 0}
+.lp-proof li{display:grid;gap:2px;padding-left:14px;border-left:2px solid var(--line)}
+.lp-proof strong{font-size:17px;color:var(--ink)}
+.lp-proof span{font-size:13px;color:var(--muted)}
+.lp-hero-media{position:relative;padding:0 0 40px 0}
+.lp-hero-media .lp-browser{transform:perspective(1600px) rotateY(-6deg) rotateX(2deg);transform-origin:left center}
+.lp-hero-phone{position:absolute;width:30%;left:-7%;bottom:0}
+
+/* Device frames */
+.lp-browser,.lp-phone{margin:0;background:#fff;overflow:hidden}
+.lp-browser{border:1px solid #dbe3ec;border-radius:14px;box-shadow:0 30px 60px -30px #0f172a59,0 12px 24px -16px #0f172a33}
+.lp-browser-bar{display:flex;align-items:center;gap:6px;height:30px;padding:0 12px;background:#f1f5f9;border-bottom:1px solid #e2e8f0}
+.lp-browser-bar i{width:9px;height:9px;border-radius:50%;background:#cbd5e1}
+.lp-browser-bar span{margin:0 auto;padding:2px 14px;border-radius:6px;background:#fff;color:#94a3b8;font-size:11px}
+.lp-phone{border:7px solid #0f172a;border-radius:30px;box-shadow:0 30px 50px -24px #0f172a80}
+.lp-browser img,.lp-phone img{display:block;width:100%;height:auto}
+
+/* Sections */
+.lp-section{padding:96px 0;scroll-margin-top:68px}
+.lp-soft{background:var(--ground);border-block:1px solid var(--line)}
+.lp-head{max-width:640px;margin:0 auto 56px;text-align:center}
+.lp-kicker{display:inline-block;margin-bottom:12px;color:var(--orange);font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.lp-head h2,.lp-app h2{font-size:clamp(30px,4vw,44px);line-height:1.1;font-weight:700}
+.lp-head p{margin:14px 0 0;color:var(--muted);font-size:17px}
+
+/* How it works: a winding line through numbered steps */
+.lp-snake{position:relative;--gutter:140px}
+.lp-snake-line{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.lp-snake-line path{fill:none;stroke-linecap:round}
+.lp-snake-track{stroke:#dbe3ec;stroke-width:3;stroke-dasharray:2 10}
+.lp-snake-run{stroke:var(--green);stroke-width:4}
+.lp-steps{list-style:none;margin:0;padding:0;display:grid;gap:72px}
+.lp-step{position:relative;display:grid;grid-template-columns:minmax(0,1fr) var(--gutter) minmax(0,1fr);grid-template-areas:"copy dot media";align-items:center}
+.lp-step:nth-child(even){grid-template-areas:"media dot copy"}
+.lp-step-copy{grid-area:copy;max-width:420px}
+.lp-step:nth-child(odd) .lp-step-copy{justify-self:end;text-align:right}
+.lp-step-copy h3{font-size:24px;font-weight:700;margin-bottom:10px}
+.lp-step-copy p{margin:0;color:var(--muted);font-size:16px;line-height:1.7}
+.lp-dot{grid-area:dot;justify-self:center;position:relative;z-index:1;display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:var(--green);color:#fff;font-size:18px;font-weight:700;box-shadow:0 0 0 8px #fff,0 0 0 9px var(--line)}
+.lp-step:last-child .lp-dot{background:var(--orange)}
+.lp-step-media{grid-area:media}
+.lp-step-media.lp-phone{width:min(260px,62%);justify-self:center}
+.lp-step:nth-child(odd) .lp-step-media.lp-browser{transform:perspective(1400px) rotateY(-4deg)}
+.lp-step:nth-child(even) .lp-step-media.lp-browser{transform:perspective(1400px) rotateY(4deg)}
+
+/* Features */
+.lp-features{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.lp-features li{padding:24px;background:#fff;border:1px solid var(--line);border-radius:16px;transition:transform .2s,box-shadow .2s,border-color .2s}
+.lp-features li:hover{transform:translateY(-3px);border-color:#c7d6e6;box-shadow:0 16px 30px -18px #0f172a40}
+.lp-features svg{width:44px;height:44px;padding:10px;border-radius:12px;background:#e8eef6;fill:none;stroke:var(--green);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.lp-features h3{font-size:17px;font-weight:700;margin:16px 0 6px}
+.lp-features p{margin:0;color:var(--muted);font-size:14px;line-height:1.6}
+
+/* Android app band */
+.lp-app{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);align-items:center;gap:40px;padding:56px 64px 0;border-radius:28px;background:radial-gradient(500px 300px at 100% 0,#0a6bb866,transparent 70%),linear-gradient(135deg,var(--green),var(--deep));color:#fff;overflow:hidden}
+.lp-app-copy{padding-bottom:56px}
+.lp-app .lp-kicker{color:#ffb27a}
+.lp-app p{max-width:480px;margin:16px 0 28px;color:#cbd8e6;font-size:17px;line-height:1.7}
+.lp-light{background:#fff;color:var(--green)}
+.lp-light:hover{background:#e8eef6}
+.lp-ghost{background:transparent;color:#fff;border:1px solid #ffffff59}
+.lp-ghost:hover{background:#ffffff14}
+.lp-app-phone{width:min(280px,80%);justify-self:center;align-self:end;margin-bottom:-90px;border-color:#000}
+
+/* Footer */
+.lp-footer{padding:28px 0 max(28px,env(safe-area-inset-bottom));border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+.lp-footer-row{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+/* Motion: content shows at once; with motion allowed it eases in while scrolling. */
+@media(prefers-reduced-motion:no-preference){
+ .lp-hero-copy>*{animation:lp-rise .7s cubic-bezier(.2,.7,.2,1) both}
+ .lp-hero-copy>:nth-child(2){animation-delay:.06s}.lp-hero-copy>:nth-child(3){animation-delay:.12s}.lp-hero-copy>:nth-child(4){animation-delay:.18s}.lp-hero-copy>:nth-child(5){animation-delay:.24s}
+ .lp-hero-media{animation:lp-rise .9s .15s cubic-bezier(.2,.7,.2,1) both}
+ @supports (animation-timeline:view()){
+  .lp-step-copy,.lp-step-media,.lp-features li{animation:lp-rise linear both;animation-timeline:view();animation-range:entry 0% entry 60%}
+  .lp-snake-run{stroke-dasharray:1;animation:lp-draw linear both;animation-timeline:--lp-snake;animation-range:entry 40% exit 60%}
+  .lp-snake{view-timeline:--lp-snake block}
+ }
+}
+@keyframes lp-rise{from{opacity:0;translate:0 24px}}
+@keyframes lp-draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+
+/* Tablet */
+@media(max-width:1000px){
+ .lp-hero-grid{grid-template-columns:1fr;gap:48px}
+ .lp-hero-copy{text-align:center}
+ .lp-hero-copy>p{margin-inline:auto}
+ .lp-cta,.lp-proof{justify-content:center}
+ .lp-hero-media{max-width:720px;margin-inline:auto;width:100%}
+ .lp-hero-phone{left:auto;right:-2%;width:26%}
+ .lp-hero-media .lp-browser{transform:none}
+ .lp-features{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .lp-snake{--gutter:96px}
+ .lp-app{grid-template-columns:1fr;padding:48px 40px 0;text-align:center}
+ .lp-app p{margin-inline:auto}
+ .lp-app .lp-cta{justify-content:center}
+ .lp-app-copy{padding-bottom:0}
+ .lp-app-phone{margin-bottom:-120px;width:min(240px,60%)}
+}
+
+/* Phone: the line runs down the left, steps stack beside it. */
+@media(max-width:720px){
+ .lp-container{width:calc(100% - 32px)}
+ .lp-nav{display:none}
+ .lp-signin{margin-left:auto}
+ .lp-header-row{min-height:60px}
+ .lp-header .brand-logo{width:46px}
+ .lp-hero{padding:44px 0 56px}
+ .lp-hero-copy>p{font-size:16px}
+ .lp-cta .lp-big{flex:1 1 100%}
+ .lp-proof{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;text-align:left}
+ .lp-proof li{padding-left:10px}
+ .lp-proof strong{font-size:14px}.lp-proof span{font-size:11.5px;line-height:1.35}
+ .lp-hero-media{padding-bottom:24px}
+ .lp-hero-phone{width:32%;right:-1%;border-width:5px;border-radius:20px}
+ .lp-section{padding:64px 0}
+ .lp-head{margin-bottom:36px}
+ .lp-head p{font-size:16px}
+ .lp-snake{--gutter:44px}
+ .lp-steps{gap:48px}
+ .lp-step,.lp-step:nth-child(even){grid-template-columns:var(--gutter) minmax(0,1fr);grid-template-areas:"dot copy" ". media";gap:16px 14px;align-items:start}
+ .lp-step:nth-child(odd) .lp-step-copy{justify-self:start;text-align:left}
+ .lp-dot{width:40px;height:40px;font-size:15px;box-shadow:0 0 0 6px #fff,0 0 0 7px var(--line)}
+ .lp-step-copy h3{font-size:20px;margin:6px 0 6px}
+ .lp-step-copy p{font-size:15px}
+ .lp-step-media.lp-browser{transform:none!important;border-radius:10px}
+ .lp-step-media.lp-browser .lp-browser-bar{display:none}
+ .lp-step-media.lp-phone{width:min(220px,70%);justify-self:start;border-width:5px;border-radius:22px}
+ .lp-features{grid-template-columns:1fr 1fr;gap:10px}
+ .lp-features li{padding:16px}
+ .lp-features svg{width:38px;height:38px;padding:8px}
+ .lp-features h3{font-size:15px;margin-top:12px}
+ .lp-features p{font-size:13px}
+ .lp-app{padding:36px 22px 0;border-radius:20px}
+ .lp-app .lp-cta .lp-big{flex:1 1 100%}
+ .lp-app-phone{margin-bottom:-140px;width:min(220px,64%);border-width:5px;border-radius:22px}
+ .lp-footer-row{flex-direction:column}
+}
+@media(max-width:380px){.lp-features{grid-template-columns:1fr}}

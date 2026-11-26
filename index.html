@@ -1,1 +1,146 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#00345f"><title>AvilonX · Race clocking</title><link rel="icon" type="image/png" href="assets/images/clocking-logo.png"><link rel="stylesheet" href="assets/css/app.css"><link rel="manifest" href="manifest.webmanifest"><script>/* The app shows only www.avilonx.site in the address bar: Refresh, Back and Forward return to the page of that history entry. */try{var p=(history.state&&history.state.path)||sessionStorage.getItem('avilonx.route');if(p&&/^pages\/[a-z0-9\/-]+\/index\.html$/.test(p))location.replace(p);}catch(e){}</script><script defer src="assets/js/pwa.js"></script></head><body class="landing"><main class="landing-wrap"><a class="brand" href="index.html"><img class="brand-logo" src="assets/images/clocking-logo.png" alt="AvilonX pigeon clock logo" width="72" height="48"><span>AvilonX<span class="brand-sub">RACE CLOCKING</span></span></a><section class="landing-hero"><div class="eyebrow">PIGEON RACING CLUB</div><h1>Every race,<br><em>accounted for.</em></h1><p>Manage your club schedules and record pigeon clockings in one place.</p><a class="button primary" href="pages/login/index.html"><span>Sign in to the clocking app</span> <span>→</span></a><div class="hero-meta"><span><i class="live-dot"></i> Club clocking portal</span><span>Supabase secured</span></div></section><aside class="race-mark" aria-hidden="true"><img src="assets/images/clocking-logo.png" alt="" width="1536" height="1024"></aside><footer class="landing-footer"><span>AvilonX Clocking</span><span>Server timestamp · Provisional results</span></footer></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#00345f">
+<title>AvilonX · Race clocking</title>
+<meta name="description" content="AvilonX runs your pigeon racing club: race schedules, bird registration, server-timed clocking by RFID, NFC or sticker, live race day, show up checks and results.">
+<link rel="icon" type="image/png" href="assets/images/clocking-logo.png">
+<link rel="stylesheet" href="assets/css/app.css">
+<link rel="stylesheet" href="assets/css/landing.css">
+<link rel="manifest" href="manifest.webmanifest">
+<script>/* The app shows only www.avilonx.site in the address bar: Refresh, Back and Forward return to the page of that history entry. */try{var p=(history.state&&history.state.path)||sessionStorage.getItem('avilonx.route');if(p&&/^pages\/[a-z0-9\/-]+\/index\.html$/.test(p))location.replace(p);}catch(e){}</script>
+<script defer src="assets/js/pwa.js"></script>
+<script type="module" src="assets/js/landing.js"></script>
+</head>
+<body class="lp">
+<header class="lp-header">
+ <div class="lp-container lp-header-row">
+  <a class="brand" href="index.html"><img class="brand-logo" src="assets/images/clocking-logo.png" alt="AvilonX pigeon clock logo" width="72" height="48"><span>AvilonX<span class="brand-sub">RACE CLOCKING</span></span></a>
+  <nav class="lp-nav" aria-label="Page sections"><a href="#how">How it works</a><a href="#features">Features</a><a href="#app">Android app</a></nav>
+  <a class="button primary lp-signin" href="pages/login/index.html">Sign in</a>
+ </div>
+</header>
+
+<main>
+ <section class="lp-hero">
+  <div class="lp-container lp-hero-grid">
+   <div class="lp-hero-copy">
+    <span class="lp-pill"><i class="live-dot"></i> Pigeon racing club system</span>
+    <h1>Every race,<br><em>accounted for.</em></h1>
+    <p>Schedule races, register birds, clock arrivals by RFID, NFC or sticker, and publish results. One system for the club team and every member, timed by the server.</p>
+    <div class="lp-cta">
+     <a class="button primary lp-big" href="pages/login/index.html">Sign in to the clocking app <span aria-hidden="true">→</span></a>
+     <a class="button secondary lp-big" href="pages/login/index.html">See public race results</a>
+    </div>
+    <ul class="lp-proof">
+     <li><strong>Server time</strong><span>No phone clock tricks</span></li>
+     <li><strong>3 ways</strong><span>RFID, NFC, sticker</span></li>
+     <li><strong>Live</strong><span>Race day board</span></li>
+    </ul>
+   </div>
+   <div class="lp-hero-media">
+    <figure class="lp-browser">
+     <div class="lp-browser-bar" aria-hidden="true"><i></i><i></i><i></i><span>avilonx.site</span></div>
+     <img src="assets/images/landing/raceday.webp" alt="Race day board: live arrivals with ring, member, arrival time, flight and speed, plus loft readers and show up counts" width="1600" height="1000" fetchpriority="high">
+    </figure>
+    <figure class="lp-phone lp-hero-phone">
+     <img src="assets/images/landing/member-dashboard.webp" alt="Member app: welcome screen with Clock a pigeon button, reminders and speed forecast" width="585" height="1266">
+    </figure>
+   </div>
+  </div>
+ </section>
+
+ <section class="lp-section" id="how">
+  <div class="lp-container">
+   <div class="lp-head">
+    <span class="lp-kicker">How it works</span>
+    <h2>From schedule to results, step by step</h2>
+    <p>Follow one race through AvilonX.</p>
+   </div>
+   <div class="lp-snake" data-snake>
+    <svg class="lp-snake-line" aria-hidden="true" focusable="false"><path class="lp-snake-track"/><path class="lp-snake-run" pathLength="1"/></svg>
+    <ol class="lp-steps">
+    <li class="lp-step">
+     <span class="lp-dot">1</span>
+     <div class="lp-step-copy"><h3>Schedule the race</h3><p>Pick the release point, release time, open and end dates. Distances to every loft are worked out from GPS coordinates.</p></div>
+     <figure class="lp-step-media lp-browser"><img src="assets/images/landing/races.webp" alt="Race schedules list with race details panel" width="1600" height="1000" loading="lazy"></figure>
+    </li>
+    <li class="lp-step">
+     <span class="lp-dot">2</span>
+     <div class="lp-step-copy"><h3>Register the birds</h3><p>Enter each pigeon with its RFID tag or race sticker. Only bonded birds can be entered, so every entry belongs to the right member.</p></div>
+     <figure class="lp-step-media lp-browser"><img src="assets/images/landing/entries.webp" alt="Race entries page with RFID entries, sticker entries and race sheet scan" width="1600" height="1000" loading="lazy"></figure>
+    </li>
+    <li class="lp-step">
+     <span class="lp-dot">3</span>
+     <div class="lp-step-copy"><h3>Release and forecast</h3><p>Once the birds are released, members see a speed forecast: when a bird flying 1,200 m/min should be home.</p></div>
+     <figure class="lp-step-media lp-phone"><img src="assets/images/landing/member-dashboard.webp" alt="Member dashboard with speed forecast table" width="585" height="1266" loading="lazy"></figure>
+    </li>
+    <li class="lp-step">
+     <span class="lp-dot">4</span>
+     <div class="lp-step-copy"><h3>Clock the arrival</h3><p>The loft RFID reader, an Android phone with NFC, or the sticker scratch code. Each clocking gets the server's time, not the phone's.</p></div>
+     <figure class="lp-step-media lp-phone"><img src="assets/images/landing/member-clocking.webp" alt="Member clocking screen with Sticker and Eclock tabs" width="585" height="1266" loading="lazy"></figure>
+    </li>
+    <li class="lp-step">
+     <span class="lp-dot">5</span>
+     <div class="lp-step-copy"><h3>Follow race day live</h3><p>Arrivals, speeds and loft reader status update as they happen. Put it on the big screen at the club.</p></div>
+     <figure class="lp-step-media lp-browser"><img src="assets/images/landing/raceday.webp" alt="Race day board with live arrivals" width="1600" height="1000" loading="lazy"></figure>
+    </li>
+    <li class="lp-step">
+     <span class="lp-dot">6</span>
+     <div class="lp-step-copy"><h3>Verify show up</h3><p>Members bring clocked birds to the club. Tap the tag to verify; birds not shown before the race closes are disqualified.</p></div>
+     <figure class="lp-step-media lp-browser"><img src="assets/images/landing/showup.webp" alt="Show up page listing clocked pigeons and their verification status" width="1600" height="1000" loading="lazy"></figure>
+    </li>
+    <li class="lp-step">
+     <span class="lp-dot">7</span>
+     <div class="lp-step-copy"><h3>Publish the results</h3><p>Ranked by speed, exported to Excel or PDF, and open to the public by club and race date.</p></div>
+     <figure class="lp-step-media lp-browser"><img src="assets/images/landing/results.webp" alt="Race results ranked by speed with review status" width="1600" height="1000" loading="lazy"></figure>
+    </li>
+    </ol>
+   </div>
+  </div>
+ </section>
+
+ <section class="lp-section lp-soft" id="features">
+  <div class="lp-container">
+   <div class="lp-head">
+    <span class="lp-kicker">Features</span>
+    <h2>Everything a racing club needs</h2>
+   </div>
+   <ul class="lp-features">
+    <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><h3>Server-timed clocking</h3><p>Every clocking is stamped by the server, so results are fair.</p></li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 0 1 14 0M8 12a4 4 0 0 1 8 0"/><circle cx="12" cy="12" r="1.5"/><path d="M12 14v6"/></svg><h3>RFID and NFC</h3><p>Wi-Fi and USB loft readers, or an Android phone's NFC.</p></li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/></svg><h3>Stickers and Eclock</h3><p>Scratch codes for clubs without readers.</p></li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 9 12l4 3 7-9"/><path d="M15 6h5v5"/></svg><h3>Live race day</h3><p>Arrivals and speeds the moment birds are clocked.</p></li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg><h3>Show up checks</h3><p>Verify clocked birds at the club before the race closes.</p></li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg><h3>Excel and PDF</h3><p>Export entries, race day and results in one click.</p></li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14a5 5 0 0 1 5 6"/></svg><h3>Members and team</h3><p>Accounts for admins, staff and members, with change history.</p></li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V9l8-5 8 5v12"/><path d="M9 21v-6h6v6"/></svg><h3>Many clubs</h3><p>Each club has its own data, members and logo.</p></li>
+   </ul>
+  </div>
+ </section>
+
+ <section class="lp-section" id="app">
+  <div class="lp-container">
+   <div class="lp-app">
+    <div class="lp-app-copy">
+     <span class="lp-kicker">Android app</span>
+     <h2>Clock from the loft with your phone</h2>
+     <p>Install AvilonX on Android to clock with NFC, see your history and check results. On other phones, open the site and add it to your home screen.</p>
+     <div class="lp-cta">
+      <a class="button lp-big lp-light" href="https://github.com/JMacailao/Mayma-Clocking/releases/latest/download/AvilonX.apk">Download for Android</a>
+      <a class="button lp-big lp-ghost" href="pages/login/index.html">Open in the browser</a>
+     </div>
+    </div>
+    <figure class="lp-phone lp-app-phone"><img src="assets/images/landing/member-results.webp" alt="Member app results screen" width="585" height="1266" loading="lazy"></figure>
+   </div>
+  </div>
+ </section>
+</main>
+
+<footer class="lp-footer">
+ <div class="lp-container lp-footer-row"><span>© AvilonX Clocking</span><span>Server timestamp · Provisional results until reviewed</span></div>
+</footer>
+</body>
+</html>
