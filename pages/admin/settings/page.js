@@ -1,4 +1,3 @@
-import { mountRecoveryEmail } from '../../../assets/js/recovery-email.js';
 import { saveClubLogo, clubLogoUrl, showClubLogo } from '../../../assets/js/club-logo.js';
 import { supabase, escapeHTML, message } from '../../../assets/js/shared.js';
 
@@ -13,7 +12,6 @@ export async function render(view,identity){
     <div class="club-logo-row"><span class="club-logo-preview" data-logo-preview></span><div class="club-logo-actions"><input type="file" accept="image/png,image/jpeg,image/webp" data-logo-file hidden><button class="button secondary" type="button" data-logo-pick>Upload logo</button><button class="text-button danger-text" type="button" data-logo-remove hidden>Remove</button></div></div>
     <p class="small">PNG, JPG or WebP. Shown next to the club name.</p>
   </section>
-  <section class="panel settings-panel" data-recovery-email></section>
   <section class="panel settings-panel"><h3>Race entries</h3>
     <fieldset class="settings-choice" ${missing?'disabled':''}><legend>Sticker for RFID entries</legend>
       <label><input type="radio" name="rfid_entry_sticker" value="required"><span><strong>Required</strong>Every RFID entry also needs the pigeon's sticker. The entry cannot be saved without it.</span></label>
@@ -47,7 +45,6 @@ export async function render(view,identity){
   fileInput.addEventListener('change',async()=>{const file=fileInput.files?.[0];fileInput.value='';if(!file)return;preview.setAttribute('aria-busy','true');try{logoPath=await saveClubLogo(clubId,file);message('Club logo saved.','success');}catch(error){message(error.message,'error');}finally{preview.removeAttribute('aria-busy');drawLogo();}});
   removeButton.addEventListener('click',async()=>{if(!confirm('Remove the club logo?'))return;try{await saveClubLogo(clubId,null);logoPath=null;message('Club logo removed.','success');}catch(error){message(error.message,'error');}drawLogo();});
   drawLogo();
-  mountRecoveryEmail(view.querySelector('[data-recovery-email]'),identity?.profile?.id);
   const current=club?.rfid_entry_sticker||'required',devices=club?.single_device?'on':'off';
   const deviceRadio=view.querySelector(`[name=single_device][value="${devices}"]`);if(deviceRadio)deviceRadio.checked=true;
   const radio=view.querySelector(`[name=rfid_entry_sticker][value="${current}"]`);if(radio)radio.checked=true;
