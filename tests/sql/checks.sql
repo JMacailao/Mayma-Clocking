@@ -257,4 +257,61 @@ DO $$ DECLARE v_user uuid; v_other uuid; v_clock bigint; v_member bigint; v_club
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
 
+-- Forgot password by email.
+INSERT INTO auth.users (id, email, encrypted_password) VALUES ('00000000-0000-0000-0000-0000000000a1', 'pw@users.mayma.invalid', extensions.crypt('oldpassword', extensions.gen_salt('bf')));
+INSERT INTO public.members (member_no, full_name, loft_name, latitude, longitude, club_id) SELECT 'PW-1', 'Reset member', 'Loft', 13, 121, id FROM public.clubs WHERE name = 'Test club';
+INSERT INTO public.app_profiles (id, username, role, member_id, club_id, is_active)
+  SELECT '00000000-0000-0000-0000-0000000000a1', 'pwmember', 'member', m.id, m.club_id, true FROM public.members m WHERE m.member_no = 'PW-1';
+DO $$
+DECLARE v jsonb; v_member bigint := (SELECT id FROM public.members WHERE member_no = 'PW-1'); i int;
+BEGIN
+  -- No email yet: no reset link; admins cannot mark an email confirmed themselves.
+  ASSERT public.password_reset_issue('pwmember') IS NULL, 'no email: no reset link';
+  UPDATE public.members SET email = '  Ana@Example.COM ', email_confirmed_at = now() WHERE id = v_member;
+  ASSERT (SELECT email = 'ana@example.com' AND email_confirmed_at IS NULL FROM public.members WHERE id = v_member), 'email kept in lower case, not confirmed by an update';
+  ASSERT public.password_reset_issue('pwmember') IS NULL, 'unconfirmed email: no reset link';
+  -- Confirmation: only the member or the club team may ask; the link confirms once.
+  BEGIN PERFORM public.email_confirm_issue(gen_random_uuid(), v_member); RAISE EXCEPTION 'expected: not allowed';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  v := public.email_confirm_issue('00000000-0000-0000-0000-0000000000a1', v_member);
+  ASSERT v->>'email' = 'ana@example.com' AND length(v->>'token') = 64, 'confirmation link made';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.account_email_tokens WHERE token_hash = v->>'token'), 'links are stored only as hashes';
+  PERFORM public.confirm_member_email(v->>'token');
+  ASSERT (SELECT email_confirmed_at IS NOT NULL FROM public.members WHERE id = v_member), 'email confirmed';
+  BEGIN PERFORM public.confirm_member_email(v->>'token'); RAISE EXCEPTION 'expected: used link';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+  -- Reset: case-insensitive username, link works once, sets the password.
+  v := public.password_reset_issue('PWMember');
+  ASSERT v->>'email' = 'ana@example.com' AND v->>'username' = 'pwmember', 'reset link for the confirmed email';
+  BEGIN PERFORM public.password_reset_complete(v->>'token', 'short'); RAISE EXCEPTION 'expected: short password';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+  PERFORM public.password_reset_complete(v->>'token', 'newpassword1');
+  ASSERT (SELECT encrypted_password = extensions.crypt('newpassword1', encrypted_password) FROM auth.users WHERE id = '00000000-0000-0000-0000-0000000000a1'), 'new password set';
+  ASSERT EXISTS (SELECT 1 FROM public.audit_log WHERE table_name = 'password_reset' AND row_id = v_member), 'reset in the change history';
+  BEGIN PERFORM public.password_reset_complete(v->>'token', 'another123'); RAISE EXCEPTION 'expected: used link';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+  -- A newer link replaces the older one; at most 3 a day.
+  v := public.password_reset_issue('pwmember');
+  ASSERT public.password_reset_issue('pwmember') IS NOT NULL, 'third link of the day';
+  BEGIN PERFORM public.password_reset_complete(v->>'token', 'another123'); RAISE EXCEPTION 'expected: replaced link';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+  ASSERT public.password_reset_issue('pwmember') IS NULL, 'no fourth reset email in a day';
+  -- Changing the email undoes the confirmation and stops links sent to the old one.
+  UPDATE public.account_email_tokens SET created_at = now() - interval '2 days' WHERE member_id = v_member;
+  v := public.password_reset_issue('pwmember');
+  UPDATE public.members SET email = 'other@example.com' WHERE id = v_member;
+  ASSERT (SELECT email_confirmed_at IS NULL FROM public.members WHERE id = v_member), 'changed email must be confirmed again';
+  BEGIN PERFORM public.password_reset_complete(v->>'token', 'another123'); RAISE EXCEPTION 'expected: email changed';
+  EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+  -- Unknown or disabled usernames get nothing.
+  ASSERT public.password_reset_issue('nobody') IS NULL, 'unknown username: nothing';
+END $$;
+-- Visitors and signed-in users cannot make links or read them.
+DO $$ BEGIN
+  ASSERT NOT has_function_privilege('anon', 'public.password_reset_issue(text)', 'EXECUTE'), 'visitors cannot make reset links';
+  ASSERT NOT has_function_privilege('authenticated', 'public.email_confirm_issue(uuid,bigint)', 'EXECUTE'), 'users cannot make confirmation links';
+  ASSERT NOT has_table_privilege('authenticated', 'public.account_email_tokens', 'SELECT'), 'links cannot be read';
+  ASSERT has_function_privilege('anon', 'public.password_reset_complete(text,text)', 'EXECUTE'), 'visitors can use a reset link';
+END $$;
+
 SELECT 'All database checks passed.' AS result;

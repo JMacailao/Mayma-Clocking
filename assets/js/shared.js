@@ -136,3 +136,11 @@ export function loadSpreadsheetParser(){
   }).catch(error=>{spreadsheetParserPromise=null;document.querySelector('[data-sheetjs]')?.remove();throw error;});
   return spreadsheetParserPromise;
 }
+
+// Sends the link that confirms a member's email (Edge Function
+// avilonx-password-reset). Returns a sentence for the notice, starting with a space.
+export async function sendEmailConfirm(memberId){
+  const {data,error}=await supabase.functions.invoke('avilonx-password-reset',{body:{action:'confirm',member_id:memberId}});
+  if(error){let detail='';try{detail=(await error.context?.json?.())?.error||'';}catch{/* no details */}return ` Confirmation email not sent: ${detail||'password reset by email is not set up yet (see docs/PASSWORD-RESET.md).'}`;}
+  return data?.confirmed?` ${data.email} is already confirmed.`:` A confirmation link was sent to ${data?.email||'the email'}; it must be opened before password resets can use it.`;
+}

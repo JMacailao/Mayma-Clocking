@@ -18,6 +18,7 @@ const PARTS=[
   ['race-tag-expiry','RFID tag expiry per race'],
   ['club-settings','Club settings (sticker for RFID entries)'],
   ['account-devices','One device per account'],
+  ['password-reset','Forgot password by email'],
   ['telegram','Telegram results for loft reader owners'],
   ['race-point-recalc','Editing a race point recalculates the results'],
   ['clock-videos','Short videos of clockings'],
