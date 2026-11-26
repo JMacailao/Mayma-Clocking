@@ -127,7 +127,7 @@
 @media(max-width:720px){
  .lp-container{width:calc(100% - 32px)}
  .lp-nav{display:none}
- .lp-signin{margin-left:auto}
+
  .lp-header-row{min-height:60px}
  .lp-header .brand-logo{width:46px}
  .lp-hero{padding:44px 0 56px}
@@ -162,3 +162,55 @@
  .lp-footer-row{flex-direction:column}
 }
 @media(max-width:380px){.lp-features{grid-template-columns:1fr}}
+
+/* Language switch */
+.lp-lang{display:inline-flex;padding:3px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.lp-lang button{min-height:32px;min-width:38px;padding:0 8px;border:0;border-radius:7px;background:none;color:var(--muted);font:600 12px var(--font);cursor:pointer}
+.lp-lang button[aria-pressed=true]{background:var(--green);color:#fff}
+
+/* Racing today */
+.lp-today{padding:28px 0;background:var(--ground);border-block:1px solid var(--line)}
+.lp-today-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.lp-today-head h2{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:700}
+.lp-today-list{list-style:none;margin:0;padding:0 0 4px;display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:thin}
+.lp-today-list li{flex:0 0 min(280px,80%);scroll-snap-align:start;padding:14px 16px;background:#fff;border:1px solid var(--line);border-radius:14px}
+.lp-today-list strong{display:block;font-size:15px}
+.lp-today-list .small{color:var(--muted);font-size:12px}
+.lp-today-stats{display:flex;gap:16px;margin-top:10px;font-size:13px;color:var(--muted)}
+.lp-today-stats b{display:block;color:var(--ink);font-size:16px}
+
+/* Demo video */
+.lp-demo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.8fr);gap:56px;align-items:center}
+.lp-demo-copy h2{font-size:clamp(30px,4vw,44px);line-height:1.1;font-weight:700;margin:0 0 14px}
+.lp-demo-copy>p{margin:0 0 20px;color:var(--muted);font-size:17px;line-height:1.7;max-width:520px}
+.lp-checks{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.lp-checks li{position:relative;padding-left:30px;font-size:15px}
+.lp-checks li::before{content:"";position:absolute;left:0;top:2px;width:20px;height:20px;border-radius:50%;background:#e8eef6 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300345f' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12 4 4 8-8'/%3E%3C/svg%3E") center/12px no-repeat}
+.lp-demo-phone{position:relative;width:min(300px,80%);justify-self:center}
+.lp-demo-phone video{display:block;width:100%;height:auto;background:#f8fafc}
+.lp-demo-toggle{position:absolute;right:10px;bottom:10px;min-height:32px;padding:0 12px;border:0;border-radius:999px;background:#0f172acc;color:#fff;font:600 12px var(--font);cursor:pointer}
+
+/* Contact */
+.lp-contact{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:56px;align-items:start}
+.lp-contact-copy h2{font-size:clamp(30px,4vw,44px);line-height:1.1;font-weight:700;margin:0 0 14px}
+.lp-contact-copy>p{margin:0 0 20px;color:var(--muted);font-size:17px;line-height:1.7}
+.lp-contact-form{display:grid;gap:14px;padding:28px;background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:0 20px 40px -28px #0f172a40}
+.lp-contact-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.lp-contact-form .button{justify-self:start}
+.lp-hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.lp-form-status{margin:0;font-size:14px;min-height:1.5em}
+.lp-form-status.is-ok{color:var(--ok)}.lp-form-status.is-error{color:var(--bad)}
+
+@media(max-width:1000px){
+ .lp-demo,.lp-contact{grid-template-columns:1fr;gap:36px}
+ .lp-lang{margin-left:auto}
+ .lp-header-row .lp-signin{margin-left:0}
+}
+@media(max-width:720px){
+ .lp-header-row{gap:10px}
+ .lp-lang button{min-width:34px}
+ .lp-contact-form{padding:20px}
+ .lp-contact-row{grid-template-columns:1fr}
+ .lp-contact-form .button{justify-self:stretch}
+ .lp-today-head .quiet-link{font-size:12px}
+}

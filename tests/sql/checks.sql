@@ -437,4 +437,23 @@ DO $$ DECLARE v_member bigint; v_entry bigint; v_club bigint; v_owner uuid; v_ad
   DELETE FROM auth.users WHERE id = v_admin;
 END $$;
 
+-- Landing page: today's races are public; club requests are checked and limited.
+DO $$ DECLARE v_club bigint; v_race bigint; BEGIN
+  SELECT id INTO v_club FROM public.clubs LIMIT 1;
+  INSERT INTO public.races (name, release_location, release_latitude, release_longitude, status, club_id, release_at_utc)
+  VALUES ('Today Derby', 'Lipa', 13.9, 121.1, 'open', v_club, now() AT TIME ZONE 'UTC' - interval '1 hour') RETURNING id INTO v_race;
+  ASSERT EXISTS (SELECT 1 FROM public.public_races_today() WHERE race_name = 'Today Derby' AND clocked = 0), 'today''s race is listed';
+  ASSERT has_function_privilege('anon', 'public.public_races_today()', 'EXECUTE'), 'visitors may read it';
+  DELETE FROM public.races WHERE id = v_race;
+  ASSERT NOT has_function_privilege('anon', 'public.superadmin_club_requests()', 'EXECUTE'), 'visitors cannot read requests';
+  ASSERT (public.submit_club_request('Pedro', 'Lipa Flyers', '0917 123 4567', '', 'Hello', '')->>'ok')::boolean;
+  ASSERT (public.submit_club_request('Bot', 'Spam', '0917 000 0000', '', '', 'http://spam')->>'ok')::boolean, 'bots get a quiet OK';
+  ASSERT (SELECT count(*) FROM public.club_requests) = 1, 'the bot request was not saved';
+  BEGIN PERFORM public.submit_club_request('Pedro', 'Lipa Flyers', '', '', '', ''); RAISE EXCEPTION 'expected: contact needed'; EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+  PERFORM public.submit_club_request('Pedro', 'Lipa Flyers', '0917 123 4567', '', '', '');
+  PERFORM public.submit_club_request('Pedro', 'Lipa Flyers', '0917 123 4567', '', '', '');
+  BEGIN PERFORM public.submit_club_request('Pedro', 'Lipa Flyers', '0917 123 4567', '', '', ''); RAISE EXCEPTION 'expected: limit'; EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+  DELETE FROM public.club_requests;
+END $$;
+
 SELECT 'All database checks passed.' AS result;

@@ -6,6 +6,16 @@
 <meta name="theme-color" content="#00345f">
 <title>AvilonX · Race clocking</title>
 <meta name="description" content="AvilonX runs your pigeon racing club: race schedules, bird registration, server-timed clocking by RFID, NFC or sticker, live race day, show up checks and results.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AvilonX">
+<meta property="og:title" content="AvilonX · Every race, accounted for.">
+<meta property="og:description" content="Pigeon racing club system: race schedules, server-timed clocking by RFID, NFC or sticker, live race day and results.">
+<meta property="og:url" content="https://www.avilonx.site/">
+<meta property="og:image" content="https://www.avilonx.site/assets/images/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="AvilonX race day board and member app">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="assets/images/clocking-logo.png">
 <link rel="stylesheet" href="assets/css/app.css">
 <link rel="stylesheet" href="assets/css/landing.css">
@@ -18,7 +28,8 @@
 <header class="lp-header">
  <div class="lp-container lp-header-row">
   <a class="brand" href="index.html"><img class="brand-logo" src="assets/images/clocking-logo.png" alt="AvilonX pigeon clock logo" width="72" height="48"><span>AvilonX<span class="brand-sub">RACE CLOCKING</span></span></a>
-  <nav class="lp-nav" aria-label="Page sections"><a href="#how">How it works</a><a href="#features">Features</a><a href="#app">Android app</a></nav>
+  <nav class="lp-nav" aria-label="Page sections"><a href="#how">How it works</a><a href="#features">Features</a><a href="#app">Android app</a><a href="#contact">Contact</a></nav>
+  <div class="lp-lang" role="group" aria-label="Language" data-no-translate><button type="button" data-lang="en" aria-pressed="true">EN</button><button type="button" data-lang="tl" aria-pressed="false">TL</button></div>
   <a class="button primary lp-signin" href="pages/login/index.html">Sign in</a>
  </div>
 </header>
@@ -49,6 +60,13 @@
      <img src="assets/images/landing/member-dashboard.webp" alt="Member app: welcome screen with Clock a pigeon button, reminders and speed forecast" width="585" height="1266">
     </figure>
    </div>
+  </div>
+ </section>
+
+ <section class="lp-today" data-today hidden aria-labelledby="today-title">
+  <div class="lp-container">
+   <div class="lp-today-head"><h2 id="today-title"><i class="live-dot"></i> Racing today</h2><a class="quiet-link" href="pages/login/index.html">All public results →</a></div>
+   <ul class="lp-today-list" data-today-list></ul>
   </div>
  </section>
 
@@ -102,6 +120,24 @@
   </div>
  </section>
 
+ <section class="lp-section lp-demo-section" id="demo">
+  <div class="lp-container lp-demo">
+   <div class="lp-demo-copy">
+    <span class="lp-kicker">See it in action</span>
+    <h2>Clock a pigeon in 10 seconds</h2>
+    <p>Choose the race, type or scan the sticker code, submit. The server records the time and the receipt shows the flight time and speed at once.</p>
+    <ul class="lp-checks"><li>Same steps on any phone</li><li>Loft readers and NFC clock with no typing at all</li><li>Results are provisional until the club verifies them</li></ul>
+   </div>
+   <figure class="lp-phone lp-demo-phone">
+    <video data-demo muted loop playsinline preload="none" poster="assets/images/landing/demo-poster.jpg" width="390" height="760" aria-label="Demo: a member clocks pigeon PH-2 with its sticker code and gets the receipt">
+     <source src="assets/images/landing/demo.webm" type="video/webm">
+     <source src="assets/images/landing/demo.mp4" type="video/mp4">
+    </video>
+    <button class="lp-demo-toggle" type="button" data-demo-toggle aria-label="Pause the demo">Pause</button>
+   </figure>
+  </div>
+ </section>
+
  <section class="lp-section lp-soft" id="features">
   <div class="lp-container">
    <div class="lp-head">
@@ -135,6 +171,29 @@
     </div>
     <figure class="lp-phone lp-app-phone"><img src="assets/images/landing/member-results.webp" alt="Member app results screen" width="585" height="1266" loading="lazy"></figure>
    </div>
+  </div>
+ </section>
+
+ <section class="lp-section" id="contact">
+  <div class="lp-container lp-contact">
+   <div class="lp-contact-copy">
+    <span class="lp-kicker">For clubs</span>
+    <h2>Get AvilonX for your club</h2>
+    <p>Tell us about your club. We will contact you to set up your club account, members and race points.</p>
+    <ul class="lp-checks"><li>Your own club account and logo</li><li>Help setting up members and lofts</li><li>Works with stickers even without readers</li></ul>
+   </div>
+   <form class="lp-contact-form" data-contact-form novalidate>
+    <label class="field"><span>Your name</span><input name="contact_name" autocomplete="name" required minlength="2" maxlength="120"></label>
+    <label class="field"><span>Club name</span><input name="club_name" autocomplete="organization" required minlength="2" maxlength="180"></label>
+    <div class="lp-contact-row">
+     <label class="field"><span>Mobile number</span><input name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="40" placeholder="0917 123 4567"></label>
+     <label class="field"><span>Email (optional)</span><input name="email" type="email" autocomplete="email" maxlength="254"></label>
+    </div>
+    <label class="field"><span>Message (optional)</span><textarea name="message" rows="3" maxlength="1000" placeholder="How many members, where you race…"></textarea></label>
+    <label class="lp-hp" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off"></label>
+    <button class="button primary lp-big" type="submit">Send request</button>
+    <p class="lp-form-status" data-contact-status role="status"></p>
+   </form>
   </div>
  </section>
 </main>
