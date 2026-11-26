@@ -10,9 +10,10 @@
 //
 // POST { action: "reset", username }      from the login page (anyone). The
 //   answer is always { ok: true }, so it never tells whether a username exists.
-// POST { action: "confirm", member_id }   from Members or Settings, signed in
-//   (the member, or the club's administrator or staff): sends the link that
-//   confirms the member's email.
+// POST { action: "confirm", member_id }   signed in: sends the link that
+//   confirms an email. member_id = a member's email (asked by the member, or
+//   the club's administrator or staff); member_id null = the caller's own
+//   account email (club administrator, Super Admin).
 // The links are made by the database (password-reset.sql), which also limits
 // them to 3 of each kind per member per day.
 const RESEND_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
@@ -89,7 +90,7 @@ Deno.serve(async (request) => {
         const url = `${SITE}/pages/reset-password/index.html?reset=${link.token}`;
         await send(link.email, "Reset your AvilonX password", emailHtml("Reset your password", [
           `Hi ${escapeHTML(String(link.name ?? ""))},`,
-          `Someone asked to reset the password of your AvilonX member account <strong>${escapeHTML(String(link.username))}</strong>. Tap the button to choose a new password.`,
+          `Someone asked to reset the password of your AvilonX account <strong>${escapeHTML(String(link.username))}</strong>. Tap the button to choose a new password.`,
         ], "Choose a new password", url, "The link works once, for 1 hour. If you did not ask for this, ignore this email: your password stays the same."));
       }
     } catch (error) {
@@ -102,12 +103,12 @@ Deno.serve(async (request) => {
     const userId = await caller(request);
     if (!userId) return reply({ error: "Sign in first." }, 401);
     try {
-      const link = await rpc("email_confirm_issue", { p_user_id: userId, p_member_id: Number(body.member_id) });
+      const link = await rpc("email_confirm_issue", { p_user_id: userId, p_member_id: body.member_id == null ? null : Number(body.member_id) });
       if (link?.confirmed) return reply({ ok: true, confirmed: true, email: link.email });
       const url = `${SITE}/pages/reset-password/index.html?confirm=${link.token}`;
       await send(link.email, "Confirm your email for AvilonX", emailHtml("Confirm your email", [
         `Hi ${escapeHTML(String(link.name ?? ""))},`,
-        "This email was added to your AvilonX member account for password resets. Tap the button to confirm it.",
+        "This email was added to your AvilonX account for password resets. Tap the button to confirm it.",
       ], "Confirm my email", url, "The link works for 3 days. If you don't know AvilonX, ignore this email."));
       return reply({ ok: true, sent: true, email: link.email });
     } catch (error) {

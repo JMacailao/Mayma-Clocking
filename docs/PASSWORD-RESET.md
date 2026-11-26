@@ -1,16 +1,22 @@
-# Forgot password by email (members)
+# Forgot password by email
 
-Members who forget their password tap **Forgot password?** on the sign-in page
-(Member tab), enter their username, and get an email with a link to choose a new
-password. Everything here is free (Resend free plan: 100 emails a day).
+Members, club administrators and the Super Admin who forget their password tap
+**Forgot password?** on the sign-in page (Member or Club team tab), enter their
+username, and get an email with a link to choose a new password. Everything here
+is free (Resend free plan: 100 emails a day).
 
 ## How it works
 
-1. **The member's email.** The club administrator adds it on **Members** (field
-   *Email (for password reset)*), or the member adds it on **Settings → Email for
-   password reset**. A **confirmation link** is sent to it; only a confirmed email
-   gets reset links. Members shows each email as *✓ Confirmed* or *Not confirmed*
-   (with **Send link again**).
+1. **The account's email.** A **confirmation link** is sent to it; only a
+   confirmed email gets reset links.
+   - **Members:** the club administrator adds it on **Members** (field *Email (for
+     password reset)*), or the member on **Settings → Email for password reset**.
+     Members shows each email as *✓ Confirmed* or *Not confirmed* (with **Send
+     link again**).
+   - **Club administrators:** **Club settings → Email for password reset**.
+   - **Super Admin:** **Setup → Email for password reset**.
+   - **One email, one account:** the same email cannot be on two members or two
+     accounts (AvilonX says "This email is already used by another account").
 2. **Forgot password?** sends a reset link to the confirmed email. The answer on
    screen is always the same, so nobody can find out which usernames exist.
 3. **The link** (works once, for 1 hour) opens *Choose a new password*. Saving
@@ -19,9 +25,9 @@ password. Everything here is free (Resend free plan: 100 emails a day).
 4. **Limits:** 3 reset emails and 3 confirmation emails per member per day. A new
    link replaces the previous one. Changing the email cancels links sent to the
    old one and needs a new confirmation.
-5. **No email, or no access to it?** The club administrator resets the password on
-   Members → **Reset password**, as before. Club team accounts (admin, staff) are
-   reset by the club administrator or the Super Admin.
+5. **No email, or no access to it?** The club administrator resets a member's
+   password on Members → **Reset password**, and a staff account's on Team
+   accounts, as before; the Super Admin resets a club administrator's on Clubs.
 
 Links are stored only as SHA-256 hashes; the Resend key and the Supabase service
 key are kept in the Edge Function, never in the website.
@@ -46,6 +52,8 @@ key are kept in the Edge Function, never in the website.
 ### 2. Database
 
 Supabase → **SQL Editor** → run **`avilonx-update.sql`** (as after every update).
+If it shows the notice *Some members share an email*, give each of those members
+its own email on Members and run it again.
 Super Admin → **Setup** then shows *Forgot password by email* as done.
 
 ### 3. Edge Function
@@ -71,6 +79,10 @@ them.
    confirmation email → *Email confirmed ✓*. Members shows *✓ Confirmed*.
 2. Sign out → **Member** tab → **Forgot password?** → that member's username →
    **Send reset link**. Open the email → choose a new password → sign in with it.
+
+**After an AvilonX update that changes the function** (like the one adding club
+administrators and the Super Admin), open the function → **Code**, paste the new
+`index.ts` again and **Deploy**. The secrets stay.
 
 ## When it doesn't work
 

@@ -314,6 +314,54 @@ DO $$ BEGIN
   ASSERT has_function_privilege('anon', 'public.password_reset_complete(text,text)', 'EXECUTE'), 'visitors can use a reset link';
 END $$;
 
+-- Club administrators and the Super Admin reset by email too; one email per account.
+INSERT INTO auth.users (id, email, encrypted_password) VALUES
+  ('00000000-0000-0000-0000-0000000000b1', 'pwadmin@users.mayma.invalid', extensions.crypt('oldpassword', extensions.gen_salt('bf'))),
+  ('00000000-0000-0000-0000-0000000000b2', 'pwsuper@users.mayma.invalid', extensions.crypt('oldpassword', extensions.gen_salt('bf')));
+INSERT INTO public.app_profiles (id, username, role, member_id, club_id, is_active)
+  SELECT '00000000-0000-0000-0000-0000000000b1', 'pwadmin', 'admin', NULL, id, true FROM public.clubs WHERE name = 'Test club';
+INSERT INTO public.app_profiles (id, username, role, member_id, club_id, is_active)
+  VALUES ('00000000-0000-0000-0000-0000000000b2', 'pwsuper', 'superadmin', NULL, NULL, true);
+DO $$
+DECLARE v jsonb; v_failed boolean;
+BEGIN
+  -- The admin saves an email for their own account and confirms it.
+  PERFORM set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b1', true);
+  v := public.account_set_email('Boss@Club.ph');
+  ASSERT v->>'email' = 'boss@club.ph' AND NOT (v->>'confirmed')::boolean, 'admin email saved, not confirmed';
+  ASSERT public.account_email_status()->>'email' = 'boss@club.ph', 'admin sees their email';
+  -- The same email cannot go on another account or a member.
+  PERFORM set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b2', true);
+  v_failed := false; BEGIN PERFORM public.account_set_email('BOSS@club.ph'); EXCEPTION WHEN OTHERS THEN v_failed := SQLERRM LIKE '%already used by another account%'; END;
+  ASSERT v_failed, 'Super Admin cannot take the admin''s email';
+  v_failed := false; BEGIN UPDATE public.members SET email = 'boss@club.ph' WHERE member_no = '161'; EXCEPTION WHEN OTHERS THEN v_failed := SQLERRM LIKE '%already used by another account%'; END;
+  ASSERT v_failed, 'a member cannot take an account''s email';
+  v_failed := false; BEGIN UPDATE public.members SET email = 'other@example.com' WHERE member_no = '161'; EXCEPTION WHEN OTHERS THEN v_failed := SQLERRM LIKE '%already used by another account%'; END;
+  ASSERT v_failed, 'two members cannot share an email';
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  -- Confirm, then reset the admin's password by email.
+  v := public.email_confirm_issue('00000000-0000-0000-0000-0000000000b1', NULL);
+  PERFORM public.confirm_member_email(v->>'token');
+  ASSERT (SELECT email_confirmed_at IS NOT NULL FROM public.app_profiles WHERE username = 'pwadmin'), 'admin email confirmed';
+  v := public.password_reset_issue('pwadmin');
+  ASSERT v->>'email' = 'boss@club.ph' AND v->>'role' = 'admin', 'reset link for the admin';
+  ASSERT public.password_reset_complete(v->>'token', 'adminpass1')->>'role' = 'admin', 'admin reset done';
+  ASSERT (SELECT encrypted_password = extensions.crypt('adminpass1', encrypted_password) FROM auth.users WHERE id = '00000000-0000-0000-0000-0000000000b1'), 'admin password set';
+  -- The Super Admin too.
+  PERFORM set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b2', true);
+  PERFORM public.account_set_email('super@avilonx.site');
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  v := public.email_confirm_issue('00000000-0000-0000-0000-0000000000b2', NULL);
+  PERFORM public.confirm_member_email(v->>'token');
+  v := public.password_reset_issue('pwsuper');
+  PERFORM public.password_reset_complete(v->>'token', 'superpass1');
+  ASSERT (SELECT encrypted_password = extensions.crypt('superpass1', encrypted_password) FROM auth.users WHERE id = '00000000-0000-0000-0000-0000000000b2'), 'Super Admin password set';
+  -- An admin cannot confirm their account email directly.
+  UPDATE public.app_profiles SET email = 'boss2@club.ph' WHERE username = 'pwadmin';
+  UPDATE public.app_profiles SET email_confirmed_at = now() WHERE username = 'pwadmin';
+  ASSERT (SELECT email_confirmed_at IS NULL FROM public.app_profiles WHERE username = 'pwadmin'), 'confirmation only through the link';
+END $$;
+
 -- Club logo: only the club's administrator, only in the club's folder.
 DO $$ DECLARE v_admin uuid; v_club bigint := (SELECT id FROM public.clubs ORDER BY id LIMIT 1); r jsonb; v_failed boolean; BEGIN
   INSERT INTO auth.users (email) VALUES ('logo-admin@users.mayma.invalid') RETURNING id INTO v_admin;
