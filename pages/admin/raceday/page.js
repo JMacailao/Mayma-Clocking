@@ -16,7 +16,7 @@ export async function render(view,identity,setPageCleanup=()=>{}){
   const pick=()=>{let saved=null;try{saved=Number(localStorage.getItem(RACE_KEY));}catch{/* storage unavailable */}return state.races.find(race=>race.id===saved)?.id||state.races.find(race=>race.status==='open')?.id||state.races[0]?.id||null;};
   let raceId=pick();
 
-  view.innerHTML=`<div class="split-heading raceday-head"><div><span class="eyebrow">RACE DAY</span><h2>Race day</h2><p>Arrivals, readers and show-ups for one race, updating by itself.</p></div>
+  view.innerHTML=`<div class="split-heading raceday-head"><div><h2>Race day</h2></div>
     <div class="raceday-actions"><label class="field"><span>Race</span><select data-race>${state.races.map(race=>`<option value="${race.id}" ${race.id===raceId?'selected':''}>${escapeHTML(race.name)}${race.is_practice?' (practice)':''}</option>`).join('')}</select></label>
     <button class="button secondary" type="button" data-tv>Big screen</button><button class="button secondary" type="button" data-export>Export Excel</button><button class="button secondary" type="button" data-print>Print / PDF</button></div></div>
   <div data-alerts></div>
@@ -62,7 +62,7 @@ export async function render(view,identity,setPageCleanup=()=>{}){
 
   function drawTv(){
     const r=race(),list=rows().filter(row=>row.rank).slice(0,15),released=asUtc(r.release_at_utc),now=Date.now();
-    tvBoard.innerHTML=`<div class="tv-head"><div><span>AvilonX · Live results</span><h2>${escapeHTML(r.name)}${r.is_practice?' · Practice':''}</h2><p>${escapeHTML(r.release_location||'')}${released?` · Released ${escapeHTML(formatDateSeconds(r.release_at_utc))}`:''}</p></div><div class="tv-clock" data-live-clock>${released&&now>released&&r.status!=='closed'?span(now-released):escapeHTML(r.status==='closed'?'Closed':'—')}</div><button type="button" class="tv-exit" data-tv-exit>Exit big screen</button></div>
+    tvBoard.innerHTML=`<div class="tv-head"><div><span>AvilonX · Live results</span><h2>${escapeHTML(r.name)}${r.is_practice?' · Practice':''}</h2></div><div class="tv-clock" data-live-clock>${released&&now>released&&r.status!=='closed'?span(now-released):escapeHTML(r.status==='closed'?'Closed':'—')}</div><button type="button" class="tv-exit" data-tv-exit>Exit big screen</button></div>
       ${list.length?`<ol class="tv-list">${list.map(row=>`<li><span class="tv-rank">${row.rank}</span><span class="tv-ring">${escapeHTML(ringLabel(row.entry.pigeon_ring,row.entry.remarks))}<small>${escapeHTML(row.member?.full_name||'')}${row.member?.loft_name?` · ${escapeHTML(row.member.loft_name)}`:''}</small></span><span class="tv-time">${escapeHTML(formatDateSeconds(row.clock.received_at_utc).split(', ').pop())}</span><span class="tv-speed">${number(row.speed)}<small>m/min</small></span></li>`).join('')}</ol>`:'<p class="tv-empty">Waiting for the first arrival…</p>'}
       <p class="tv-foot">Provisional results · updating live</p>`;
     tvBoard.querySelector('[data-tv-exit]').onclick=exitTv;
