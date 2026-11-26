@@ -27,6 +27,7 @@ checklist** page shows which parts are done.
 | `club-settings.sql` | Club settings: whether RFID entries need the sticker (required or optional). |
 | `account-devices.sql` | One device per account (Club settings): signing in elsewhere asks first and signs the other device out. |
 | `telegram.sql` | Results on Telegram for members who own a loft reader (see [TELEGRAM.md](TELEGRAM.md)). |
+| `password-reset.sql` | `app_profiles.recovery_email`, `password_resets` (hashed one-time links), `set_my_recovery_email()`, `superadmin_set_club_admin_email()`, `admin_set_member_email()`; `_password_reset_start/_finish()` for the `avilonx-password-reset` Edge Function only. |
 | `club-logo.sql` | `clubs.logo_path`, public `club-logos` bucket (club admin writes own folder), `admin_set_club_logo()`. |
 | `clock-videos.sql` | Short video per clocking: `clock_videos`, private `clock-videos` bucket, `member_save_clock_video()`. Members see their own, the club sees all of its own. |
 | `race-point-recalc.sql` | Editing a race point's location or coordinates moves the races using it and recalculates every entry's distance (so speeds and ranks), clocked birds included. |

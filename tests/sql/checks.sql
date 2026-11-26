@@ -275,4 +275,37 @@ DO $$ DECLARE v_admin uuid; v_club bigint := (SELECT id FROM public.clubs ORDER 
   ASSERT v_failed, 'not signed in: refused';
 END $$;
 
+-- Forgot password: recovery emails, one-time links, only via the Edge Function (service role).
+DO $$ DECLARE v_admin uuid; v_super uuid; v_club bigint := (SELECT id FROM public.clubs ORDER BY id LIMIT 1); r jsonb; v_token text; v_failed boolean; BEGIN
+  INSERT INTO auth.users (email) VALUES ('resetadmin@users.mayma.invalid') RETURNING id INTO v_admin;
+  INSERT INTO public.app_profiles (id, role, username, club_id, is_active) VALUES (v_admin, 'admin', 'resetadmin', v_club, true);
+  INSERT INTO auth.users (email) VALUES ('resetsuper@users.mayma.invalid') RETURNING id INTO v_super;
+  INSERT INTO public.app_profiles (id, role, username, is_active) VALUES (v_super, 'superadmin', 'resetsuper', true);
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  ASSERT public.set_my_recovery_email('  Club.Admin@Gmail.com ') = 'club.admin@gmail.com', 'own email saved, lower case';
+  v_failed := false; BEGIN PERFORM public.set_my_recovery_email('not-an-email'); EXCEPTION WHEN OTHERS THEN v_failed := true; END;
+  ASSERT v_failed, 'a bad email is refused';
+  v_failed := false; BEGIN PERFORM public.superadmin_set_club_admin_email(v_club, 'x@gmail.com'); EXCEPTION WHEN OTHERS THEN v_failed := true; END;
+  ASSERT v_failed, 'only the Super Admin sets a club admin''s email';
+  PERFORM set_config('request.jwt.claim.sub', v_super::text, true);
+  PERFORM public.superadmin_set_club_admin_email(v_club, 'club.admin@gmail.com');
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  v_failed := false; BEGIN SET LOCAL ROLE authenticated; PERFORM public._password_reset_start('resetadmin'); EXCEPTION WHEN OTHERS THEN v_failed := true; END; RESET ROLE;
+  ASSERT v_failed, 'the website cannot start a reset itself';
+  ASSERT public._password_reset_start('nobody') IS NULL, 'unknown username: nothing sent';
+  r := public._password_reset_start('ResetAdmin');
+  ASSERT r->>'email' = 'club.admin@gmail.com' AND length(r->>'token') = 64, 'a link for the recovery email';
+  v_token := r->>'token';
+  ASSERT NOT (public._password_reset_finish(v_token, 'short')->>'ok')::boolean, 'short password refused';
+  ASSERT (public._password_reset_finish(v_token, 'newpass123')->>'ok')::boolean, 'valid link sets the password';
+  ASSERT (SELECT encrypted_password = extensions.crypt('newpass123', encrypted_password) FROM auth.users WHERE id = v_admin), 'new password works';
+  ASSERT NOT (public._password_reset_finish(v_token, 'another123')->>'ok')::boolean, 'a link works once';
+  PERFORM public._password_reset_start('resetadmin'); PERFORM public._password_reset_start('resetadmin');
+  ASSERT public._password_reset_start('resetadmin') IS NULL, 'at most 3 links an hour';
+  UPDATE public.password_resets SET created_at = now() - interval '2 hours', expires_at = now() - interval '1 hour' WHERE user_id = v_admin;
+  r := public._password_reset_start('resetadmin');
+  UPDATE public.password_resets SET expires_at = now() - interval '1 minute' WHERE token_hash = encode(extensions.digest(r->>'token', 'sha256'), 'hex');
+  ASSERT NOT (public._password_reset_finish(r->>'token', 'newpass456')->>'ok')::boolean, 'an expired link is refused';
+END $$;
+
 SELECT 'All database checks passed.' AS result;

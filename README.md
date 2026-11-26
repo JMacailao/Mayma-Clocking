@@ -101,7 +101,9 @@ The separate files, for reference:
       Videos are kept in the private `clock-videos` Storage bucket.
   21. `club-logo.sql` — each club's own logo (Club settings → Club logo), shown in
       the top bar; public `club-logos` Storage bucket.
-  22. `race-day.sql` — change history (who changed races, entries, clocks and
+  22. `password-reset.sql` — "Forgot password?" by email: recovery emails and one-time
+      reset links (see *Forgot password by Gmail* below).
+  23. `race-day.sql` — change history (who changed races, entries, clocks and
       birds, and when), practice races, instant result pop-ups (Supabase
       Realtime) and the Setup checklist. Run it last.
 2. Open the site. On a fresh database the login page asks you to **create the superadmin
@@ -390,3 +392,23 @@ next to what was read, so misread values can be corrected before saving.
 - [docs/DATABASE.md](docs/DATABASE.md): the database setup files.
 - [docs/TESTING.md](docs/TESTING.md): the automatic tests and how to run them (`npm test`, `npm run test:browser`, `npm run test:sql`).
 - [docs/RFID-READER.md](docs/RFID-READER.md): the loft RFID reader (ESP8266 or ESP32): parts, wiring, OLED screens.
+
+## Forgot password by Gmail
+
+"Forgot password?" on the sign-in page emails a one-time reset link (30 minutes)
+to the account's recovery email. Club administrators set theirs on *Club
+settings*, members on *Settings*; the Super Admin can set a club administrator's
+on *Club accounts*. The email is sent by the `avilonx-password-reset` Edge Function
+from a Gmail account:
+
+1. Use a Gmail account for the club (e.g. `avilonx.noreply@gmail.com`). Turn on
+   2-Step Verification, then create an **App Password**
+   (Google Account → Security → App passwords).
+2. Supabase → Edge Functions → Secrets: add `GMAIL_USER` (the Gmail address) and
+   `GMAIL_APP_PASSWORD` (the 16-letter App Password). Optional: `SITE_URL`
+   (default `https://www.avilonx.site`).
+3. Deploy `supabase/functions/avilonx-password-reset` with **JWT verification off**.
+
+Gmail sends up to about 500 emails a day. Without a recovery email, people ask
+their club administrator to reset the password, as before.
+

@@ -19,6 +19,9 @@ export async function render() {
  const resultsPanel=document.querySelector('[data-login-results]');if(resultsPanel&&!resultsPanel.dataset.mounted){resultsPanel.dataset.mounted='true';mountPublicResults(resultsPanel);}
  const {data:hasAdmin,error:checkError}=await supabase.rpc('has_admin_account');
  if(checkError){container.innerHTML='<span class="eyebrow">DATABASE SETUP NEEDED</span><h1>Finish database setup</h1><p>In your Supabase SQL Editor run <code>schema.sql</code> (fresh database only), then <code>supabase-auth.sql</code>, <code>multi-club.sql</code>, <code>account-credentials.sql</code>, and <code>public-results.sql</code>, then reload this page.</p>';return;}
+ // The emailed "Forgot password" link: set a new password.
+ const resetToken=new URLSearchParams(location.search).get('reset');
+ if(resetToken){renderResetPassword(container,resetToken);return;}
  const {data:{session}}=await supabase.auth.getSession();
  if(session){try{const {data:p}=await supabase.from('app_profiles').select('role').eq('id',session.user.id).maybeSingle();if(p){location.href=nextFor(p.role)||homeFor(p.role);return;}}catch(e){console.error(e);}}
  if(!hasAdmin){renderSuperAdmin(container);return;}
@@ -36,7 +39,7 @@ function renderSignIn(container){
   
   title.textContent=isResults?'Public race results':audience==='member'?'Member sign in':'Welcome back';
   introCopy.textContent=isResults?'Choose a club and race date to view the results.':audience==='member'?'Sign in with the username and password your club administrator gave you.':'Sign in with your club-team username and password.';
-  helpCopy.textContent=audience==='member'?'Need a member login? Ask your club administrator to create your account or reset your password.':'For club administrator access, contact your club administrator to create your account or reset your password.';
+  helpCopy.textContent=audience==='member'?'No member login yet? Ask your club administrator.':'No account yet? Ask your club administrator.';
   container.querySelector('[data-login-message]').hidden=true;
  };
  tabs.forEach(tab=>tab.onclick=()=>{
@@ -45,6 +48,8 @@ function renderSignIn(container){
  if((new URLSearchParams(location.search).get('next')||'').includes('/pages/member/'))showAudience('member');
  if(new URLSearchParams(location.search).get('signedout')==='device')loginMessage(container,'You were signed out because this account was signed in on another device. The club allows one device per account.','info');
  const form=container.querySelector('#login-form');
+ form.insertAdjacentHTML('beforeend','<button class="text-button forgot-link" type="button" data-forgot>Forgot password?</button>');
+ form.querySelector('[data-forgot]').onclick=()=>renderForgot(container,form.elements.username.value.trim().toLowerCase());
  const eye=container.querySelector('[data-show-password]');eye.onclick=()=>{const field=form.elements.password,show=field.type==='password';field.type=show?'text':'password';eye.setAttribute('aria-pressed',String(show));eye.setAttribute('aria-label',show?'Hide password':'Show password');field.focus();};
  form.onsubmit=async event=>{event.preventDefault();const username=form.elements.username.value.trim().toLowerCase();if(!USERNAME_RE.test(username)){loginMessage(container,USERNAME_HELP,'error');return;}const button=form.querySelector('button');tabs.forEach(tab=>tab.disabled=true);button.disabled=true;button.textContent='Signing in…';
   const {data,error}=await supabase.auth.signInWithPassword({email:`${username}@users.mayma.invalid`,password:form.elements.password.value});
@@ -73,3 +78,39 @@ function renderSuperAdmin(container){
   location.href=homeFor('superadmin');};
 }
 function loginMessage(container,text,kind){const node=container.querySelector('[data-login-message]');node.textContent=text;node.className=`notice ${kind}`;node.hidden=false;}
+
+// "Forgot password?": the avilonx-password-reset Edge Function emails a link to
+// the account's recovery email (Gmail). Same answer whether or not it exists.
+async function callReset(body){
+ const {data,error}=await supabase.functions.invoke('avilonx-password-reset',{body});
+ if(!error)return data;
+ try{const answer=await error.context?.json?.();if(answer?.message)return answer;}catch{/* not JSON */}
+ return {ok:false,message:'Password reset is not available right now. Ask your club administrator.'};
+}
+function renderForgot(container,username=''){
+ container.innerHTML=`<h1>Forgot password</h1><p>Enter your username. We email a reset link to your recovery email.</p><form id="forgot-form" class="form-grid" novalidate><label class="field"><span>Username</span><input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></label><button class="button primary" type="submit">Send reset link</button><button class="text-button" type="button" data-back>Back to sign in</button></form><div class="notice" data-login-message role="status" hidden></div>`;
+ const form=container.querySelector('#forgot-form');form.elements.username.value=username;form.elements.username.focus();
+ container.querySelector('[data-back]').onclick=()=>renderSignIn(container);
+ form.onsubmit=async event=>{
+  event.preventDefault();const name=form.elements.username.value.trim().toLowerCase();
+  if(!USERNAME_RE.test(name)){loginMessage(container,USERNAME_HELP,'error');return;}
+  const button=form.querySelector('[type=submit]');button.disabled=true;button.textContent='Sending…';
+  const answer=await callReset({action:'request',username:name});
+  button.disabled=false;button.textContent='Send reset link';
+  loginMessage(container,answer?.message||'Try again.',answer?.ok?'success':'error');
+ };
+}
+function renderResetPassword(container,token){
+ container.innerHTML=`<h1>Set a new password</h1><form id="reset-form" class="form-grid" novalidate><label class="field"><span>New password · 8 or more characters</span><input name="password" type="password" autocomplete="new-password" minlength="8" required></label><label class="field"><span>Confirm new password</span><input name="confirm" type="password" autocomplete="new-password" minlength="8" required></label><button class="button primary" type="submit">Save new password</button></form><div class="notice" data-login-message role="status" hidden></div>`;
+ const form=container.querySelector('#reset-form');form.elements.password.focus();
+ form.onsubmit=async event=>{
+  event.preventDefault();const password=form.elements.password.value;
+  if(password.length<8){loginMessage(container,'Use at least 8 characters.','error');return;}
+  if(password!==form.elements.confirm.value){loginMessage(container,'The two passwords are not the same.','error');return;}
+  const button=form.querySelector('[type=submit]');button.disabled=true;button.textContent='Saving…';
+  const answer=await callReset({action:'reset',token,password});
+  if(answer?.ok){container.innerHTML=`<h1>Password changed</h1><p>Sign in with your username${answer.username?` <strong>${answer.username.replace(/[^a-z0-9_.-]/g,'')}</strong>`:''} and the new password.</p><button class="button primary" type="button" data-signin>Sign in</button>`;container.querySelector('[data-signin]').onclick=()=>{try{history.replaceState(null,'',url('pages/login/index.html'));}catch{/* history unavailable */}renderSignIn(container);};return;}
+  button.disabled=false;button.textContent='Save new password';
+  loginMessage(container,answer?.message||'Try again.','error');
+ };
+}
