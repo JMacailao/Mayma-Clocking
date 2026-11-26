@@ -29,6 +29,7 @@ checklist** page shows which parts are done.
 | `telegram.sql` | Results on Telegram for members who own a loft reader (see [TELEGRAM.md](TELEGRAM.md)). |
 | `push.sql` | Push notifications on the website and Android app (see [PUSH.md](PUSH.md)). |
 | `landing.sql` | Home page: "Racing today" and club requests from the "Get AvilonX for your club" form. |
+| `season-standings.sql` | Member loft reader status (taps waiting to send) and season standings (loft points, ace pigeons). |
 | `club-logo.sql` | `clubs.logo_path`, public `club-logos` bucket (club admin writes own folder), `admin_set_club_logo()`. |
 | `clock-videos.sql` | Short video per clocking: `clock_videos`, private `clock-videos` bucket, `member_save_clock_video()`. Members see their own, the club sees all of its own. |
 | `race-point-recalc.sql` | Editing a race point's location or coordinates moves the races using it and recalculates every entry's distance (so speeds and ranks), clocked birds included. |

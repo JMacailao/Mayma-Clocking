@@ -1287,3 +1287,20 @@ dialog::backdrop{background:rgba(15,23,42,.5);overflow:hidden;overscroll-behavio
 #forgot-form .button,#forgot-form .text-button{grid-column:1/-1}
 .reset-grid{grid-template-columns:minmax(0,520px);justify-content:center}
 .reset-login{margin-top:12px;width:100%}
+
+/* Member dashboard: loft reader status (season-standings.sql) */
+.reader-status-list{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.reader-status-list li{display:flex;gap:12px;align-items:flex-start}
+.reader-status-list .reader-dot{flex:none;width:10px;height:10px;margin-top:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px var(--ok-bg)}
+.reader-status-list .is-offline .reader-dot{background:var(--bad);box-shadow:0 0 0 4px var(--bad-bg)}
+.reader-status-list p{margin:4px 0 0}
+.reader-waiting{padding:8px 10px;border-radius:var(--radius-sm);background:var(--warn-bg);color:var(--warn);font-size:13px}
+
+/* Season standings */
+.season-panel .panel-heading{align-items:flex-start}
+.season-panel .panel-heading p{margin:4px 0 0}
+.season-year{min-width:110px}
+.season-panel .season-sub{margin:28px 0 2px}
+.season-table tr.is-mine td{background:#eef4fb}
+.season-table tr.is-mine td:first-child{box-shadow:inset 3px 0 0 var(--green)}
+@media(max-width:720px){.season-table{min-width:560px}}

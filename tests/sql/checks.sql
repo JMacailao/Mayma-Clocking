@@ -456,4 +456,32 @@ DO $$ DECLARE v_club bigint; v_race bigint; BEGIN
   DELETE FROM public.club_requests;
 END $$;
 
+-- Season standings: closed, non-practice races; best bird per loft scores by place.
+DO $$ DECLARE v_admin uuid; v_club bigint; r jsonb; v_a timestamp; v_b timestamp; BEGIN
+  SELECT id INTO v_club FROM public.clubs ORDER BY id LIMIT 1;
+  INSERT INTO auth.users (email) VALUES ('season-admin@users.mayma.invalid') RETURNING id INTO v_admin;
+  INSERT INTO public.app_profiles (id, role, username, club_id, is_active) VALUES (v_admin, 'admin', 'seasonadmin', v_club, true);
+  DELETE FROM public.clock_events;  -- start from no clockings
+  v_a := date_trunc('year', now() AT TIME ZONE 'Asia/Manila') + interval '10 days';
+  v_b := v_a + interval '7 days';
+  UPDATE public.races SET release_at_utc = v_a, requires_show_up = false, is_practice = false WHERE name = 'Race A';
+  UPDATE public.races SET release_at_utc = v_b, requires_show_up = true, is_practice = false, status = 'closed' WHERE name IN ('Race B', 'Race B2');
+  INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, source, verification)
+    SELECT id, 'PH-1', v_a + interval '10 minutes', 'barcode', 'provisional' FROM public.race_entries WHERE barcode = '111';
+  INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, source, verification)
+    SELECT id, 'PH-1', v_b + interval '20 minutes', 'barcode', 'provisional' FROM public.race_entries WHERE barcode = '222';
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  r := public.season_standings(NULL);
+  ASSERT (r->>'races')::int = 1, 'not shown up in a Show up race: not counted ' || r::text;
+  UPDATE public.clock_events SET verification = 'verified' WHERE race_entry_id = (SELECT id FROM public.race_entries WHERE barcode = '222');
+  r := public.season_standings(NULL);
+  ASSERT (r->>'races')::int = 2 AND (r->'lofts'->0->>'points')::int = 20 AND (r->'lofts'->0->>'wins')::int = 2, 'two wins, 20 points: ' || r::text;
+  ASSERT jsonb_array_length(r->'aces') = 1 AND r->'aces'->0->>'ring' = 'PH-1' AND (r->'aces'->0->>'races')::int = 2, 'ace pigeon with 2 races';
+  ASSERT (public.season_standings(1999)->>'races')::int = 0, 'another year is empty';
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+  BEGIN PERFORM public.season_standings(NULL); RAISE EXCEPTION 'expected: sign in'; EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  DELETE FROM public.clock_events WHERE race_entry_id IN (SELECT id FROM public.race_entries WHERE barcode IN ('111', '222'));
+  DELETE FROM public.app_profiles WHERE id = v_admin; DELETE FROM auth.users WHERE id = v_admin;
+END $$;
+
 SELECT 'All database checks passed.' AS result;
