@@ -19,7 +19,7 @@ module.exports = async (page, { open, check, sample, OUT }) => {
   // The list: no Actions column; sector and coordinates in one column.
   const heads = await page.locator('[data-table] th').allInnerTexts();
   check(JSON.stringify(heads.map(h => h.trim().toLowerCase())) === '["location","sector & coordinates"]', `columns ${JSON.stringify(heads)}`);
-  check(/South · 13\.75, 121\.05/.test(await page.locator('[data-table] tbody tr').first().innerText()), 'sector and coordinates shown together');
+  check(/South · N 13°45'00\.00\s+E 121°03'00\.00/.test(await page.locator('[data-table] tbody tr').first().innerText()), 'sector and coordinates shown together');
   await page.click('[data-add-race-point]');
   check(!(await page.locator('[data-delete-point]').isVisible()), 'no Delete when adding');
   check(await page.inputValue('#record-form [name=location]') === '' && await page.locator('#race-point-dialog-title').innerText() === 'Add a race point', 'after an edit, Add starts empty');
