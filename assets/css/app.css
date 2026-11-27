@@ -1534,3 +1534,13 @@ th{color:#55657a}
 .schedule-form-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 12px}
 .tag.lap{background:#e8eef6;color:var(--green)}
 .race-summary-lap{margin:-2px 0 6px;color:var(--green);font-size:12.5px;font-weight:700;letter-spacing:.02em}
+/* Scan race sheet: boxes the reader was not sure about, and Next / Previous to check. */
+.entry-sheet-input.is-unsure{border-color:#e0b100;background:#fff8d6;box-shadow:inset 0 0 0 1px #f3cf4a}
+.entry-sheet-table tr.has-unsure td{background:#fffcef}
+.entry-sheet-table tr.is-current td{box-shadow:inset 0 2px 0 #009fa8,inset 0 -2px 0 #009fa8}
+.entry-sheet-table tr.is-current td:first-child{box-shadow:inset 3px 0 0 #009fa8,inset 0 2px 0 #009fa8,inset 0 -2px 0 #009fa8}
+.sheet-check-nav{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 10px;padding:8px 10px;border:1px solid #f3dd8a;border-radius:9px;background:#fffbea}
+.sheet-check-nav[hidden]{display:none}
+.sheet-check-count{flex:1 1 auto;font-size:13px;font-weight:700;color:#7c4a03}
+.sheet-check-nav.is-done{border-color:#c8decf;background:#f0f7f1}.sheet-check-nav.is-done .sheet-check-count{color:var(--green)}
+@media(max-width:720px){.sheet-check-count{flex-basis:100%}.sheet-check-nav .button{flex:1 1 0;min-height:44px}.entry-sheet-table tr.has-unsure{border-color:#f0d36b;background:#fffcef}.entry-sheet-table tr.has-unsure td{background:transparent}.entry-sheet-table tr.is-current{outline:2px solid #009fa8;outline-offset:1px}}

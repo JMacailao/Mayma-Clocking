@@ -416,6 +416,22 @@ export function formSharpness(page){
 // The form code at the bottom right (see FORM_CODE in loading-form.js): its
 // squares as 0/1 on the straightened page, tried at small shifts. Returns what
 // readFormCodeBits makes of them, or null (forms printed before the code).
+// The QR code of an AvilonX loading form (club, race, page). page: the
+// straightened form; box: its place as fractions of the page (formQrBox).
+// reader: the barcode reader (decodeFromCanvas). Returns the QR text or ''.
+export function readFormQr(page,reader,box){
+  if(!page||!reader||!box)return '';
+  const W=page.width,H=page.height,pad=(box.x1-box.x0)*.35;
+  const left=(box.x0-pad)*W,top=(box.y0-pad*W/H)*H,width=(box.x1-box.x0+2*pad)*W,height=(box.y1-box.y0)*H+2*pad*W;
+  for(const threshold of [false,true])for(const scale of [3,2]){
+    const crop=document.createElement('canvas');crop.width=Math.max(1,Math.round(width*scale));crop.height=Math.max(1,Math.round(height*scale));
+    const context=crop.getContext('2d',{willReadFrequently:true});context.fillStyle='#fff';context.fillRect(0,0,crop.width,crop.height);context.imageSmoothingEnabled=!threshold;
+    context.drawImage(page,left,top,width,height,0,0,crop.width,crop.height);
+    if(threshold){const pixels=context.getImageData(0,0,crop.width,crop.height),data=pixels.data;let sum=0;for(let i=0;i<data.length;i+=4)sum+=data[i]*.299+data[i+1]*.587+data[i+2]*.114;const cut=sum/(data.length/4)-30;for(let i=0;i<data.length;i+=4){const v=(data[i]*.299+data[i+1]*.587+data[i+2]*.114)<cut?0:255;data[i]=data[i+1]=data[i+2]=v;}context.putImageData(pixels,0,0);}
+    try{const result=reader.decodeFromCanvas(crop),text=result?.getText?.()??result?.text??'';if(text)return String(text);}catch{/* not found in this try */}
+  }
+  return '';
+}
 export function readFormCode(page,cells,decode){
   const W=page.width,H=page.height,context=page.getContext('2d',{willReadFrequently:true});
   const xs=cells.map(c=>c.x0),ys=cells.map(c=>c.y0);

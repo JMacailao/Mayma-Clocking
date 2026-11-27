@@ -1,17 +1,18 @@
 import { supabase, escapeHTML, message, dbError, number, distanceKm, formatDate, ringLabel, tableRows, loadSpreadsheetParser } from '../../../assets/js/shared.js';
 import { formatNfcUid } from '../../../assets/js/nfc.js';
 import { entrySheetRowsFromWorksheet, extractExcelBarcodeImages, decodeExcelBarcodeImages } from './excel-import.js';
-import { formLayout, rowBoxes, PAPERS, printLoadingForm, formCodeCells, readFormCodeBits, remarksCheck } from './loading-form.js';
+import { formLayout, rowBoxes, PAPERS, printLoadingForm, formCodeCells, readFormCodeBits, remarksCheck, formQrSvgs, formQrBox, parseFormQr } from './loading-form.js';
 import { matchFormRows } from './form-match.js';
 import { printBasketingSheet } from './basketing-sheet.js';
-import { findFormMarks, orientForm, formSharpness, readFormLayout, readFormHandwriting, FORM_GUIDE, tableCorners, quadPoint, straightenTable, entrySheetRowsFromGuide, loadDocumentOCR, loadDocumentBarcodeReader, scanSheetBarcodes, documentFileToCanvas, rotateDocumentCanvas, detectTableGrid, entrySheetRowsFromGrid, entrySheetRowsFromOCR, refineHandwrittenEntryFields } from './sheet-reader.js';
+import { unsureFields, rowNeedsCheck, nextRowToCheck } from './sheet-check.js';
+import { findFormMarks, orientForm, readFormQr, formSharpness, readFormLayout, readFormHandwriting, FORM_GUIDE, tableCorners, quadPoint, straightenTable, entrySheetRowsFromGuide, loadDocumentOCR, loadDocumentBarcodeReader, scanSheetBarcodes, documentFileToCanvas, rotateDocumentCanvas, detectTableGrid, entrySheetRowsFromGrid, entrySheetRowsFromOCR, refineHandwrittenEntryFields } from './sheet-reader.js';
 import { sheetRemarks, sheetMember, sheetBird } from './sheet-parse.js';
 import { tagExpired, clockWays, distanceMeters } from './entry-helpers.js';
 
 export function mountEntrySheetImport(view,races,members,entries,readerByMember=new Map(),birds=null,remarkLabels=[],stickerRule='required'){
   const birdById=new Map((birds||[]).map(bird=>[bird.id,bird]));
   const existingForm=view.querySelector('#entry-form');
-  const importPanel=`<div class="entry-sheet-panel"><p class="entry-tab-intro" data-sheet-only>Upload a photo or PDF of the loading form. Columns are read left to right: <strong>member ID</strong> (Loft name), <strong>ring number</strong> (Pigeon I.D.), <strong>remarks</strong> (P1/P2/P3) and the <strong>sticker</strong> (its barcode, or the printed reference number).</p><p class="entry-tab-intro" data-excel-only>Download the Excel template, fill it in, then import it. Required columns: Member ID, Ring Number, and Barcode Number.</p><div class="entry-sheet-controls" data-sheet-only><label class="field"><span>Document photo or PDF</span><input type="file" data-sheet-file accept="image/*,.pdf,application/pdf"><small class="small">Check red rows before saving.</small></label></div><div class="entry-sheet-actions" data-excel-only><button class="button secondary" type="button" data-download-entry-template>Download Excel template</button><button class="button secondary" type="button" data-open-entry-excel>Import Excel</button><input type="file" data-entry-excel accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden></div><p class="small" data-excel-only>Columns: Member ID, Ring Number, Barcode Number (as text).</p><div class="entry-sheet-actions" data-sheet-only><span class="entry-sheet-print"><select data-form-paper aria-label="Paper size">${Object.entries(PAPERS).map(([key,paper])=>`<option value="${key}">${paper.label}</option>`).join('')}</select><button class="button secondary" type="button" data-print-form>Print loading form</button><button class="button secondary" type="button" data-print-basketing>Print basketing sheet</button></span><button class="button secondary" type="button" data-sheet-camera>Take photo with guide</button><button class="button secondary" type="button" data-sheet-align disabled>Align on guide</button><button class="button secondary" type="button" data-rotate-sheet disabled>Rotate 90°</button><button class="button primary" type="button" data-read-sheet disabled>Read photo + scan barcodes</button></div><p class="entry-sheet-status" data-sheet-status aria-live="polite">Choose the race schedule above, then upload a photo/PDF or import an Excel file.</p><div class="entry-sheet-grid-note" data-sheet-grid-note data-sheet-only hidden></div><div class="entry-sheet-preview" data-sheet-preview data-sheet-only hidden><canvas data-sheet-preview-canvas></canvas></div><section class="entry-sheet-review" data-sheet-review hidden><div class="panel-heading"><div><h3>Review race entries</h3><p class="small">Fix red rows before saving.</p></div><span class="count-pill" data-sheet-count></span></div><div data-sheet-table></div><div class="form-actions"><button class="button secondary" type="button" data-clear-sheet>Clear scan</button><button class="button primary" type="button" data-save-sheet disabled>Save valid entries</button></div></section></div>`;
+  const importPanel=`<div class="entry-sheet-panel"><p class="entry-tab-intro" data-sheet-only>Upload a photo or PDF of the loading form. Columns are read left to right: <strong>member ID</strong> (Loft name), <strong>ring number</strong> (Pigeon I.D.), <strong>remarks</strong> (P1/P2/P3) and the <strong>sticker</strong> (its barcode, or the printed reference number).</p><p class="entry-tab-intro" data-excel-only>Download the Excel template, fill it in, then import it. Required columns: Member ID, Ring Number, and Barcode Number.</p><div class="entry-sheet-controls" data-sheet-only><label class="field"><span>Document photo or PDF</span><input type="file" data-sheet-file accept="image/*,.pdf,application/pdf"><small class="small">Check red rows before saving.</small></label></div><div class="entry-sheet-actions" data-excel-only><button class="button secondary" type="button" data-download-entry-template>Download Excel template</button><button class="button secondary" type="button" data-open-entry-excel>Import Excel</button><input type="file" data-entry-excel accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden></div><p class="small" data-excel-only>Columns: Member ID, Ring Number, Barcode Number (as text).</p><div class="entry-sheet-actions" data-sheet-only><span class="entry-sheet-print"><select data-form-paper aria-label="Paper size">${Object.entries(PAPERS).map(([key,paper])=>`<option value="${key}">${paper.label}</option>`).join('')}</select><select data-form-pages aria-label="Pages to print">${Array.from({length:10},(_,i)=>`<option value="${i+1}">${i+1} page${i?'s':''}</option>`).join('')}</select><button class="button secondary" type="button" data-print-form>Print loading form</button><button class="button secondary" type="button" data-print-basketing>Print basketing sheet</button></span><button class="button secondary" type="button" data-sheet-camera>Take photo with guide</button><button class="button secondary" type="button" data-sheet-align disabled>Align on guide</button><button class="button secondary" type="button" data-rotate-sheet disabled>Rotate 90°</button><button class="button primary" type="button" data-read-sheet disabled>Read photo + scan barcodes</button></div><p class="entry-sheet-status" data-sheet-status aria-live="polite">Choose the race schedule above, then upload a photo/PDF or import an Excel file.</p><div class="entry-sheet-grid-note" data-sheet-grid-note data-sheet-only hidden></div><div class="entry-sheet-preview" data-sheet-preview data-sheet-only hidden><canvas data-sheet-preview-canvas></canvas></div><section class="entry-sheet-review" data-sheet-review hidden><div class="panel-heading"><div><h3>Review race entries</h3><p class="small">Fix red rows. Yellow boxes: the reader was not sure, so compare them with the photo.</p></div><span class="count-pill" data-sheet-count></span></div><div class="sheet-check-nav" data-sheet-nav><span class="sheet-check-count" data-sheet-nav-count aria-live="polite"></span><button class="button secondary" type="button" data-sheet-prev>Previous</button><button class="button primary" type="button" data-sheet-next>Next to check</button></div><div data-sheet-table></div><div class="form-actions"><button class="button secondary" type="button" data-clear-sheet>Clear scan</button><button class="button primary" type="button" data-save-sheet disabled>Save valid entries</button></div></section></div>`;
   // Insert the panel without re-rendering the page, so the handlers already set
   // on the entry form (save, camera scan, NFC) keep working.
   const importPane=view.querySelector('[data-entry-pane="import"]');
@@ -26,8 +27,12 @@ export function mountEntrySheetImport(view,races,members,entries,readerByMember=
   view.querySelector('[data-print-form]').onclick=async()=>{
     const race=races.find(item=>item.id===Number(raceSelect.value));
     try{localStorage.setItem('avilonx.formPaper',paperSelect.value);}catch{/* storage unavailable */}
-    const {clubName,layout}=await clubForm();
-    try{printLoadingForm({clubName,race,layout,paper:paperSelect.value});}catch(error){message(error.message,'error');}
+    // The window opens first (browsers block pop-ups opened after waiting).
+    const win=window.open('','_blank');if(!win){message('The browser blocked the new window. Allow pop-ups for AvilonX, then try again.','error');return;}
+    const pages=Math.min(10,Math.max(1,Number(view.querySelector('[data-form-pages]')?.value)||1));
+    const {clubName,clubId,layout}=await clubForm();let qrSvgs=[];
+    try{qrSvgs=await formQrSvgs({clubId,raceId:race?.id,pages});}catch(error){console.warn(error);message('Printed without the QR code (no internet). The form still reads; choose the race yourself.','error');}
+    try{printLoadingForm({clubName,race,layout,paper:paperSelect.value,copies:pages,qrSvgs},win);}catch(error){win.close();message(error.message,'error');}
   };
   // Every entry of the chosen race, one block per member, with a QR code to the results.
   view.querySelector('[data-print-basketing]').onclick=async()=>{
@@ -38,6 +43,7 @@ export function mountEntrySheetImport(view,races,members,entries,readerByMember=
   };
   // The club's loading form: its name, box counts (Club settings) and all its remarks.
   let clubFormCache=null;
+  const readPages=new Set();// "race:page" read in this visit
   async function clubForm(){
     if(clubFormCache)return clubFormCache;
     let club={};try{const {data}=await supabase.from('clubs').select('*').limit(1).maybeSingle();club=data||{};}catch{/* defaults */}
@@ -61,10 +67,34 @@ export function mountEntrySheetImport(view,races,members,entries,readerByMember=
     const note=matched?`<span class="sheet-match">matched to a ${kind==='member'?'registered member':'bonded ring'}</span>`:sure===false?`<span class="sheet-unsure">${kind==='member'?'no registered member fits clearly':'no bonded ring fits clearly'}</span>`:'';
     return `<div class="sheet-digits" data-sheet-digits><span class="sheet-digits-label">Read</span>${boxes}${note}</div>`;
   };
-  const redrawRows=()=>{
+  // Yellow input: the reader was not sure about this box.
+  const unsureAttr=(row,field)=>unsureFields(row).includes(field)?' is-unsure" title="Not sure: compare with the photo':'';
+  let currentRowId=null;
+  const updateCheckNav=()=>{
+    const nav=view.querySelector('[data-sheet-nav]');if(!nav)return;
+    const left=rows.filter(rowNeedsCheck).length;
+    nav.hidden=!rows.length;nav.classList.toggle('is-done',!left);
+    nav.querySelector('[data-sheet-nav-count]').textContent=left?`${left} row${left===1?'':'s'} to check`:'All rows checked';
+    nav.querySelector('[data-sheet-prev]').disabled=!left;nav.querySelector('[data-sheet-next]').disabled=!left;
+    rows.forEach(row=>{const tr=table.querySelector(`[data-sheet-row="${row.id}"]`);if(!tr)return;const unsure=unsureFields(row);tr.classList.toggle('has-unsure',unsure.length>0&&!row.errors?.length);
+      tr.querySelectorAll('[data-sheet-field]').forEach(input=>{const on=unsure.includes(input.dataset.sheetField);input.classList.toggle('is-unsure',on);if(on)input.title='Not sure: compare with the photo';else input.removeAttribute('title');});
+      const ok=tr.querySelector('[data-sheet-ok]');if(ok)ok.hidden=!unsure.length;});
+  };
+  const goToRow=step=>{
+    const row=nextRowToCheck(rows,currentRowId,step);if(!row)return;currentRowId=row.id;
+    table.querySelectorAll('tr.is-current').forEach(tr=>tr.classList.remove('is-current'));
+    const tr=table.querySelector(`[data-sheet-row="${row.id}"]`);if(!tr)return;tr.classList.add('is-current');
+    tr.scrollIntoView({behavior:'smooth',block:'center'});
+    const field=unsureFields(row)[0];const input=(field&&tr.querySelector(`[data-sheet-field="${field}"]`))||tr.querySelector('[data-sheet-field]');input?.focus({preventScroll:true});
+  };
+  view.querySelector('[data-sheet-next]').onclick=()=>goToRow(1);
+  view.querySelector('[data-sheet-prev]').onclick=()=>goToRow(-1);
+  const redrawRows=()=>{currentRowId=null;
     review.hidden=!rows.length;count.textContent=`${rows.length} row${rows.length===1?'':'s'}`;
-    table.innerHTML=rows.length?`<div class="table-scroll entry-sheet-table"><table><thead><tr><th>Sheet row</th><th>Member ID</th><th>Ring</th><th>Remarks</th><th>Sticker</th><th>Error / status</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr data-sheet-row="${escapeHTML(row.id)}" class="${row.saved?'is-saved':row.errors?.length?'has-errors':''}"><td data-label="Sheet row"><span class="entry-sheet-row-number">${escapeHTML(row.sheetRow)}</span></td><td data-label="Member ID">${cellImage(row,'memberRegion')}<input class="entry-sheet-input" data-sheet-field="member_no" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.member_no)}" aria-label="Member ID, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}>${readDigitsHtml(row.member_no_digits,row.memberRead,row.memberMatched,row.memberSure,'member')}</td><td data-label="Ring">${cellImage(row,'ringRegion')}<input class="entry-sheet-input" data-sheet-field="pigeon_ring" data-sheet-id="${escapeHTML(row.id)}" maxlength="80" value="${escapeHTML(row.pigeon_ring)}" aria-label="Ring number, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}>${readDigitsHtml(row.ring_number_digits,row.ringRead,row.ringMatched,row.ringSure,'ring')}</td><td data-label="Remarks">${cellImage(row,'remarksRegion')}<input class="entry-sheet-input entry-sheet-remarks" data-sheet-field="remarks_text" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.remarks_text||'')}" placeholder="P1/P2" aria-label="Remarks, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Sticker">${cellImage(row,'barcodeRegion')}<input class="entry-sheet-input" data-sheet-field="barcode" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.barcode)}" aria-label="Barcode, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Error / status"><span class="entry-sheet-row-status ${row.saved?'is-saved':row.errors?.length?'has-error':''}" data-sheet-row-status="${escapeHTML(row.id)}">${row.saved?'Saved':'Checking…'}</span></td><td data-label="Remove"><button class="text-button danger-text" type="button" data-remove-sheet-row="${escapeHTML(row.id)}" ${row.saved?'disabled':''}>Remove</button></td></tr>`).join('')}</tbody></table></div>`:'';
-    table.querySelectorAll('[data-sheet-field]').forEach(input=>input.addEventListener('input',()=>{const row=rows.find(item=>item.id===input.dataset.sheetId);if(row){row[input.dataset.sheetField]=input.value;if(input.dataset.sheetField==='barcode')row.barcodeScanError='';}clearTimeout(validationTimer);validationTimer=setTimeout(()=>validateRows(),400);}));
+    table.innerHTML=rows.length?`<div class="table-scroll entry-sheet-table"><table><thead><tr><th>Sheet row</th><th>Member ID</th><th>Ring</th><th>Remarks</th><th>Sticker</th><th>Error / status</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr data-sheet-row="${escapeHTML(row.id)}" class="${row.saved?'is-saved':row.errors?.length?'has-errors':''}"><td data-label="Sheet row"><span class="entry-sheet-row-number">${escapeHTML(row.sheetRow)}</span></td><td data-label="Member ID">${cellImage(row,'memberRegion')}<input class="entry-sheet-input${unsureAttr(row,'member_no')}" data-sheet-field="member_no" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.member_no)}" aria-label="Member ID, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}>${readDigitsHtml(row.member_no_digits,row.memberRead,row.memberMatched,row.memberSure,'member')}</td><td data-label="Ring">${cellImage(row,'ringRegion')}<input class="entry-sheet-input${unsureAttr(row,'pigeon_ring')}" data-sheet-field="pigeon_ring" data-sheet-id="${escapeHTML(row.id)}" maxlength="80" value="${escapeHTML(row.pigeon_ring)}" aria-label="Ring number, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}>${readDigitsHtml(row.ring_number_digits,row.ringRead,row.ringMatched,row.ringSure,'ring')}</td><td data-label="Remarks">${cellImage(row,'remarksRegion')}<input class="entry-sheet-input entry-sheet-remarks${unsureAttr(row,'remarks_text')}" data-sheet-field="remarks_text" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.remarks_text||'')}" placeholder="P1/P2" aria-label="Remarks, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Sticker">${cellImage(row,'barcodeRegion')}<input class="entry-sheet-input${unsureAttr(row,'barcode')}" data-sheet-field="barcode" data-sheet-id="${escapeHTML(row.id)}" maxlength="120" value="${escapeHTML(row.barcode)}" aria-label="Barcode, source row ${escapeHTML(row.sheetRow)}" ${row.saved?'disabled':''}></td><td data-label="Error / status"><span class="entry-sheet-row-status ${row.saved?'is-saved':row.errors?.length?'has-error':''}" data-sheet-row-status="${escapeHTML(row.id)}">${row.saved?'Saved':'Checking…'}</span></td><td data-label="Remove"><button class="text-button" type="button" data-sheet-ok="${escapeHTML(row.id)}" ${unsureFields(row).length?'':'hidden'}>Looks right</button> <button class="text-button danger-text" type="button" data-remove-sheet-row="${escapeHTML(row.id)}" ${row.saved?'disabled':''}>Remove</button></td></tr>`).join('')}</tbody></table></div>`:'';
+    table.querySelectorAll('[data-sheet-field]').forEach(input=>input.addEventListener('input',()=>{const row=rows.find(item=>item.id===input.dataset.sheetId);if(row){row[input.dataset.sheetField]=input.value;row.checked={...row.checked,[input.dataset.sheetField]:true};currentRowId=row.id;updateCheckNav();if(input.dataset.sheetField==='barcode')row.barcodeScanError='';}clearTimeout(validationTimer);validationTimer=setTimeout(()=>validateRows(),400);}));
+    table.querySelectorAll('[data-sheet-ok]').forEach(button=>button.onclick=()=>{const row=rows.find(item=>item.id===button.dataset.sheetOk);if(!row)return;row.checked={...row.checked,...Object.fromEntries(unsureFields(row).map(field=>[field,true]))};currentRowId=row.id;updateCheckNav();if(rows.some(rowNeedsCheck))goToRow(1);});
+    updateCheckNav();
     table.querySelectorAll('[data-remove-sheet-row]').forEach(button=>button.onclick=()=>{rows=rows.filter(row=>row.id!==button.dataset.removeSheetRow);redrawRows();validateRows();});
   };
   async function validateRows(){
@@ -101,7 +131,7 @@ export function mountEntrySheetImport(view,races,members,entries,readerByMember=
       if(indicator){indicator.textContent=errors.length?errors.join(' '):row.noSticker?'Ready to save · no sticker: clocked by RFID only':'Ready to save';indicator.classList.toggle('has-error',errors.length>0);indicator.classList.toggle('is-ready',!errors.length);indicator.classList.remove('is-saved');}
       rowElement?.classList.toggle('has-errors',errors.length>0);rowElement?.classList.remove('is-saved');
     }
-    saveButton.disabled=!ready||!raceId;saveButton.textContent=ready?`Save ${ready} valid entr${ready===1?'y':'ies'}`:'Save valid entries';count.textContent=`${rows.length} items · ${savedCount} saved · ${ready} ready · ${errorCount} errors`;
+    updateCheckNav();saveButton.disabled=!ready||!raceId;saveButton.textContent=ready?`Save ${ready} valid entr${ready===1?'y':'ies'}`:'Save valid entries';count.textContent=`${rows.length} items · ${savedCount} saved · ${ready} ready · ${errorCount} errors`;
   }
   // The preview shows the table the reader found: each row's Member ID, Ring,
   // Remarks and Sticker cells, so the photo can be rotated or retaken before reading.
@@ -237,7 +267,19 @@ export function mountEntrySheetImport(view,races,members,entries,readerByMember=
       if(formRace&&Number(raceSelect.value)!==formRace.id){raceSelect.value=String(formRace.id);drawRegistered();notes.push(`This form is for ${formRace.name}: that race is now chosen.`);}
       else if(code.raceId&&!formRace)notes.push('This form was printed for a race that is not in this club\'s list: check the race.');
     }
+    // The QR code (club, race, page): picks the race and numbers the rows by page.
+    let qr=null;
+    try{const barcodeReader=await loadDocumentBarcodeReader();for(const paper of Object.keys(PAPERS)){qr=parseFormQr(readFormQr(page,barcodeReader,formQrBox(paper)));if(qr)break;}}catch(error){console.warn('QR reading is unavailable:',error);}
+    if(qr){
+      if(qr.clubId&&club.clubId&&qr.clubId!==Number(club.clubId))notes.push('This form was printed by another club: check the race and members.');
+      const qrRace=qr.raceId&&races.find(race=>race.id===qr.raceId);
+      if(qrRace&&Number(raceSelect.value)!==qrRace.id){raceSelect.value=String(qrRace.id);drawRegistered();notes.push(`This form is for ${qrRace.name}: that race is now chosen.`);}
+      const key=`${raceSelect.value}:${qr.page}`;
+      if(readPages.has(key))notes.push(`Page ${qr.page} was already read: rows saved before show as already registered.`);
+      readPages.add(key);
+    }
     const form=readFormLayout(sourceCanvas,corners,layout,index=>rowBoxes(index,layout),page);cellSource=form.page;rows=form.rows;
+    if(qr)rows.forEach(row=>{row.page=qr.page;row.sheetRow=`p${qr.page} · ${row.sheetRow}`;});
     if(!rows.length){status.textContent='This AvilonX loading form has no rows filled in.';review.hidden=true;return;}
     status.textContent=`AvilonX loading form: ${rows.length} row${rows.length===1?'':'s'}. Scanning the stickers…`;
     try{const barcodeReader=await loadDocumentBarcodeReader();await scanSheetBarcodes(form.page,rows,barcodeReader,(current,total)=>{status.textContent=`Scanning stickers… ${current} of ${total}`;});}
@@ -248,7 +290,7 @@ export function mountEntrySheetImport(view,races,members,entries,readerByMember=
     matchFormRows(rows,members,birds);
     try{await refineHandwrittenEntryFields(worker,form.page,rows,members,()=>{},['barcode']);}catch(error){console.warn('Sticker number reading failed:',error);}
     rows.forEach(row=>{if(!row.barcode&&!row.barcodeScanError)row.barcodeScanError='Sticker not read. Type the number printed on it.';});
-    redrawRows();status.textContent=`Read ${rows.length} row${rows.length===1?'':'s'} from the AvilonX loading form. Check the red rows and the digits marked orange, then save.${notes.length?` ${notes.join(' ')}`:''}`;await validateRows();review.scrollIntoView({behavior:'smooth',block:'start'});
+    redrawRows();status.textContent=`Read ${rows.length} row${rows.length===1?'':'s'} from the AvilonX loading form${qr?` (page ${qr.page})`:''}. Fix the red rows and check the yellow boxes (Next to check), then save.${notes.length?` ${notes.join(' ')}`:''}`;await validateRows();review.scrollIntoView({behavior:'smooth',block:'start'});
   }
   readButton.onclick=async()=>{
     if(!sourceCanvas)return;if(!Number(raceSelect.value)){message('Choose the race schedule for this sheet first.','error');raceSelect.focus();return;}

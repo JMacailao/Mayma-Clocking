@@ -81,6 +81,34 @@ export function readFormCodeBits(bits){
   return {raceId:raceId||null,memberBoxes,prefixBoxes,numberBoxes,remarksCount,remarksHash};
 }
 
+// The QR code at the top right: club, race and page number ("AVX-LF:club:race:page"),
+// so a scanned page is matched to its race and numbered without typing.
+export const FORM_QR={x0:.87,size:.075,y0:.008};// x and size: fraction of the frame's width
+export const formQrText=({clubId=0,raceId=0,page=1}={})=>`AVX-LF:${Math.max(0,Number(clubId)||0)}:${Math.max(0,Number(raceId)||0)}:${Math.max(1,Number(page)||1)}`;
+export function parseFormQr(text){
+  const m=/^AVX-LF:(\d+):(\d+):(\d+)$/.exec(String(text||'').trim());
+  return m?{clubId:Number(m[1])||null,raceId:Number(m[2])||null,page:Number(m[3])}:null;
+}
+// The QR square as fractions of the frame (its height depends on the paper).
+export function formQrBox(paper='long'){
+  const P=PAPERS[paper]||PAPERS.long,FW=P.width-2*MARGIN,FH=P.height-2*MARGIN,side=FORM_QR.size*FW;
+  return {x0:FORM_QR.x0,x1:FORM_QR.x0+FORM_QR.size,y0:FORM_QR.y0,y1:FORM_QR.y0+side/FH};
+}
+const QR_LIB='https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+export function loadQrMaker(){
+  if(window.qrcode)return Promise.resolve(window.qrcode);
+  return new Promise((resolve,reject)=>{
+    const script=Object.assign(document.createElement('script'),{src:QR_LIB,crossOrigin:'anonymous'});
+    script.onload=()=>window.qrcode?resolve(window.qrcode):reject(new Error('The QR code maker could not start.'));
+    script.onerror=()=>reject(new Error('The QR code maker could not be loaded. Check the internet connection.'));
+    document.head.append(script);
+  });
+}
+// One QR picture (SVG) per page.
+export async function formQrSvgs({clubId,raceId,pages=1}){
+  const qrcode=await loadQrMaker();
+  return Array.from({length:Math.max(1,pages)},(_,i)=>{const qr=qrcode(0,'M');qr.addData(formQrText({clubId,raceId,page:i+1}));qr.make();return qr.createSvgTag({cellSize:4,margin:0,scalable:true});});
+}
 export const PAPERS={
   long:{label:'Long bond paper (8.5 × 13 in)',width:215.9,height:330.2},
   a4:{label:'A4',width:210,height:297},
@@ -101,19 +129,22 @@ export function rowBoxes(index,L=FORM_LAYOUT){
 }
 
 // The printable page (HTML). layout: formLayout(club settings and remarks).
-export function loadingFormHtml({clubName='',race=null,layout=FORM_LAYOUT,paper='long',copies=1}={}){
+export function loadingFormHtml({clubName='',race=null,layout=FORM_LAYOUT,paper='long',copies=1,qrSvgs=[]}={}){
   const P=PAPERS[paper]||PAPERS.long,FW=P.width-2*MARGIN,FH=P.height-2*MARGIN,L=layout;
   const at=(fx,fy)=>`left:${(MARGIN+fx*FW).toFixed(2)}mm;top:${(MARGIN+fy*FH).toFixed(2)}mm`;
   const size=(fw,fh)=>`width:${(fw*FW).toFixed(2)}mm;height:${(fh*FH).toFixed(2)}mm`;
   const box=(b,cls='box')=>`<div class="${cls}" style="${at(b.x0,b.y0)};${size(b.x1-b.x0,b.y1-b.y0)}"></div>`;
   const releaseDate=race?.release_at_utc?new Date(`${String(race.release_at_utc).replace(' ','T')}Z`).toLocaleDateString('en-PH',{timeZone:'Asia/Manila',year:'numeric',month:'short',day:'numeric'}):'';
   const mark=(fx,fy,mm)=>`<div class="mark" style="left:${(MARGIN+fx*FW-mm/2).toFixed(2)}mm;top:${(MARGIN+fy*FH-mm/2).toFixed(2)}mm;width:${mm}mm;height:${mm}mm"></div>`;
-  const page=()=>{
+  const pages=Math.max(1,copies,qrSvgs.length),qr=formQrBox(paper);
+  const lap=race?(race.lap?`${race.lap} · ${race.name}`:race.name):'';
+  const page=(_,index)=>{
     let html=mark(0,0,L.marks.big)+mark(1,0,L.marks.small)+mark(1,1,L.marks.small)+mark(0,1,L.marks.small);
-    html+=`<div class="title" style="${at(.08,.004)};width:${(.84*FW).toFixed(2)}mm">${escapeHTML(clubName||'Pigeon racing club')}</div>`;
-    html+=`<div class="subtitle" style="${at(.08,.036)};width:${(.84*FW).toFixed(2)}mm">LOADING FORM</div>`;
+    html+=`<div class="title" style="${at(.15,.004)};width:${(.7*FW).toFixed(2)}mm">${escapeHTML(clubName||'Pigeon racing club')}</div>`;
+    html+=`<div class="subtitle" style="${at(.15,.036)};width:${(.7*FW).toFixed(2)}mm">LOADING FORM${pages>1?` · PAGE ${index+1} OF ${pages}`:''}</div>`;
+    if(qrSvgs[index])html+=`<div class="qr" style="${at(qr.x0,qr.y0)};${size(qr.x1-qr.x0,qr.y1-qr.y0)}">${qrSvgs[index]}</div>`;
     const field=(label,value,fx,fy,fw)=>`<div class="field" style="${at(fx,fy)};width:${(fw*FW).toFixed(2)}mm"><span>${label}:</span><b>${escapeHTML(value||'')}</b></div>`;
-    html+=field('LAP',race?.name,.04,.068,.44)+field('DATE',releaseDate,.53,.068,.43)+field('RACE POINT',race?.release_location,.04,.098,.44)+field('RACE CATEGORY','',.53,.098,.43);
+    html+=field('LAP',lap,.04,.068,.44)+field('DATE',releaseDate,.53,.068,.43)+field('RACE POINT',race?.release_location,.04,.098,.44)+field('RACE CATEGORY','',.53,.098,.43);
     // Table: heading row and grid lines.
     const T=L.table,top=T.top,head=T.header,C=L.columns,tableW=T.right-T.left,tableH=T.bottom-top;
     html+=`<div class="grid" style="${at(T.left,top)};${size(tableW,tableH)}"></div>`;
@@ -129,7 +160,7 @@ export function loadingFormHtml({clubName='',race=null,layout=FORM_LAYOUT,paper=
     }
     const bits=formCodeBits({raceId:race?.id,layout:L});
     formCodeCells().forEach((cell,i)=>{if(bits[i])html+=`<div class="code" style="${at(cell.x0,cell.y0)};${size(cell.x1-cell.x0,cell.y1-cell.y0)}"></div>`;});
-    html+=`<div class="foot" style="${at(.03,.975)};width:${(.56*FW).toFixed(2)}mm">AvilonX loading form · Loft name: member ID · Pigeon I.D: ${L.settings.prefixBoxes?'letters on top, numbers below':'numbers'} · one character per box, inside the box · tick the remarks · keep the 4 black squares and the code on the right visible when scanning</div>`;
+    html+=`<div class="foot" style="${at(.03,.975)};width:${(.56*FW).toFixed(2)}mm">AvilonX loading form · Loft name: member ID · Pigeon I.D: ${L.settings.prefixBoxes?'letters on top, numbers below':'numbers'} · one character per box, inside the box · tick the remarks · keep the 4 black squares, the QR code and the code on the right visible when scanning</div>`;
     return `<section class="page">${html}</section>`;
   };
   return `<!doctype html><html><head><meta charset="utf-8"><title>Loading form${race?` · ${escapeHTML(race.name)}`:''}</title><style>
@@ -150,13 +181,14 @@ export function loadingFormHtml({clubName='',race=null,layout=FORM_LAYOUT,paper=
   .hint{font-size:2mm;color:#666}
   .foot{font-size:2.1mm;line-height:1.25;color:#555;text-align:left}
   .code{background:#000}
+  .qr svg{display:block;width:100%;height:100%}
   @media screen{body{background:#e9edf2}.page{margin:8mm auto;background:#fff;box-shadow:0 2px 12px #0003}}
-  </style></head><body>${Array.from({length:Math.max(1,copies)},page).join('')}</body></html>`;
+  </style></head><body>${Array.from({length:pages},page).join('')}</body></html>`;
 }
 
 // Opens the form in a new window and the print dialog (print to paper or save as PDF).
-export function printLoadingForm(options){
-  const win=window.open('','_blank');
+export function printLoadingForm(options,openedWindow=null){
+  const win=openedWindow||window.open('','_blank');
   if(!win)throw new Error('The browser blocked the new window. Allow pop-ups for AvilonX, then try again.');
   win.document.open();win.document.write(loadingFormHtml(options));win.document.close();
   win.addEventListener('load',()=>setTimeout(()=>win.print(),300));
