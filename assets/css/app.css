@@ -1517,3 +1517,15 @@ th{color:#55657a}
 @media(max-width:360px){
   .coordinate-values,.dms-grid .coordinate-values{grid-template-columns:50px repeat(3,minmax(0,1fr));gap:4px}
 }
+
+/* Race points: add / edit in a pop-up (the list stays on the page). */
+.race-point-list-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.race-point-dialog{width:min(1100px,calc(100vw - 24px));max-width:none;max-height:calc(100dvh - 24px);padding:0;border:0;border-radius:var(--radius);background:transparent;overflow:auto}
+.race-point-dialog:modal{overscroll-behavior:contain}
+.race-point-dialog::backdrop{background:#0f172a8c;overflow:hidden;overscroll-behavior:contain}
+.race-point-dialog .race-point-panel{margin:0}
+.race-point-dialog-head{justify-content:space-between}
+.race-point-dialog-close{display:grid;place-items:center;width:36px;height:36px;border:0;border-radius:8px;background:none;color:var(--ink);font-size:24px;line-height:1;cursor:pointer}
+.race-point-dialog-close:hover{background:var(--soft)}
+@media(pointer:coarse){.race-point-dialog-close{width:44px;height:44px}}
+@media(max-width:720px){dialog.race-point-dialog:modal{width:100vw;max-inline-size:100vw;max-block-size:100dvh;max-height:100dvh;margin:0;border-radius:0}.race-point-dialog .race-point-panel{border-radius:0;min-height:100dvh}}

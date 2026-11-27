@@ -27,7 +27,7 @@ const PRIMARY = {
   dashboard: ['Create a race', null, 'create-race'],
   members: ['Add member', '[data-add-member]', 'click'],
   'bird-bonding': ['Bond a bird', '[data-bond-new]', 'click'],
-  'race-points': ['Add race point', '#record-form', 'focus'],
+  'race-points': ['Add race point', '[data-add-race-point]', 'click'],
   races: ['Create schedule', '[data-create-schedule]', 'click'],
   entries: ['New entry', '#entry-form', 'focus'],
   'entry-remarks': ['Add remark', '#remark-form', 'focus'],
@@ -41,7 +41,7 @@ const PRIMARY = {
 };
 // Page buttons the toolbar replaces, so they are not shown twice (the toolbar
 // still presses them).
-const DUPLICATES = '.schedule-toolbar [data-create-schedule],.birds-head [data-bond-new],.welcome-row>a.button[href*="races"],[data-add-member],[data-tv],[data-export-race],[data-radar-open]';
+const DUPLICATES = '.schedule-toolbar [data-create-schedule],.birds-head [data-bond-new],.welcome-row>a.button[href*="races"],[data-add-member],[data-add-race-point],[data-tv],[data-export-race],[data-radar-open]';
 const FILTERS = '.schedule-filter,.birds-filters,.race-filter,.history-filter,.history-filters,.results-actions .field,[data-page-filters]';
 const MORE_TEXT = /^(Export|Print|Big screen|Download|Template|Import)/i;
 

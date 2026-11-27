@@ -36,6 +36,9 @@ export const playFeedback=kind=>{
 const toastStack=()=>{
   let stack=document.querySelector('[data-toast-stack]');
   if(!stack&&document.body){stack=document.createElement('div');stack.className='toast-stack';stack.dataset.toastStack='';stack.setAttribute('aria-live','polite');document.body.append(stack);}
+  // A pop-up (modal dialog) covers the page: show messages inside it so they stay visible.
+  const host=[...document.querySelectorAll('dialog[open]')].find(dialog=>dialog.matches(':modal'))||document.body;
+  if(stack&&host&&stack.parentElement!==host)host.append(stack);
   return stack;
 };
 export const message = (text, kind='info') => {
