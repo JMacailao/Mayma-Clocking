@@ -151,18 +151,24 @@ export async function render(view) {
     message(race?'Schedule saved.':'Schedule created.','success');window.dispatchEvent(new Event('app:refresh'));
   };
 
-  // Delete a race: only one without pigeons entered (its results stay safe).
+  // Delete a race: one without pigeons any time; one with pigeons only 6 months
+  // after its race day (its entries and clockings go with it; billing stays).
+  const raceDay=race=>race.end_date||race.open_date||PH_DAY(race.release_at_utc)||PH_DAY(race.created_at);
+  const sixMonthsAfter=day=>{const d=new Date(`${day}T00:00:00Z`),m=d.getUTCMonth()+6;d.setUTCMonth(m);if(d.getUTCMonth()!==((m%12)+12)%12)d.setUTCDate(0);return d.toISOString().slice(0,10);};
+  const dayText=day=>new Date(`${day}T00:00:00Z`).toLocaleDateString('en-PH',{timeZone:'UTC',year:'numeric',month:'short',day:'numeric'});
   view.querySelector('[data-delete-race]').onclick=async()=>{
     const race=races.find(item=>item.id===selectedId);if(!race)return;
-    const count=pigeonCount(race.id);
-    if(count){message(`${race.name} has ${count} pigeon${count===1?'':'s'} entered. Remove ${count===1?'it':'them'} in Race entries first, or set the race to Closed. Removed entries stay billed.`,'error');return;}
-    if(!confirm(`Delete the race "${race.name}"? This cannot be undone.`))return;
+    const count=pigeonCount(race.id),day=raceDay(race),allowed=day?sixMonthsAfter(day):null;
+    if(count&&(!allowed||allowed>today)){message(`${race.name} has ${count} pigeon${count===1?'':'s'} entered. A race with pigeons can be deleted 6 months after its race day${allowed?` (from ${dayText(allowed)})`:''}. Until then, set it to Closed.`,'error');return;}
+    if(!confirm(count?`Delete "${race.name}" with its ${count} pigeon entr${count===1?'y':'ies'}, clockings and results? This cannot be undone. (Entries stay billed.)`:`Delete the race "${race.name}"? This cannot be undone.`))return;
     const button=view.querySelector('[data-delete-race]');button.disabled=true;
-    const {error:deleteError}=await supabase.from('races').delete().eq('id',race.id);
+    let {error:deleteError}=await supabase.rpc('admin_delete_race',{p_race_id:race.id});
+    // Before avilonx-update.sql adds admin_delete_race: an empty race is deleted directly.
+    if(deleteError&&/admin_delete_race/.test(deleteError.message||'')&&!count)({error:deleteError}=await supabase.from('races').delete().eq('id',race.id));
     button.disabled=false;
-    if(deleteError){message(/foreign key|violates|23503/i.test(`${deleteError.message} ${deleteError.code}`)?`${race.name} still has entries or clockings. Remove them first, or set the race to Closed.`:dbError(deleteError),'error');return;}
+    if(deleteError){message(/admin_delete_race/.test(deleteError.message||'')?'Deleting races with pigeons is not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':dbError(deleteError),'error');return;}
     if(dialog.open)dialog.close();
-    message(`Race "${race.name}" deleted.`,'success');window.dispatchEvent(new Event('app:refresh'));
+    message(`Race "${race.name}" deleted${count?` with ${count} entr${count===1?'y':'ies'}`:''}.`,'success');window.dispatchEvent(new Event('app:refresh'));
   };
 
   // Loft readers keep taps made offline and send them later with their tap

@@ -585,4 +585,27 @@ DO $$ DECLARE v_super uuid; v_admin uuid; v_member uuid; v_club bigint; v_race b
   PERFORM set_config('request.jwt.claim.sub', '', true);
 END $$;
 
+-- Deleting a race: one with pigeons only 6 months after its race day (entries and clockings go too; billing stays).
+DO $$ DECLARE v_admin uuid; v_club bigint; v_race bigint; v_entry bigint; v_failed boolean; r jsonb; BEGIN
+  SELECT id INTO v_club FROM public.clubs ORDER BY id LIMIT 1;
+  SELECT id INTO v_admin FROM public.app_profiles WHERE username = 'billadmin';
+  INSERT INTO public.races (name, release_location, release_latitude, release_longitude, club_id, open_date, end_date)
+    VALUES ('Old race', 'Point', 13, 121, v_club, current_date - 10, current_date - 10) RETURNING id INTO v_race;
+  INSERT INTO public.barcode_stickers (barcode_number, source) VALUES ('9873', 'manual');
+  INSERT INTO public.race_entries (race_id, member_id, pigeon_id, distance_m, barcode)
+    SELECT v_race, p.member_id, p.id, 1000, '9873' FROM public.pigeons p WHERE p.ring_number = 'PH-B1' RETURNING id INTO v_entry;
+  INSERT INTO public.clock_events (race_entry_id, pigeon_ring, received_at_utc, source, verification) VALUES (v_entry, 'PH-B1', now() AT TIME ZONE 'UTC', 'barcode', 'provisional');
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  v_failed := false; BEGIN PERFORM public.admin_delete_race(v_race); EXCEPTION WHEN invalid_parameter_value THEN v_failed := SQLERRM LIKE '%6 months after%'; END;
+  ASSERT v_failed, 'a recent race with pigeons cannot be deleted';
+  UPDATE public.races SET open_date = current_date - 200, end_date = current_date - 200 WHERE id = v_race;
+  r := public.admin_delete_race(v_race);
+  ASSERT (r->>'entries')::int = 1 AND (r->>'clocks')::int = 1, 'deleted with its entry and clocking: ' || r::text;
+  ASSERT NOT EXISTS (SELECT 1 FROM public.races WHERE id = v_race) AND NOT EXISTS (SELECT 1 FROM public.race_entries WHERE id = v_entry), 'race and entries gone';
+  ASSERT (SELECT deleted_at IS NOT NULL FROM public.billing_counts WHERE race_entry_id = v_entry), 'billing count stays';
+  INSERT INTO public.races (name, release_location, release_latitude, release_longitude, club_id) VALUES ('Empty race', 'Point', 13, 121, v_club) RETURNING id INTO v_race;
+  ASSERT (public.admin_delete_race(v_race)->>'entries')::int = 0, 'an empty race is deleted';
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+END $$;
+
 SELECT 'All database checks passed.' AS result;
