@@ -53,4 +53,12 @@ module.exports = async (page, { open, check, OUT }) => {
   await page.evaluate(rows => { window.FAKE.rpc.public_race_results = rows; delete window.FAKE.rpc.public_race_summaries; }, rows);
   await page.click('[data-public-results-form] [type=submit]'); await page.waitForTimeout(400);
   check(await page.locator('[data-public-results-table] tbody tr').count() === 4 && !(await page.locator('[data-public-race-summaries]').isVisible()), 'no race headers function: results still show');
+  check((await page.locator('[data-public-results-table] th').allInnerTexts()).some(h => /^race$/i.test(h.trim())), 'two races that day: a Race column');
+
+  // One race that day: its header names it, so no Race column (and no race line on phone cards).
+  await page.evaluate(([one, header]) => { window.FAKE.rpc.public_race_results = one; window.FAKE.rpc.public_race_summaries = header; }, [rows.filter(r => r.race_name === 'Batangas Derby'), summaries.slice(0, 1)]);
+  await page.click('[data-public-results-form] [type=submit]'); await page.waitForTimeout(400);
+  const oneRace = await page.locator('[data-public-results-table] th').allInnerTexts();
+  check(!oneRace.some(h => /^race$/i.test(h.trim())) && /^rank$/i.test(oneRace[0].trim()) && oneRace.some(h => /loft/i.test(h)), `one race: no Race column (${oneRace.join(' | ')})`);
+  check(!/Batangas Derby/.test(await page.locator('[data-public-results-table] .public-cards').innerText()), 'one race: phone cards do not repeat the race name');
 };
