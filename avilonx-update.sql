@@ -2117,9 +2117,21 @@ COMMENT ON FUNCTION public.public_race_results(bigint, date) IS
   'Public race results for a club and Philippines-local race date: rank, race status, Show up verification, DQ and whether a show-up is needed; no member or account data.';
 
 
+-- The lap of a race in the season (1, 2, 3 …), set on Race schedules and
+-- shown under the race title on Results. Optional.
+ALTER TABLE public.races ADD COLUMN IF NOT EXISTS lap smallint;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'races_lap_range') THEN
+    ALTER TABLE public.races ADD CONSTRAINT races_lap_range CHECK (lap IS NULL OR lap BETWEEN 1 AND 99);
+  END IF;
+END $$;
+
 -- Header of each race on the public results: release point (name and
--- coordinates), release time, status, and how many birds are entered and
--- clocked (clocks the club rejected are not counted), e.g. 9/10. No member data.
+-- coordinates), release time, status, how many birds are entered and
+-- clocked (clocks the club rejected are not counted), e.g. 9/10, and the lap.
+-- No member data. (Dropped first: the lap column was added to its result.)
+DROP FUNCTION IF EXISTS public.public_race_summaries(bigint, date);
 CREATE OR REPLACE FUNCTION public.public_race_summaries(p_club_id bigint, p_race_date date)
 RETURNS TABLE(
   race_name text,
@@ -2129,7 +2141,8 @@ RETURNS TABLE(
   release_at_utc timestamp without time zone,
   race_status text,
   birds_entered bigint,
-  birds_clocked bigint
+  birds_clocked bigint,
+  lap smallint
 )
 LANGUAGE sql
 STABLE
@@ -2146,17 +2159,18 @@ AS $function$
     (SELECT count(*) FROM public.race_entries AS e WHERE e.race_id = r.id),
     (SELECT count(DISTINCT e.id) FROM public.race_entries AS e
        JOIN public.clock_events AS c ON c.race_entry_id = e.id
-      WHERE e.race_id = r.id AND c.verification <> 'rejected')
+      WHERE e.race_id = r.id AND c.verification <> 'rejected'),
+    r.lap
   FROM public.races AS r
   WHERE r.club_id = p_club_id
     AND ((r.release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date = p_race_date
     AND NOT r.is_practice
-  ORDER BY r.name;
+  ORDER BY r.lap NULLS LAST, r.name;
 $function$;
 REVOKE ALL ON FUNCTION public.public_race_summaries(bigint, date) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.public_race_summaries(bigint, date) TO anon, authenticated;
 COMMENT ON FUNCTION public.public_race_summaries(bigint, date) IS
-  'Public race headers for a club and Philippines-local race date: release point, coordinates, release time, status, birds clocked / entered; no member data.';
+  'Public race headers for a club and Philippines-local race date: release point, coordinates, release time, status, birds clocked / entered, lap; no member data.';
 
 NOTIFY pgrst, 'reload schema';
 

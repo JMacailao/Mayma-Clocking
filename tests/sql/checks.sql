@@ -495,4 +495,13 @@ DO $$ BEGIN
   DELETE FROM public.client_errors;
 END $$;
 
+-- Race lap: 1 to 99, shown in the public race headers.
+DO $$ DECLARE v_failed boolean := false; BEGIN
+  UPDATE public.races SET lap = 3 WHERE name = 'Race A';
+  ASSERT (SELECT s.lap FROM public.races AS r, public.public_race_summaries(r.club_id, ((r.release_at_utc AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date) AS s
+           WHERE r.name = 'Race A' AND s.race_name = 'Race A') = 3, 'public race header has the lap';
+  BEGIN UPDATE public.races SET lap = 0 WHERE name = 'Race A'; EXCEPTION WHEN check_violation THEN v_failed := true; END;
+  ASSERT v_failed, 'lap must be 1 to 99';
+END $$;
+
 SELECT 'All database checks passed.' AS result;

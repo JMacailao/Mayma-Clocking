@@ -28,7 +28,7 @@ export async function render(view) {
         <label class="field"><span>Race name</span><input name="name" maxlength="180" required></label>
         <label class="field"><span>Release point</span><select name="race_point_id" required><option value="">Choose a location</option>${points.map(p=>`<option value="${p.id}">${escapeHTML(p.location)}${p.sector?` · ${escapeHTML(p.sector)}`:''}</option>`).join('')}</select><small class="small" data-point-note hidden>Locked (pigeons registered). Edit it on Race points.</small></label>
         <div class="schedule-form-pair"><label class="field"><span>Open date</span><input name="open_date" type="date" required></label><label class="field"><span>End date</span><input name="end_date" type="date" required></label></div>
-        <label class="field"><span>Status</span><select name="status">${STATUSES.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label>
+        <div class="schedule-form-row"><label class="field"><span>Status</span><select name="status">${STATUSES.map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label><label class="field schedule-lap"><span>Lap</span><input name="lap" type="number" min="1" max="99" step="1" inputmode="numeric" placeholder="e.g. 1"></label></div>
         <div class="field"><span>Official release</span><div class="schedule-form-pair"><input name="release_date" type="date" aria-label="Official release date"><input name="release_time" type="time" aria-label="Official release time"></div><small class="small">Philippine time. Needed to open the race.</small></div>
         <div class="field"><span>RFID tag expiry</span><div class="schedule-form-pair"><select name="nfc_expiry_days" aria-label="RFID tag expiry"><option value="">No expiry</option><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option><option value="5">5 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="custom">Custom…</option></select><input name="nfc_expiry_custom" type="number" min="1" max="365" step="1" inputmode="numeric" placeholder="Days" aria-label="RFID tag expiry in days" hidden></div><small class="small">From release. Then RFID tags stop clocking.</small></div>
         <label class="schedule-practice schedule-showup"><input type="checkbox" name="requires_show_up" checked><span><strong>Show up needed</strong> Clocked pigeons must be brought to the club before the race closes, or they are disqualified.</span></label>
@@ -68,7 +68,7 @@ export async function render(view) {
   const drawRows=()=>{
     const list=shown();
     filterNodes.count.textContent=`${list.length} of ${races.length} race${races.length===1?'':'s'}`;
-    rowsNode.innerHTML=list.length?list.map(race=>`<tr class="schedule-row ${race.id===selectedId?'is-selected':''}" data-race-row="${race.id}" tabindex="0" aria-selected="${race.id===selectedId}"><td data-label="Race"><strong>${escapeHTML(race.name)}</strong>${race.is_practice?' <span class="tag practice">Practice</span>':''}${race.requires_show_up===false?' <span class="tag">No show up</span>':''}</td><td data-label="Release point">${escapeHTML(race.release_location||'—')}</td><td data-label="Release time">${escapeHTML(race.release_at_utc?formatDate(race.release_at_utc):'Not set')}</td><td data-label="Pigeons">${pigeonCount(race.id)}</td><td data-label="Status">${stateTag(race.status)}</td></tr>`).join(''):`<tr><td class="empty-cell" colspan="5">${escapeHTML(emptyText())}</td></tr>`;
+    rowsNode.innerHTML=list.length?list.map(race=>`<tr class="schedule-row ${race.id===selectedId?'is-selected':''}" data-race-row="${race.id}" tabindex="0" aria-selected="${race.id===selectedId}"><td data-label="Race"><strong>${escapeHTML(race.name)}</strong>${race.is_practice?' <span class="tag practice">Practice</span>':''}${race.lap?` <span class="tag lap">Lap ${escapeHTML(String(race.lap))}</span>`:''}${race.requires_show_up===false?' <span class="tag">No show up</span>':''}</td><td data-label="Release point">${escapeHTML(race.release_location||'—')}</td><td data-label="Release time">${escapeHTML(race.release_at_utc?formatDate(race.release_at_utc):'Not set')}</td><td data-label="Pigeons">${pigeonCount(race.id)}</td><td data-label="Status">${stateTag(race.status)}</td></tr>`).join(''):`<tr><td class="empty-cell" colspan="5">${escapeHTML(emptyText())}</td></tr>`;
     rowsNode.querySelectorAll('[data-race-row]').forEach(row=>{const pick=()=>openEditor(races.find(race=>race.id===Number(row.dataset.raceRow)));row.onclick=pick;row.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();pick();}};});
   };
   const validateDateRange=()=>{endDateInput.min=openDateInput.value;const invalid=Boolean(openDateInput.value&&endDateInput.value&&endDateInput.value<openDateInput.value);endDateInput.setCustomValidity(invalid?'End date must be on or after open date.':'');return !invalid;};
@@ -91,7 +91,7 @@ export async function render(view) {
     if(race){
       form.elements.name.value=race.name||'';
       form.elements.race_point_id.value=race.race_point_id??points.find(point=>point.location===race.release_location)?.id??'';
-      openDateInput.value=race.open_date||'';endDateInput.value=race.end_date||'';form.elements.status.value=race.status||'draft';form.elements.is_practice.checked=Boolean(race.is_practice);form.elements.requires_show_up.checked=race.requires_show_up!==false;setExpiry(race.nfc_expiry_days);
+      openDateInput.value=race.open_date||'';endDateInput.value=race.end_date||'';form.elements.status.value=race.status||'draft';form.elements.is_practice.checked=Boolean(race.is_practice);form.elements.requires_show_up.checked=race.requires_show_up!==false;form.elements.lap.value=race.lap??'';setExpiry(race.nfc_expiry_days);
       const [date='',time='']=utcToPhDateTimeLocal(race.release_at_utc).split('T');releaseDateInput.value=date;releaseTimeInput.value=time;
     }
     if(!race)setExpiry(null);
@@ -129,6 +129,10 @@ export async function render(view) {
     if(expirySelect.value==='custom'&&!(Number.isInteger(expiryDays)&&expiryDays>=1&&expiryDays<=365)){message('Enter the RFID tag expiry in days (1 to 365).','error');expiryCustom.focus();return;}
     // Sent only when set (or already set), so saving still works before race-tag-expiry.sql is run.
     if(expiryDays!==null||race?.nfc_expiry_days!=null)record.nfc_expiry_days=expiryDays;
+    const lap=form.elements.lap.value===''?null:Number(form.elements.lap.value);
+    if(lap!==null&&!(Number.isInteger(lap)&&lap>=1&&lap<=99)){message('Enter the lap as a number from 1 to 99, or leave it blank.','error');form.elements.lap.focus();return;}
+    // Sent only when set (or already set), so saving still works before avilonx-update.sql is run again.
+    if(lap!==null||race?.lap!=null)record.lap=lap;
     // Sent only when ticked (or already a practice race), so saving still works before race-day.sql is run.
     if(form.elements.is_practice.checked||race?.is_practice)record.is_practice=form.elements.is_practice.checked;
     // Sent only when unticked (or already unticked), so saving still works before entry-remarks.sql is run.
@@ -142,7 +146,7 @@ export async function render(view) {
     saveButton.disabled=true;
     const {error:saveError}=race?await supabase.from('races').update(record).eq('id',race.id):await supabase.from('races').insert(record);
     saveButton.disabled=false;
-    if(saveError){message(/nfc_expiry_days/i.test(saveError.message||'')?'RFID tag expiry per race is not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':/is_practice/i.test(saveError.message||'')?'Practice races are not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':/requires_show_up/i.test(saveError.message||'')?'The Show up option is not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':dbError(saveError),'error');return;}
+    if(saveError){message(/\blap\b|races_lap_range/i.test(saveError.message||'')?'Laps are not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':/nfc_expiry_days/i.test(saveError.message||'')?'RFID tag expiry per race is not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':/is_practice/i.test(saveError.message||'')?'Practice races are not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':/requires_show_up/i.test(saveError.message||'')?'The Show up option is not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':dbError(saveError),'error');return;}
     if(dialog.open)dialog.close();
     message(race?'Schedule saved.':'Schedule created.','success');window.dispatchEvent(new Event('app:refresh'));
   };

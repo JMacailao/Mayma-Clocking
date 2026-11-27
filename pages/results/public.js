@@ -33,7 +33,7 @@ async function mountPublicResults(panel) {
   const [{data,error},summaries]=await Promise.all([supabase.rpc('public_race_results',args),Promise.resolve(supabase.rpc('public_race_summaries',args)).catch(()=>({data:null}))]);
   // Race headers need public_race_summaries (entry-remarks.sql); without it the results still show.
   const summaryBox=panel.querySelector('[data-public-race-summaries]'),races=error?[]:(summaries?.data||[]);
-  summaryBox.innerHTML=races.map(race=>raceSummaryHtml({name:race.race_name,location:race.release_location,latitude:race.release_latitude,longitude:race.release_longitude,release_at_utc:race.release_at_utc,status:race.race_status,entered:race.birds_entered,clocked:race.birds_clocked})).join('');summaryBox.hidden=!races.length;
+  summaryBox.innerHTML=races.map(race=>raceSummaryHtml({name:race.race_name,lap:race.lap,location:race.release_location,latitude:race.release_latitude,longitude:race.release_longitude,release_at_utc:race.release_at_utc,status:race.race_status,entered:race.birds_entered,clocked:race.birds_clocked})).join('');summaryBox.hidden=!races.length;
   button.disabled=false;button.textContent='Show results';
   if(error){setError('Could not load these results. Check your connection and try again.');table.innerHTML='';toolbar.hidden=true;console.error('Could not load public race results:',error);return;}
   rows=(data||[]).map(row=>({...row,speed_m_per_min:row.speed_m_per_min==null?null:Number(row.speed_m_per_min)}));sortOrder.value='desc';toolbar.hidden=false;draw();

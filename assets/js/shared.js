@@ -110,7 +110,8 @@ export const raceSummaryHtml = (race) => {
   const lat=coord(race.latitude,'N','S'),lon=coord(race.longitude,'E','W');
   const entered=Number(race.entered)||0,clocked=Number(race.clocked)||0;
   const item=(label,value,cls='')=>`<div class="race-summary-item${cls}"><dt>${escapeHTML(label)}</dt><dd>${value}</dd></div>`;
-  return `<section class="race-summary"><h3>${escapeHTML(race.name||'Race')} <span class="race-summary-status${race.status==='closed'?' is-closed':''}">${race.status==='closed'?'Closed · final':'Open'}</span></h3><dl>${item('Location',escapeHTML(race.location||'—'))}${item('Coordinates',lat&&lon?`${escapeHTML(lat)}, ${escapeHTML(lon)}`:'—')}${item('Release time',escapeHTML(formatDateSeconds(race.release_at_utc)))}${item('Clocked',`<strong>${clocked}/${entered}</strong> <span>birds</span>`,' is-count')}</dl></section>`;
+  const lap=Number(race.lap)>0?`<p class="race-summary-lap">Lap ${escapeHTML(String(race.lap))}</p>`:'';
+  return `<section class="race-summary"><h3>${escapeHTML(race.name||'Race')} <span class="race-summary-status${race.status==='closed'?' is-closed':''}">${race.status==='closed'?'Closed · final':'Open'}</span></h3>${lap}<dl>${item('Location',escapeHTML(race.location||'—'))}${item('Coordinates',lat&&lon?`${escapeHTML(lat)}, ${escapeHTML(lon)}`:'—')}${item('Release time',escapeHTML(formatDateSeconds(race.release_at_utc)))}${item('Clocked',`<strong>${clocked}/${entered}</strong> <span>birds</span>`,' is-count')}</dl></section>`;
 };
 export const number = (value) => value==null?'—':Number(value).toLocaleString('en-PH',{maximumFractionDigits:3});
 // A ring number with the entry's ticked remarks after it, e.g. "12345 P1/P2/P3".

@@ -7,7 +7,7 @@ module.exports = async (page, { open, check, OUT }) => {
     { race_name: 'Lipa Final', loft_name: 'Green Loft', distance_m: 41000, pigeon_ring: 'PH-9', barcode: '999', arrival_at_utc: '2026-11-22 01:50:00', flight_seconds: 1400, speed_m_per_min: 1757, rank: null, race_status: 'closed', verification: 'provisional', disqualified: true }
   ];
   const summaries = [
-    { race_name: 'Batangas Derby', release_location: 'Batangas City', release_latitude: 13.7565, release_longitude: 121.0583, release_at_utc: '2026-11-22 01:30:00', race_status: 'open', birds_entered: 10, birds_clocked: 9 },
+    { race_name: 'Batangas Derby', release_location: 'Batangas City', release_latitude: 13.7565, release_longitude: 121.0583, release_at_utc: '2026-11-22 01:30:00', race_status: 'open', birds_entered: 10, birds_clocked: 9, lap: 2 },
     { race_name: 'Lipa Final', release_location: 'Lipa', release_latitude: 13.9411, release_longitude: 121.1631, release_at_utc: '2026-11-22 01:20:00', race_status: 'closed', birds_entered: 4, birds_clocked: 2 }
   ];
   await open('/repo/pages/results/public.js', `F.rpc.public_result_clubs=[{club_id:1,club_name:'Mayma Club'}];F.rpc.public_race_results=${JSON.stringify(rows)};F.rpc.public_race_summaries=${JSON.stringify(summaries)};`, { fn: 'mountPublicResults' });
@@ -21,6 +21,7 @@ module.exports = async (page, { open, check, OUT }) => {
   check(/✓ Verified/.test(body) && /Provisional/.test(body), 'shows verified and provisional');
   check(/Closed · final/.test(body) && /\bOpen\b/.test(body), 'shows the race status');
   const headers2 = await page.locator('[data-public-race-summaries] .race-summary').allInnerTexts();
+  check(/Batangas Derby[\s\S]*Lap 2/.test(headers2[0]) && !/Lap/.test(headers2[1] || ''), `the lap shows under the race title (${headers2[0]?.slice(0, 60)})`);
   check(headers2.length === 2 && /Batangas Derby/.test(headers2[0]) && /Batangas City/.test(headers2[0]) && /13\.76° N, 121\.06° E/.test(headers2[0]) && /9:30:00\sAM/.test(headers2[0]) && /9\/10/.test(headers2[0]) && /2\/4/.test(headers2[1]) && /Closed · final/.test(headers2[1]), `race headers: location, coordinates, release time, clocked/entered (${headers2.map(h => h.replace(/\s+/g, ' ')).join(' | ')})`);
   const firstRank = await page.locator('[data-public-results-table] tbody tr').first().locator('.public-rank').innerText().catch(() => '');
   check(firstRank === '1', 'fastest bird ranked 1');

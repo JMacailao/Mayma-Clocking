@@ -39,5 +39,5 @@ function raceHeaders(list){
  const byRace=new Map();
  list.forEach(r=>{if(!r.race)return;const s=byRace.get(r.race.id)||{race:r.race,entered:0,clocked:0};s.entered++;if(r.clock&&r.clock.verification!=='rejected')s.clocked++;byRace.set(r.race.id,s);});
  if(!byRace.size)return '';
- return `<div class="race-summaries">${[...byRace.values()].map(({race,entered,clocked})=>raceSummaryHtml({name:race.name,location:race.release_location,latitude:race.release_latitude,longitude:race.release_longitude,release_at_utc:race.release_at_utc,status:race.status,entered,clocked})).join('')}</div>`;
+ return `<div class="race-summaries">${[...byRace.values()].map(({race,entered,clocked})=>raceSummaryHtml({name:race.name,lap:race.lap,location:race.release_location,latitude:race.release_latitude,longitude:race.release_longitude,release_at_utc:race.release_at_utc,status:race.status,entered,clocked})).join('')}</div>`;
 }
