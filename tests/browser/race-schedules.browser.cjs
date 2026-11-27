@@ -22,4 +22,18 @@ module.exports = async (page, { open, check, sample, toast }) => {
   check((await lastUpdate()).lap === 2, 'saves the lap');
   await page.fill('[name=lap]', ''); await page.click('[data-save-schedule]'); await page.waitForTimeout(300);
   check((await lastUpdate()).lap === null, 'clearing the lap saves no lap');
+
+  // Delete: refused while pigeons are entered; an empty race is deleted.
+  await open('/repo/pages/admin/races/page.js', sample + `F.tables.race_points=[{id:1,location:'Batangas',latitude:13,longitude:121}];F.tables.races.push({id:77,name:'Empty Race',status:'draft',club_id:1,release_location:'Batangas',open_date:'2026-11-27',end_date:'2026-11-27',created_at:new Date().toISOString()});`);
+  await page.click('[data-filter-mode="all"]');
+  await page.click('[data-race-row="5"]');
+  check(await page.locator('[data-delete-race]').isVisible(), 'Delete race shows when editing');
+  await page.click('[data-delete-race]'); await page.waitForTimeout(200);
+  check(/pigeons? entered/.test(await toast()) && await page.evaluate(() => window.FAKE.tables.races.some(r => r.id === 5)), 'a race with pigeons entered is not deleted');
+  await page.click('[data-race-row="77"]');
+  page.once('dialog', d => d.accept());
+  await page.click('[data-delete-race]'); await page.waitForTimeout(300);
+  check(await page.evaluate(() => !window.FAKE.tables.races.some(r => r.id === 77)) && /deleted/.test(await toast()), 'an empty race is deleted');
+  await page.click('[data-create-schedule]');
+  check(!(await page.locator('[data-delete-race]').isVisible()), 'no Delete when creating');
 };

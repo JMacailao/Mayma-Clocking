@@ -33,7 +33,7 @@ export async function render(view) {
         <div class="field"><span>RFID tag expiry</span><div class="schedule-form-pair"><select name="nfc_expiry_days" aria-label="RFID tag expiry"><option value="">No expiry</option><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option><option value="5">5 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="custom">Custom…</option></select><input name="nfc_expiry_custom" type="number" min="1" max="365" step="1" inputmode="numeric" placeholder="Days" aria-label="RFID tag expiry in days" hidden></div><small class="small">From release. Then RFID tags stop clocking.</small></div>
         <label class="schedule-practice schedule-showup"><input type="checkbox" name="requires_show_up" checked><span><strong>Show up needed</strong> Clocked pigeons must be brought to the club before the race closes, or they are disqualified.</span></label>
         <label class="schedule-practice"><input type="checkbox" name="is_practice"><span><strong>Practice race</strong> A test race to try readers and phones. It never appears in the public results.</span></label>
-        <div class="schedule-form-actions"><button class="button primary" type="submit" data-save-schedule>Save changes</button><button class="button secondary" type="button" data-cancel-editor>Cancel</button></div>
+        <div class="schedule-form-actions"><button class="button primary" type="submit" data-save-schedule>Save changes</button><button class="button secondary" type="button" data-cancel-editor>Cancel</button><button class="button danger-button" type="button" data-delete-race hidden>Delete race</button></div>
       </form>
     </aside>
   </div>`;
@@ -86,7 +86,7 @@ export async function render(view) {
   };
   function openEditor(race,{inDialog=false}={}){
     selectedId=race?.id??null;form.reset();
-    title.textContent=race?'Edit schedule':'Create schedule';saveButton.textContent=race?'Save changes':'Create schedule';
+    title.textContent=race?'Edit schedule':'Create schedule';saveButton.textContent=race?'Save changes':'Create schedule';view.querySelector('[data-delete-race]').hidden=!race;
     const locked=Boolean(race&&pigeonCount(race.id));form.elements.race_point_id.disabled=locked;pointNote.hidden=!locked;
     if(race){
       form.elements.name.value=race.name||'';
@@ -149,6 +149,20 @@ export async function render(view) {
     if(saveError){message(/\blap\b|races_lap_range/i.test(saveError.message||'')?'Laps are not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':/nfc_expiry_days/i.test(saveError.message||'')?'RFID tag expiry per race is not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':/is_practice/i.test(saveError.message||'')?'Practice races are not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':/requires_show_up/i.test(saveError.message||'')?'The Show up option is not set up yet. Run avilonx-update.sql in the Supabase SQL Editor.':dbError(saveError),'error');return;}
     if(dialog.open)dialog.close();
     message(race?'Schedule saved.':'Schedule created.','success');window.dispatchEvent(new Event('app:refresh'));
+  };
+
+  // Delete a race: only one without pigeons entered (its results stay safe).
+  view.querySelector('[data-delete-race]').onclick=async()=>{
+    const race=races.find(item=>item.id===selectedId);if(!race)return;
+    const count=pigeonCount(race.id);
+    if(count){message(`${race.name} has ${count} pigeon${count===1?'':'s'} entered. Remove ${count===1?'it':'them'} in Race entries first, or set the race to Closed. Removed entries stay billed.`,'error');return;}
+    if(!confirm(`Delete the race "${race.name}"? This cannot be undone.`))return;
+    const button=view.querySelector('[data-delete-race]');button.disabled=true;
+    const {error:deleteError}=await supabase.from('races').delete().eq('id',race.id);
+    button.disabled=false;
+    if(deleteError){message(/foreign key|violates|23503/i.test(`${deleteError.message} ${deleteError.code}`)?`${race.name} still has entries or clockings. Remove them first, or set the race to Closed.`:dbError(deleteError),'error');return;}
+    if(dialog.open)dialog.close();
+    message(`Race "${race.name}" deleted.`,'success');window.dispatchEvent(new Event('app:refresh'));
   };
 
   // Loft readers keep taps made offline and send them later with their tap
