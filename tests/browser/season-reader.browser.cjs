@@ -7,7 +7,9 @@ module.exports = async (page, { open, check, sample, OUT }) => {
     F.rpc.member_reader_status=[{name:'Loft clock',is_online:false,last_heartbeat_at:new Date(Date.now()-25*60000).toISOString(),last_seen_at:null,pending_taps:3}];`);
   await page.waitForSelector('.reader-status', { timeout: 8000 }).catch(() => {});
   const card = await page.locator('.reader-status').innerText().catch(() => '');
-  check(/Loft clock/.test(card) && /Offline/.test(card) && /3 taps waiting to send/.test(card) && /25 min ago/.test(card), `reader card shows offline with 3 taps waiting (${card.replace(/\s+/g, ' ')})`);
+  check(/Last contact 25 min ago/.test(card) && /3 taps waiting to send/.test(card) && !/Loft clock|Check the reader/.test(card), `reader card: last contact and taps waiting only (${card.replace(/\s+/g, ' ')})`);
+  check(await page.locator('.reader-status .reader-dot').getAttribute('aria-label') === 'Offline', 'the dot says offline');
+  check(!(await page.locator('[data-notify-box]').count()), 'no notification offer on the dashboard (it is in Settings)');
   await page.locator('.reader-status').screenshot({ path: `${OUT}/reader-status.png` });
 
   await open('/repo/pages/member/results/page.js', sample + `F.identity={profile:{role:'member',member_id:8,username:'ana',club_id:1}};F.rpc.public_result_clubs=[];` + standings);
