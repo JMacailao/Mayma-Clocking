@@ -2,7 +2,7 @@
 // entries (clocked birds included) will be recalculated, then saves.
 module.exports = async (page, { open, check, sample, toast }) => {
   await open('/repo/pages/admin/race-points/page.js', sample + `F.tables.race_points=[{id:1,location:'Batangas',sector:'South',description:null,latitude:13,longitude:121}];F.tables.races[0].race_point_id=1;`);
-  await page.click('[data-edit]');
+  await page.click('[data-edit-point]');
   await page.click('[data-coord-mode-button="dd"]');
   await page.fill('[data-coordinate-decimal-for="latitude"]', '13.7565');
   await page.locator('[data-coordinate-decimal-for="latitude"]').dispatchEvent('input');
@@ -20,7 +20,7 @@ module.exports = async (page, { open, check, sample, toast }) => {
 
   // Cancelling keeps the point as it was; a change of description only asks nothing.
   await open('/repo/pages/admin/race-points/page.js', sample + `F.tables.race_points=[{id:1,location:'Batangas',sector:'South',description:null,latitude:13,longitude:121}];Object.assign(F.tables.races[0],{release_latitude:13,release_longitude:121});`);
-  await page.click('[data-edit]');
+  await page.click('[data-edit-point]');
   await page.fill('#record-form [name=location]', 'Batangas City');
   page.once('dialog', d => d.dismiss().catch(() => {}));
   await page.click('#record-form [type=submit]'); await page.waitForTimeout(400);
@@ -32,7 +32,7 @@ module.exports = async (page, { open, check, sample, toast }) => {
 
   // Another point with the same name: unlinked races may be the other point's, so they are not counted.
   await open('/repo/pages/admin/race-points/page.js', sample + `F.tables.race_points=[{id:1,location:'Batangas',sector:'South',description:null,latitude:13,longitude:121},{id:2,location:'Batangas',sector:'North',description:null,latitude:14,longitude:121}];F.tables.races.forEach(r=>{r.race_point_id=null;});`);
-  await page.locator('[data-edit]').last().click();
+  await page.locator('[data-edit-point]').last().click();
   await page.fill('#record-form [name=location]', 'Batangas Port');
   asked = false; page.once('dialog', d => { asked = true; d.accept().catch(() => {}); });
   await page.click('#record-form [type=submit]'); await page.waitForTimeout(400);
@@ -41,7 +41,7 @@ module.exports = async (page, { open, check, sample, toast }) => {
   // The races cannot be checked: nothing is saved and the admin is told.
   await open('/repo/pages/admin/race-points/page.js', sample + `F.tables.race_points=[{id:1,location:'Batangas',sector:'South',description:null,latitude:13,longitude:121}];F.tables.races[0].race_point_id=1;`);
   await page.evaluate(() => { window.FAKE.fail = { races: 'offline' }; });
-  await page.click('[data-edit]');
+  await page.click('[data-edit-point]');
   await page.fill('#record-form [name=location]', 'Batangas City');
   asked = false; page.once('dialog', d => { asked = true; d.accept().catch(() => {}); });
   await page.click('#record-form [type=submit]'); await page.waitForTimeout(400);

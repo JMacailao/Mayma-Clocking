@@ -1544,3 +1544,10 @@ th{color:#55657a}
 .sheet-check-count{flex:1 1 auto;font-size:13px;font-weight:700;color:#7c4a03}
 .sheet-check-nav.is-done{border-color:#c8decf;background:#f0f7f1}.sheet-check-nav.is-done .sheet-check-count{color:var(--green)}
 @media(max-width:720px){.sheet-check-count{flex-basis:100%}.sheet-check-nav .button{flex:1 1 0;min-height:44px}.entry-sheet-table tr.has-unsure{border-color:#f0d36b;background:#fffcef}.entry-sheet-table tr.has-unsure td{background:transparent}.entry-sheet-table tr.is-current{outline:2px solid #009fa8;outline-offset:1px}}
+/* Race points: the location opens the pop-up; sector and coordinates in one column. */
+.race-point-open{border:0;background:none;padding:6px 0;min-height:var(--target);color:var(--green);font:inherit;font-weight:600;text-align:left;cursor:pointer;text-decoration:underline;text-decoration-color:#00345f40;text-underline-offset:3px}
+.race-point-open:hover{text-decoration-color:currentColor}
+.race-point-coords{color:var(--muted);font-variant-numeric:tabular-nums}
+.danger-button{background:#fff;color:var(--red);border:1px solid #f3c4c4;margin-left:auto}
+.danger-button:hover{background:var(--bad-bg)}
+.danger-button[hidden]{display:none}
