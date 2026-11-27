@@ -8,13 +8,14 @@ function decimalToDms(value,key) {
   const positive=key==='latitude'?'N':'E',negative=key==='latitude'?'S':'W';
   if(value===null||value===undefined||String(value).trim()==='')return {hemisphere:positive,degrees:'',minutes:'',seconds:''};
   const decimal=Number(value);if(!Number.isFinite(decimal))return {hemisphere:positive,degrees:'',minutes:'',seconds:''};
-  const totalSeconds=Math.round(Math.abs(decimal)*3600*10000)/10000;
-  const degrees=Math.floor(totalSeconds/3600),remaining=totalSeconds-degrees*3600,minutes=Math.floor(remaining/60),seconds=Number((remaining-minutes*60).toFixed(4));
+  // Seconds with 2 decimals (rounded; 59.995 carries into the next minute).
+  const totalSeconds=Math.round(Math.abs(decimal)*3600*100)/100;
+  const degrees=Math.floor(totalSeconds/3600),remaining=totalSeconds-degrees*3600,minutes=Math.floor(remaining/60),seconds=Number((remaining-minutes*60).toFixed(2));
   return {hemisphere:decimal<0?negative:positive,degrees:String(degrees),minutes:String(minutes),seconds:String(seconds)};
 }
 function coordinateFieldHTML(key,label,value='',{selectDirection=false}={}) {
   const id=`field-${key}`,limit=key==='latitude'?90:180,hemispheres=key==='latitude'?['N','S']:['E','W'],parts=decimalToDms(value,key);
-  return `<div class="coordinate-axis" data-coordinate-axis="${key}" data-coordinate-limit="${limit}"><span class="coordinate-name" id="${id}-label">${label}</span><input type="hidden" id="${id}" name="${key}" data-coordinate-value value="${escapeHTML(value??'')}"><div class="coordinate-values">${selectDirection?`<label class="coordinate-direction"><span class="visually-hidden">${label} direction</span><select data-coordinate-hemisphere aria-label="${label} direction">${hemispheres.map(direction=>`<option value="${direction}" ${parts.hemisphere===direction?'selected':''}>${direction}</option>`).join('')}</select></label>`:`<div class="coordinate-hemispheres" role="radiogroup" aria-labelledby="${id}-label">${hemispheres.map(direction=>`<label class="hemisphere-choice"><input type="radio" name="${key}_hemisphere" value="${direction}" ${parts.hemisphere===direction?'checked':''}><span>${direction}</span></label>`).join('')}</div>`}<label class="coordinate-part"><span class="visually-hidden">${label} degrees</span><input type="number" inputmode="numeric" autocomplete="off" data-coordinate-part="degrees" aria-label="${label} degrees" min="0" max="${limit}" step="1" value="${escapeHTML(parts.degrees)}"><span aria-hidden="true">°</span></label><label class="coordinate-part"><span class="visually-hidden">${label} minutes</span><input type="number" inputmode="numeric" autocomplete="off" data-coordinate-part="minutes" aria-label="${label} minutes" min="0" max="59" step="1" value="${escapeHTML(parts.minutes)}"><span aria-hidden="true">′</span></label><label class="coordinate-part coordinate-seconds"><span class="visually-hidden">${label} seconds</span><input type="number" inputmode="decimal" autocomplete="off" data-coordinate-part="seconds" aria-label="${label} seconds" min="0" max="59.9999" step="0.0001" value="${escapeHTML(parts.seconds)}"><span aria-hidden="true">″</span></label></div></div>`;
+  return `<div class="coordinate-axis" data-coordinate-axis="${key}" data-coordinate-limit="${limit}"><span class="coordinate-name" id="${id}-label">${label}</span><input type="hidden" id="${id}" name="${key}" data-coordinate-value value="${escapeHTML(value??'')}"><div class="coordinate-values">${selectDirection?`<label class="coordinate-direction"><span class="visually-hidden">${label} direction</span><select data-coordinate-hemisphere aria-label="${label} direction">${hemispheres.map(direction=>`<option value="${direction}" ${parts.hemisphere===direction?'selected':''}>${direction}</option>`).join('')}</select></label>`:`<div class="coordinate-hemispheres" role="radiogroup" aria-labelledby="${id}-label">${hemispheres.map(direction=>`<label class="hemisphere-choice"><input type="radio" name="${key}_hemisphere" value="${direction}" ${parts.hemisphere===direction?'checked':''}><span>${direction}</span></label>`).join('')}</div>`}<label class="coordinate-part"><span class="visually-hidden">${label} degrees</span><input type="number" inputmode="numeric" autocomplete="off" data-coordinate-part="degrees" aria-label="${label} degrees" min="0" max="${limit}" step="1" value="${escapeHTML(parts.degrees)}"><span aria-hidden="true">°</span></label><label class="coordinate-part"><span class="visually-hidden">${label} minutes</span><input type="number" inputmode="numeric" autocomplete="off" data-coordinate-part="minutes" aria-label="${label} minutes" min="0" max="59" step="1" value="${escapeHTML(parts.minutes)}"><span aria-hidden="true">′</span></label><label class="coordinate-part coordinate-seconds"><span class="visually-hidden">${label} seconds</span><input type="number" inputmode="decimal" autocomplete="off" data-coordinate-part="seconds" aria-label="${label} seconds" min="0" max="59.99" step="0.01" value="${escapeHTML(parts.seconds)}"><span aria-hidden="true">″</span></label></div></div>`;
 }
 function decimalCoordinateFields(fieldsList=[]) {
   const coordinates=fieldsList.filter(([key,,type])=>type==='coordinates'&&['latitude','longitude'].includes(key));
@@ -85,7 +86,7 @@ function parseImportedCoordinate(row,axis,limit,positive,negative,cell,columns){
   const degrees=Number(degreeText),minutes=minuteText===''?0:Number(minuteText),seconds=secondText===''?0:Number(secondText);
   if(!Number.isInteger(degrees)||degrees<0||degrees>limit)return {error:`${titleCase(axis)} degrees must be a whole number from 0 to ${limit}.`};
   if(!Number.isInteger(minutes)||minutes<0||minutes>=60)return {error:`${titleCase(axis)} minutes must be a whole number from 0 to 59.`};
-  if(!Number.isFinite(seconds)||seconds<0||seconds>=60)return {error:`${titleCase(axis)} seconds must be from 0 up to 59.9999.`};
+  if(!Number.isFinite(seconds)||seconds<0||seconds>=60)return {error:`${titleCase(axis)} seconds must be from 0 up to 59.99.`};
   if(degrees===limit&&(minutes>0||seconds>0))return {error:`At ${limit} ${titleCase(axis)} degrees, minutes and seconds must be zero.`};
   if(hemisphere!==positive&&hemisphere!==negative)return {error:`${titleCase(axis)} hemisphere must be ${positive} or ${negative}.`};
   const magnitude=degrees+minutes/60+seconds/3600;
@@ -142,10 +143,12 @@ function bindCoordinateEditor(form) {
       const parts=decimalToDms(decimal,key);degree.value=parts.degrees;minute.value=parts.minutes;second.value=parts.seconds;setHemisphere(axis,parts.hemisphere);hidden.value=decimal.toFixed(7);return {valid:true,value:decimal};
     }
     if(!degree.value.trim()){hidden.value='';return {valid:false,missing:true};}
-    const d=Number(degree.value),m=minute.value.trim()===''?0:Number(minute.value),s=second.value.trim()===''?0:Number(second.value);
-    let error='';if(!Number.isInteger(d)||d<0||d>limit)error=`Degrees must be between 0 and ${limit}.`;else if(!Number.isInteger(m)||m<0||m>=60)error='Minutes must be a whole number from 0 to 59.';else if(!Number.isFinite(s)||s<0||s>=60)error='Seconds must be from 0 up to 59.9999.';else if(d===limit&&(m>0||s>0))error=`At ${limit} degrees, minutes and seconds must be zero.`;
+    const d=Number(degree.value),m=minute.value.trim()===''?0:Number(minute.value),s=second.value.trim()===''?0:Math.round(Number(second.value)*100)/100;
+    let error='';if(!Number.isInteger(d)||d<0||d>limit)error=`Degrees must be between 0 and ${limit}.`;else if(!Number.isInteger(m)||m<0||m>=60)error='Minutes must be a whole number from 0 to 59.';else if(!Number.isFinite(s)||s<0||s>=60)error='Seconds must be from 0 up to 59.99.';else if(d===limit&&(m>0||s>0))error=`At ${limit} degrees, minutes and seconds must be zero.`;
     if(error){degree.setCustomValidity(error);degree.setAttribute('aria-invalid','true');hidden.value='';return {valid:false,error};}
-    const magnitude=d+(m/60)+(s/3600),sign=(hemisphere==='S'||hemisphere==='W')?-1:1,decimal=Number((magnitude*sign).toFixed(7));hidden.value=decimal.toFixed(7);return {valid:true,value:decimal};
+    const magnitude=d+(m/60)+(s/3600),sign=(hemisphere==='S'||hemisphere==='W')?-1:1;let decimal=Number((magnitude*sign).toFixed(7));
+    if(axis.dataset.exact){const exact=Number(axis.dataset.exact),shown=decimalToDms(exact,key);if(shown.hemisphere===hemisphere&&Number(shown.degrees)===d&&Number(shown.minutes)===m&&Number(shown.seconds)===s)decimal=exact;}
+    hidden.value=decimal.toFixed(7);return {valid:true,value:decimal};
   };
   const displaySatelliteMap=async(latitude,longitude)=>{
     const request=++mapRequest;canvas.hidden=false;placeholder.hidden=false;placeholder.querySelector('span:last-child').textContent='Loading satellite imagery…';
@@ -193,6 +196,8 @@ function bindCoordinateEditor(form) {
   };
   const set=(key,value)=>{
     const axis=axes.find(item=>item.dataset.coordinateAxis===key);if(!axis)return;const parts=decimalToDms(value,key);
+    // The exact saved value, kept while the rounded boxes are not changed.
+    axis.dataset.exact=parts.degrees===''?'':String(Number(value));
     axis.querySelector('[data-coordinate-part="degrees"]').value=parts.degrees;axis.querySelector('[data-coordinate-part="minutes"]').value=parts.minutes;axis.querySelector('[data-coordinate-part="seconds"]').value=parts.seconds;
     const decimalInput=form.querySelector(`[data-coordinate-decimal-for="${key}"]`);if(decimalInput)decimalInput.value=decimalMode()&&value!==null&&value!==undefined&&String(value).trim()!==''&&Number.isFinite(Number(value))?String(Number(Number(value).toFixed(7))):'';
     setHemisphere(axis,parts.hemisphere);
@@ -235,6 +240,8 @@ function bindCoordinateEditor(form) {
     form.querySelectorAll('[data-coord-panel]').forEach(panel=>panel.hidden=panel.dataset.coordPanel!==mode);refresh(true);
   };
   modeButtons.forEach(button=>button.onclick=()=>setMode(button.dataset.coordModeButton));
+  // Seconds keep 2 decimals: rounded when the box is left.
+  form.querySelectorAll('[data-coordinate-part="seconds"]').forEach(input=>input.addEventListener('change',()=>{const value=Number(input.value);if(input.value.trim()!==''&&Number.isFinite(value)){const rounded=Math.round(value*100)/100;if(String(rounded)!==input.value)input.value=String(rounded);}}));
   refresh(true);
   return {set,refresh,validate(){refresh(true);const values=axes.map(readAxis);values.forEach((value,index)=>{if(value.missing){const degree=(decimalMode()&&form.querySelector(`[data-coordinate-decimal-for="${axes[index].dataset.coordinateAxis}"]`))||axes[index].querySelector('[data-coordinate-part="degrees"]');degree.setCustomValidity('Enter this coordinate as DMS or decimal degrees.');degree.setAttribute('aria-invalid','true');}});return values.every(value=>value.valid);}};
 }

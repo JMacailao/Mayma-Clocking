@@ -29,6 +29,24 @@ module.exports = async (page, { open, check, sample, OUT }) => {
   const box = await dialog.boundingBox();
   check(box && Math.round(box.width) === 390, `phone: the pop-up fills the screen (${box && Math.round(box.width)})`);
   await page.screenshot({ path: `${OUT}/race-point-add-dialog-390.png` });
+  // Seconds show 2 decimals; saving without changing them keeps the exact coordinates.
+  await page.setViewportSize({ width: 1300, height: 900 });
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { const p = window.FAKE.tables.race_points[0]; p.latitude = 13.0399083; p.longitude = 121.4782269; });
+  await page.evaluate(() => window.dispatchEvent(new Event('app:refresh')));
+  await page.waitForTimeout(300);
+  await page.click('[data-edit-point]');
+  const secs = await page.locator('[data-coordinate-part="seconds"]').evaluateAll(list => list.map(i => i.value));
+  check(JSON.stringify(secs) === '["23.67","41.62"]', `seconds rounded to 2 decimals ${JSON.stringify(secs)}`);
+  await page.fill('#record-form [name=description]', 'Town plaza');
+  await page.click('#record-form [type=submit]'); await page.waitForTimeout(400);
+  const saved = await page.evaluate(() => window.FAKE.tables.race_points[0]);
+  check(saved.description === 'Town plaza' && Math.abs(saved.latitude - 13.0399083) < 1e-7 && Math.abs(saved.longitude - 121.4782269) < 1e-7, `unchanged seconds keep the exact coordinates (${saved.latitude}, ${saved.longitude})`);
+  await page.click('[data-edit-point]');
+  const second = page.locator('[data-coordinate-axis="latitude"] [data-coordinate-part="seconds"]');
+  await second.fill('23.456'); await second.blur();
+  check(await second.inputValue() === '23.46', `typed seconds are rounded (${await second.inputValue()})`);
+  await page.click('#cancel-edit');
   // Delete is in the pop-up of a saved race point.
   await page.setViewportSize({ width: 1300, height: 900 });
   await page.keyboard.press('Escape');
