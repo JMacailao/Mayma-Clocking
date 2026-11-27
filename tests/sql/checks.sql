@@ -504,4 +504,85 @@ DO $$ DECLARE v_failed boolean := false; BEGIN
   ASSERT v_failed, 'lap must be 1 to 99';
 END $$;
 
+-- Billing: birds encoded are counted (practice free, delete keeps the count),
+-- bills by start/end date without overlap, invoices, warnings, closing a club.
+DO $$ DECLARE v_super uuid; v_admin uuid; v_member uuid; v_club bigint; v_race bigint; v_practice bigint; v_entry bigint; v_n bigint; v_bill public.club_bills; v_failed boolean; v_status jsonb; v_today date := (now() AT TIME ZONE 'Asia/Manila')::date; BEGIN
+  SELECT id INTO v_club FROM public.clubs ORDER BY id LIMIT 1;
+  INSERT INTO public.races (name, release_location, release_latitude, release_longitude, club_id) VALUES ('Bill race', 'Point', 13, 121, v_club) RETURNING id INTO v_race;
+  INSERT INTO public.races (name, release_location, release_latitude, release_longitude, club_id, is_practice) VALUES ('Practice', 'Point', 13, 121, v_club, true) RETURNING id INTO v_practice;
+  INSERT INTO public.barcode_stickers (barcode_number, source) VALUES ('9871', 'manual'), ('9872', 'manual');
+  INSERT INTO public.pigeons (club_id, member_id, ring_number, bird_name, color, loft_name, photo_path, bond_type)
+    SELECT v_club, m.id, 'PH-B1', 'Bill', 'Blue', 'Loft', 'x/y.jpg', 'ring' FROM public.members m WHERE m.member_no = '161';
+  SELECT count(*) INTO v_n FROM public.billing_counts WHERE club_id = v_club;
+  INSERT INTO public.race_entries (race_id, member_id, pigeon_id, distance_m, barcode)
+    SELECT v_race, p.member_id, p.id, 1000, '9871' FROM public.pigeons p WHERE p.ring_number = 'PH-B1' RETURNING id INTO v_entry;
+  INSERT INTO public.race_entries (race_id, member_id, pigeon_id, distance_m, barcode)
+    SELECT v_practice, p.member_id, p.id, 1000, '9872' FROM public.pigeons p WHERE p.ring_number = 'PH-B1';
+  ASSERT (SELECT count(*) FROM public.billing_counts WHERE club_id = v_club) = v_n + 1, 'an entry is counted once; practice is free';
+  ASSERT (SELECT price = 5 AND race_name = 'Bill race' AND member_no = '161' FROM public.billing_counts WHERE race_entry_id = v_entry), 'counted at the club price, with its details';
+  UPDATE public.race_entries SET distance_m = 1200 WHERE id = v_entry;
+  ASSERT (SELECT count(*) FROM public.billing_counts WHERE club_id = v_club) = v_n + 1, 'editing is free';
+  DELETE FROM public.race_entries WHERE id = v_entry;
+  ASSERT (SELECT deleted_at IS NOT NULL FROM public.billing_counts WHERE race_entry_id = v_entry), 'deleting keeps the count (non-refundable)';
+
+  INSERT INTO auth.users (email) VALUES ('bill-super@users.mayma.invalid') RETURNING id INTO v_super;
+  INSERT INTO public.app_profiles (id, role, username, is_active) VALUES (v_super, 'superadmin', 'billsuper', true);
+  INSERT INTO auth.users (email) VALUES ('bill-admin@users.mayma.invalid') RETURNING id INTO v_admin;
+  INSERT INTO public.app_profiles (id, role, username, club_id, is_active) VALUES (v_admin, 'admin', 'billadmin', v_club, true);
+  SELECT p.id INTO v_member FROM public.app_profiles p JOIN public.members m ON m.id = p.member_id WHERE m.member_no = '161';
+  IF v_member IS NULL THEN
+    INSERT INTO auth.users (email) VALUES ('bill-member@users.mayma.invalid') RETURNING id INTO v_member;
+    INSERT INTO public.app_profiles (id, role, username, club_id, member_id, is_active) SELECT v_member, 'member', 'billmember', v_club, id, true FROM public.members WHERE member_no = '161';
+  END IF;
+  UPDATE public.app_profiles SET is_active = true WHERE id = v_member;
+
+  -- The club admin sees their own club only and cannot make bills.
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  ASSERT (public.club_billing_status()->>'unbilled')::int = v_n + 1, 'club admin: birds not billed yet';
+  v_failed := false; BEGIN PERFORM public.superadmin_create_bill(v_club, v_today, v_today); EXCEPTION WHEN insufficient_privilege THEN v_failed := true; END;
+  ASSERT v_failed, 'club admin cannot make a bill';
+  v_failed := false; BEGIN PERFORM public.billing_bills(v_club + 999); EXCEPTION WHEN insufficient_privilege THEN v_failed := true; END;
+  ASSERT v_failed, 'club admin cannot see another club';
+  PERFORM set_config('request.jwt.claim.sub', v_member::text, true);
+  v_failed := false; BEGIN PERFORM public.club_billing_status(); EXCEPTION WHEN insufficient_privilege THEN v_failed := true; END;
+  ASSERT v_failed, 'members do not see billing';
+
+  -- The Super Admin bills a start date to end date; overlapping dates are refused.
+  PERFORM set_config('request.jwt.claim.sub', v_super::text, true);
+  ASSERT (SELECT birds = v_n + 1 AND deleted = 1 AND amount = (v_n + 1) * 5 FROM public.superadmin_billing_summary(v_today - 1, v_today) WHERE club_id = v_club), 'summary for the dates';
+  v_bill := public.superadmin_create_bill(v_club, v_today - 1, v_today);
+  ASSERT v_bill.birds = v_n + 1 AND v_bill.amount = (v_n + 1) * 5 AND v_bill.settled_at IS NULL, 'bill for the dates: ' || v_bill.birds;
+  v_failed := false; BEGIN PERFORM public.superadmin_create_bill(v_club, v_today, v_today); EXCEPTION WHEN invalid_parameter_value THEN v_failed := SQLERRM LIKE '%overlap%'; END;
+  ASSERT v_failed, 'overlapping dates are refused';
+  v_failed := false; BEGIN PERFORM public.superadmin_create_bill(v_club, v_today + 1, v_today + 1); EXCEPTION WHEN invalid_parameter_value THEN v_failed := true; END;
+  ASSERT v_failed, 'no bill for future dates';
+  v_bill := public.superadmin_settle_bill(v_bill.id, v_today, 'GCash', 'REF123', '');
+  ASSERT v_bill.invoice_no ~ ('^AVX-' || to_char(v_today, 'YYYY') || '-\d{4}$') AND v_bill.settled_at IS NOT NULL, 'settled with an invoice number: ' || v_bill.invoice_no;
+  v_failed := false; BEGIN PERFORM public.superadmin_delete_bill(v_bill.id); EXCEPTION WHEN invalid_parameter_value THEN v_failed := true; END;
+  ASSERT v_failed, 'a settled bill cannot be removed';
+
+  -- Warnings pop up for the club admin until closed.
+  PERFORM public.superadmin_send_warning(v_club, 'Please pay the bill.', v_bill.id);
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  v_status := public.club_account_status();
+  ASSERT jsonb_array_length(v_status->'warnings') = 1 AND NOT (v_status->>'is_closed')::boolean, 'club admin sees the warning';
+  ASSERT (public.club_billing_status()->>'unpaid_bills')::int = 0, 'the bill shows settled';
+  PERFORM public.club_dismiss_warning((v_status->'warnings'->0->>'id')::bigint);
+  ASSERT jsonb_array_length(public.club_account_status()->'warnings') = 0, 'a closed warning does not pop up again';
+
+  -- Closing the club locks out its admin; members keep clocking; reopening unlocks.
+  PERFORM set_config('request.jwt.claim.sub', v_super::text, true);
+  PERFORM public.superadmin_set_club_closed(v_club, true, 'Unpaid bill');
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  ASSERT public.current_app_role() IS NULL AND NOT public.is_app_admin() AND NOT public.can_manage_club_data(), 'closed: the club admin has no access';
+  ASSERT (public.club_account_status()->>'is_closed')::boolean AND public.club_account_status()->>'closed_reason' = 'Unpaid bill', 'closed: the lock screen knows why';
+  PERFORM set_config('request.jwt.claim.sub', v_member::text, true);
+  ASSERT public.current_app_role() = 'member', 'closed: members keep their access';
+  PERFORM set_config('request.jwt.claim.sub', v_super::text, true);
+  PERFORM public.superadmin_set_club_closed(v_club, false, '');
+  PERFORM set_config('request.jwt.claim.sub', v_admin::text, true);
+  ASSERT public.is_app_admin(), 'reopened: the club admin is back';
+  PERFORM set_config('request.jwt.claim.sub', '', true);
+END $$;
+
 SELECT 'All database checks passed.' AS result;

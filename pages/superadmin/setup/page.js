@@ -25,7 +25,8 @@ const PARTS=[
   ['clock-videos','Short videos of clockings'],
   ['club-logo','Club logo'],
   ['race-day','Race day: change history, setup checks'],
-  ['realtime','Instant result pop-ups (live updates)']
+  ['realtime','Instant result pop-ups (live updates)'],
+  ['billing','Billing: birds encoded, bills, invoices']
 ];
 
 // Super Admin: which parts of the database setup are done, and what to run.

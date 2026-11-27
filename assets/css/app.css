@@ -1597,3 +1597,50 @@ th{color:#55657a}
 .my-coords-extra{margin:0;color:var(--muted)}
 .my-coords .form-actions{flex-direction:row;flex-wrap:wrap;align-items:stretch}
 .my-coords .form-actions .button{flex:1 1 140px;min-width:0;height:auto;min-height:var(--target)}
+/* Billing */
+.billing-dates{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 12px;margin-bottom:12px}
+.billing-dates .field{flex:1 1 150px;max-width:220px}
+.billing-quick{display:flex;gap:8px;flex-wrap:wrap}
+.billing-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 10px}
+.billing-toolbar .count-pill{margin-left:auto}
+.billing-check{display:inline-flex;align-items:center;gap:8px;min-height:var(--target);font-size:13.5px;font-weight:600}
+.billing-table td{white-space:nowrap}
+.billing-status{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin:0 0 14px;padding:14px 16px;border-radius:var(--radius);border:1px solid}
+.billing-status strong{font-size:18px}
+.billing-status.is-ok{background:var(--ok-bg);border-color:#bbf7d0;color:var(--ok)}
+.billing-status.is-bad{background:var(--bad-bg);border-color:#fecaca;color:var(--bad)}
+.billing-bills{list-style:none;margin:0;padding:0}
+.billing-bills>li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;padding:12px 0;border-bottom:1px solid var(--line)}
+.billing-bills>li:last-child{border-bottom:0}
+.billing-bill-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.billing-settle{flex:1 1 100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+.billing-settle[hidden]{display:none}
+.billing-dialog{width:min(860px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:0;border:0;border-radius:14px;box-shadow:0 20px 60px #0f172a59}
+.billing-dialog::backdrop{background:#1e293b99}
+.billing-dialog>.panel{margin:0}
+.billing-dialog-head{position:sticky;top:-20px;z-index:2;margin:-20px -20px 12px;padding:16px 20px 12px;background:#fff;border-bottom:1px solid var(--line)}
+.billing-sections{display:grid;gap:18px}
+.billing-sections h4{margin:0 0 8px;font-size:14px}
+.billing-sections section{padding-bottom:16px;border-bottom:1px solid var(--line)}
+.billing-inline{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px}
+.billing-inline .field{width:160px}
+.billing-log{margin:8px 0 0;padding-left:18px;font-size:13px;color:#475569}
+.billing-more summary{cursor:pointer;font-weight:600;min-height:var(--target);display:flex;align-items:center}
+.billing-birds tr.is-deleted td{color:var(--muted)}
+.race-point-close{border:0;background:var(--soft);width:40px;height:40px;border-radius:50%;font-size:22px;cursor:pointer}
+@media (max-width:720px){.billing-dialog{width:100vw;max-width:100vw;max-height:100dvh;height:100dvh;border-radius:0}.billing-dates .field{max-width:none}.billing-toolbar .count-pill{margin-left:0}.billing-bill-actions .button{flex:1 1 140px}}
+/* Closed club: lock screen; warnings from the Super Admin */
+.club-lock{min-height:100dvh;display:grid;place-items:center;padding:24px 16px;background:var(--ground)}
+.club-lock-card{width:min(460px,100%);padding:30px 26px;text-align:center;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+.club-lock-icon{font-size:40px}
+.club-lock-card h1{margin:8px 0 6px;font:700 22px/1.3 var(--font)}
+.club-lock-club{margin:0;color:var(--muted);font-weight:600}
+.club-lock-reason{padding:10px 12px;border-radius:10px;background:var(--bad-bg);color:var(--bad)}
+.club-lock-card .button{width:100%;margin-top:8px}
+.club-warning{width:min(480px,calc(100vw - 24px));padding:22px;border:0;border-top:6px solid #f59e0b;border-radius:14px;box-shadow:0 20px 60px #0f172a59}
+.club-warning::backdrop{background:#1e293b99}
+.club-warning h2{margin:0 0 10px;font:700 18px/1.3 var(--font);color:#92400e}
+.club-warning-item{padding:10px 0;border-bottom:1px solid var(--line)}
+.club-warning-item p{margin:0 0 4px;font-size:15px;line-height:1.5}
+.club-warning .form-actions{justify-content:flex-end;margin-top:14px}
+.billing-dialog textarea{font:inherit;font-size:14px;line-height:1.5}

@@ -3,9 +3,9 @@
 // button at least 44 × 44 px so a fingertip hits it.
 const fs = require('node:fs'), path = require('node:path');
 const PAGES = {
-  admin: ['admin/dashboard', 'admin/raceday', 'admin/members', 'admin/birds', 'admin/race-points', 'admin/coordinates', 'admin/races', 'admin/entries', 'admin/remarks', 'admin/clocking', 'admin/showup', 'admin/readers', 'admin/results', 'admin/history', 'admin/users', 'admin/settings'],
+  admin: ['admin/dashboard', 'admin/raceday', 'admin/members', 'admin/birds', 'admin/race-points', 'admin/coordinates', 'admin/races', 'admin/entries', 'admin/remarks', 'admin/clocking', 'admin/showup', 'admin/readers', 'admin/results', 'admin/history', 'admin/users', 'admin/settings', 'admin/billing'],
   member: ['member/dashboard', 'member/history', 'member/clocking', 'member/pigeons', 'member/coordinates', 'member/results', 'member/settings'],
-  superadmin: ['superadmin/clubs', 'superadmin/stickers/register', 'superadmin/nfc', 'superadmin/readers', 'superadmin/stickers/generate', 'superadmin/setup'],
+  superadmin: ['superadmin/clubs', 'superadmin/stickers/register', 'superadmin/nfc', 'superadmin/readers', 'superadmin/stickers/generate', 'superadmin/billing', 'superadmin/setup'],
   visitor: ['login']
 };
 module.exports = async (page, { check, sample, BASE }) => {
@@ -18,7 +18,7 @@ module.exports = async (page, { check, sample, BASE }) => {
       await context.route(/^https:\/\/(?!cdn\.jsdelivr\.net)/, route => route.abort());
       await context.addInitScript(`window.FAKE={tables:{},rpc:{}};(function(F){${sample}
         ${role === 'visitor' ? '' : "F.session={user:{id:'u'}};"}F.tables.app_profiles=[${JSON.stringify(profile)}];F.tables.clubs=[{id:1,name:'Club'}];F.tables.race_points=[{id:1,location:'Batangas',latitude:13,longitude:121}];
-        F.tables.members.forEach(m=>{m.latitude=14;m.longitude=121;m.club_id=1;});F.rpc.setup_status={};F.rpc.superadmin_list_rfid_devices=[];F.rpc.member_list_rfid_devices=[];F.rpc.public_result_clubs=[];F.tables.clubs[0].rfid_entry_sticker='required';
+        F.tables.members.forEach(m=>{m.latitude=14;m.longitude=121;m.club_id=1;});F.rpc.setup_status={};F.rpc.superadmin_list_rfid_devices=[];F.rpc.superadmin_billing_summary=[{club_id:1,club_name:'JMB Racing Pigeon Club',bird_price:5,birds:700,deleted:3,amount:3500,unbilled:120,unbilled_amount:600,unpaid_bills:1,unpaid_amount:2100,is_closed:false,open_warnings:1}];F.rpc.billing_bills=[{id:11,start_date:'2026-11-01',end_date:'2026-11-15',birds:420,amount:2100,created_at:'2026-11-16T01:00:00Z',settled_at:null}];F.rpc.billing_entries=[{id:1,encoded_at:'2026-11-03T01:00:00Z',race_name:'Derby',member_no:'161',member_name:'Ana',pigeon_ring:'PH-1',price:5,deleted:true,bill_id:11}];F.rpc.club_billing_status={club_name:'Club',bird_price:5,unpaid_bills:1,unpaid_amount:2100,unbilled:120,unbilled_amount:600};F.rpc.club_account_status={is_closed:false,warnings:[]};F.rpc.member_list_rfid_devices=[];F.rpc.public_result_clubs=[];F.tables.clubs[0].rfid_entry_sticker='required';
       })(window.FAKE);`);
       const tab = await context.newPage();
       tab.on('dialog', d => d.dismiss().catch(() => {}));

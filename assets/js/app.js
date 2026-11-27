@@ -7,6 +7,7 @@ import { checkAndroidUpdate, bindAppUpdateButton } from './android-app.js';
 import { showClubLogo } from './club-logo.js';
 import { watchDevice, releaseDevice } from './device-session.js';
 import { watchIdle } from './idle-logout.js';
+import { watchClubAccount } from './club-lock.js';
 const signOutUser = async() => {const {error}=await supabase.auth.signOut({scope:'local'});if(error)throw error;};
 
 const body = document.body;
@@ -30,7 +31,7 @@ async function getIdentity() {
 const loginUrl=()=>`${url('pages/login/index.html')}?next=${encodeURIComponent(location.pathname+location.search)}`;
 const homeFor = (role) => url(role==='superadmin'?'pages/superadmin/clubs/index.html':['admin','staff'].includes(role)?'pages/admin/dashboard/index.html':'pages/member/dashboard/index.html');
 // Line icons for the menu.
-const ICON_PATHS={pin:'<path d="M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.3"/>',
+const ICON_PATHS={bill:'<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',pin:'<path d="M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.3"/>',
   home:'<path d="M4 11.5 12 5l8 6.5V20h-5.5v-5h-5v5H4z"/>',
   user:'<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.7 3.6-5.6 7-5.6s6.2 1.9 7 5.6"/>',
   users:'<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-4.9 5.5-4.9s4.9 1.7 5.5 4.9"/><path d="M15 5.6a3 3 0 0 1 0 5.8M17 14.4c1.9.5 3.1 2 3.5 4.6"/>',
@@ -59,7 +60,7 @@ function superadminNav(active) {
   return navGroups([
     ['',[['clubs','Club accounts','pages/superadmin/clubs/index.html','users']]],
     ['Registration',[['sticker-register','Register Sticker','pages/superadmin/stickers/register/index.html','sticker'],['nfc-register','Register NFC','pages/superadmin/nfc/index.html','nfc'],['rfid-register','Register RFID reader','pages/superadmin/readers/index.html','wifi'],['sticker-generate','Generate Sticker','pages/superadmin/stickers/generate/index.html','grid']]],
-    ['Administration',[['setup','Setup checklist','pages/superadmin/setup/index.html','check']]]
+    ['Administration',[['billing','Billing','pages/superadmin/billing/index.html','bill'],['setup','Setup checklist','pages/superadmin/setup/index.html','check']]]
   ],active);
 }
 function adminNav(active,canManageAccounts) {
@@ -68,7 +69,7 @@ function adminNav(active,canManageAccounts) {
     ['Club directory',[['members','Members','pages/admin/members/index.html','user'],['birds','Band Assignments','pages/admin/birds/index.html','bird']]],
     ['Race setup',[['race-points','Race points','pages/admin/race-points/index.html','target'],['coordinates','My coordinates','pages/admin/coordinates/index.html','pin'],['races','Races','pages/admin/races/index.html','clock'],['entries','Race entries','pages/admin/entries/index.html','list'],['remarks','Entry remarks','pages/admin/remarks/index.html','check']]],
     ['Race day operations',[['raceday','Race day','pages/admin/raceday/index.html','raceday'],['clocking','Clocking','pages/admin/clocking/index.html','clocking'],['showup','Show up','pages/admin/showup/index.html','tick'],['readers','RFID readers','pages/admin/readers/index.html','wifi'],['results','Results','pages/admin/results/index.html','trend']]],
-    ['Administration',[['history','Change history','pages/admin/history/index.html','history'],...(canManageAccounts?[['users','Team accounts','pages/admin/users/index.html','users'],['settings','Club settings','pages/admin/settings/index.html','settings']]:[])]]
+    ['Administration',[['history','Change history','pages/admin/history/index.html','history'],...(canManageAccounts?[['users','Team accounts','pages/admin/users/index.html','users'],['settings','Club settings','pages/admin/settings/index.html','settings'],['billing','Billing','pages/admin/billing/index.html','bill']]:[])]]
   ],active);
 }
 function memberNav(active) {
@@ -92,7 +93,7 @@ async function guard(role,active) {
     if(!identity) { location.href=loginUrl(); return null; }
     if(!identity.profile) { await signOutUser(); document.querySelector('#app-shell').innerHTML=`<main class="loading"><strong>This account is not set up yet.</strong><span>Ask your administrator to finish setting up your account.</span><a class="button primary" href="${url('pages/login/index.html')}">Return to sign in</a></main>`; return null; }
     if(identity.profile.is_active===false) { await signOutUser(); document.querySelector('#app-shell').innerHTML=`<main class="loading"><strong>This account is disabled.</strong><span>Ask your club administrator to reactivate it.</span><a class="button primary" href="${url('pages/login/index.html')}">Return to sign in</a></main>`; return null; }
-    const staffOnAdminPage=role==='admin'&&identity.profile.role==='staff'&&!['team-users','club-settings'].includes(body.dataset.view);
+    const staffOnAdminPage=role==='admin'&&identity.profile.role==='staff'&&!['team-users','club-settings','billing'].includes(body.dataset.view);
     if(identity.profile.role!==role&&!staffOnAdminPage) { location.href=homeFor(identity.profile.role); return null; }
     body.classList.toggle('member-body',role==='member');
     body.classList.toggle('admin-body',role==='admin');
@@ -109,6 +110,8 @@ async function renderPage(view,role,identity,page=body.dataset.view,setCleanup=f
   else if(page==='sticker-register'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/stickers/register/page.js');await pageModule.render(view,setCleanup);}
   else if(page==='nfc-register'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/nfc/page.js');await pageModule.render(view,setCleanup);}
   else if(page==='rfid-register'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/readers/page.js');await pageModule.render(view,setCleanup);}
+  else if(page==='billing'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/billing/page.js');await pageModule.render(view);}
+  else if(page==='billing'&&role==='admin'&&identity.profile.role==='admin'){const pageModule=await import('../../pages/admin/billing/page.js');await pageModule.render(view);}
   else if(page==='setup'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/setup/page.js');await pageModule.render(view);}
   else if(page==='sticker-generate'&&role==='superadmin'){const pageModule=await import('../../pages/superadmin/stickers/generate/page.js');await pageModule.render(view);}
   else if(page==='team-users'&&role==='admin'&&identity.profile.role==='admin'){const pageModule=await import('../../pages/admin/users/page.js');await pageModule.render(view,identity);}
@@ -143,6 +146,8 @@ async function main(){
   if(!identity)return;
   // One device per account: sign out here when another device took the account over.
   if(identity.profile?.role!=='superadmin')watchDevice(async()=>{try{await signOutUser();}catch{/* already signed out */}location.replace(`${url('pages/login/index.html')}?signedout=device`);});
+  // Club admin and staff: a closed club shows only the lock screen; warnings pop up.
+  if(['admin','staff'].includes(identity.profile?.role)&&await watchClubAccount(async()=>{try{await signOutUser();}catch{/* already signed out */}location.replace(url('pages/login/index.html'));}))return;
   // 15 minutes without any action: signed out (all roles).
   watchIdle(async()=>{try{await signOutUser();}catch{/* already signed out */}location.replace(`${url('pages/login/index.html')}?signedout=idle`);});
   await navigateRoute(routeFor(location.href),{push:false,identity});
@@ -181,6 +186,22 @@ const routes=[
     "view": "my-pigeons",
     "role": "member",
     "active": "pigeons"
+  },
+  {
+    "path": "pages/superadmin/billing/index.html",
+    "documentTitle": "Billing \u00b7 AvilonX Clocking",
+    "title": "Billing",
+    "view": "billing",
+    "role": "superadmin",
+    "active": "billing"
+  },
+  {
+    "path": "pages/admin/billing/index.html",
+    "documentTitle": "Billing \u00b7 AvilonX Clocking",
+    "title": "Billing",
+    "view": "billing",
+    "role": "admin",
+    "active": "billing"
   },
   {
     "path": "pages/superadmin/setup/index.html",
