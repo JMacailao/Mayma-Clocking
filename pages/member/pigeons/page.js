@@ -31,7 +31,7 @@ export async function render(view,identity){
   };
   const active=birds.filter(bird=>bird.status==='active');
   view.innerHTML=`${heading}<section class="panel"><div class="panel-heading"><h3>${t('Bonded birds')}</h3><span class="count-pill">${active.length} ${t('active')}${birds.length>active.length?` · ${birds.length-active.length} ${t('retired')}`:''}</span></div>
-  ${birds.length?`<div class="table-scroll"><table class="bird-table"><thead><tr><th>${t('Photo')}</th><th>${t('Ring')}</th><th>${t('Bird')}</th><th>${t('Colour')}</th><th>RFID</th><th>${t('Races')}</th><th>${t('Best speed')}</th></tr></thead><tbody>${birds.map(bird=>{const s=stats(bird),photo=photos.get(bird.photo_path);return `<tr class="bird-row ${bird.status==='retired'?'is-retired':''}">
+  ${birds.length?`<div class="table-scroll"><table class="bird-table member-birds"><thead><tr><th>${t('Photo')}</th><th>${t('Ring')}</th><th>${t('Bird')}</th><th>${t('Colour')}</th><th>RFID</th><th>${t('Races')}</th><th>${t('Best speed')}</th></tr></thead><tbody>${birds.map(bird=>{const s=stats(bird),photo=photos.get(bird.photo_path);return `<tr class="bird-row ${bird.status==='retired'?'is-retired':''}">
     <td data-label="${t('Photo')}" class="bird-col-photo">${photo?`<button type="button" class="bird-thumb" data-view-photo="${bird.id}" aria-label="${t('View photo')}"><img src="${escapeHTML(photo)}" alt="" loading="lazy"></button>`:'<span class="bird-thumb is-empty">—</span>'}</td>
     <td data-label="${t('Ring')}"><strong>${escapeHTML(bird.ring_number)}</strong>${bird.status==='retired'?` <span class="tag closed">${t('Retired')}</span>`:''}</td>
     <td data-label="${t('Bird')}">${escapeHTML(bird.bird_name)}</td>

@@ -1551,3 +1551,18 @@ th{color:#55657a}
 .danger-button{background:#fff;color:var(--red);border:1px solid #f3c4c4;margin-left:auto}
 .danger-button:hover{background:var(--bad-bg)}
 .danger-button[hidden]{display:none}
+/* Member side on phones: photo beside each pigeon, compact counters. */
+@media (max-width:720px){
+  .table-scroll .bird-table.member-birds tr{grid-template-columns:72px minmax(0,1fr);column-gap:12px;row-gap:1px}
+  .table-scroll .bird-table.member-birds td{grid-column:2}
+  .table-scroll .bird-table.member-birds td.bird-col-photo{grid-column:1;grid-row:1 / span 7}
+  .table-scroll .bird-table.member-birds td.bird-col-colour::after{content:none}
+  .table-scroll .bird-table.member-birds tbody tr:last-child{border-bottom:0}
+}
+@media (max-width:420px){
+  .member-body .stats-grid.three{gap:8px}
+  .member-body .stats-grid.three .stat-card{padding:10px 10px 9px}
+  .member-body .stats-grid.three .stat-label{font-size:11.5px;line-height:1.3}
+  .member-body .stats-grid.three .stat-card strong{font-size:20px;margin:4px 0 0}
+  .member-body .stats-grid.three .stat-foot{display:none}
+}
