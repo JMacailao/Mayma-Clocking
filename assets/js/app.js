@@ -6,6 +6,7 @@ import { startUpdateCheck } from './update-check.js';
 import { checkAndroidUpdate, bindAppUpdateButton } from './android-app.js';
 import { showClubLogo } from './club-logo.js';
 import { watchDevice, releaseDevice } from './device-session.js';
+import { watchIdle } from './idle-logout.js';
 const signOutUser = async() => {const {error}=await supabase.auth.signOut({scope:'local'});if(error)throw error;};
 
 const body = document.body;
@@ -141,6 +142,8 @@ async function main(){
   if(!identity)return;
   // One device per account: sign out here when another device took the account over.
   if(identity.profile?.role!=='superadmin')watchDevice(async()=>{try{await signOutUser();}catch{/* already signed out */}location.replace(`${url('pages/login/index.html')}?signedout=device`);});
+  // 15 minutes without any action: signed out (all roles).
+  watchIdle(async()=>{try{await signOutUser();}catch{/* already signed out */}location.replace(`${url('pages/login/index.html')}?signedout=idle`);});
   await navigateRoute(routeFor(location.href),{push:false,identity});
   // Members get a pop-up with the result whenever one of their pigeons is clocked (also by their loft reader).
   if(role==='member'&&identity.profile?.member_id)import('./member-results-watch.js').then(module=>module.watchMemberReceipts(identity.profile.member_id)).catch(error=>console.warn('Result pop-ups unavailable:',error));

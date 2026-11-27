@@ -2,6 +2,7 @@ import '../../assets/js/error-report.js';
 import { supabase, authError, USERNAME_RE, USERNAME_HELP, pageUrl as url } from '../../assets/js/shared.js';
 import { mountPublicResults } from '../results/public.js';
 import { claimDevice } from '../../assets/js/device-session.js';
+import { markActive } from '../../assets/js/idle-logout.js';
 
 const signOutUser = async()=>{const {error}=await supabase.auth.signOut({scope:'local'});if(error)throw error;};
 // The page to return to after signing in, when it is a page of this site for the
@@ -59,6 +60,7 @@ function renderSignIn(container){
  const params=new URLSearchParams(location.search);
  if((params.get('next')||'').includes('/pages/member/')||params.get('audience')==='member')showAudience('member');
  if(params.get('reset')==='done')loginMessage(container,'Password changed. Sign in with your username and new password.','success');
+ if(new URLSearchParams(location.search).get('signedout')==='idle')loginMessage(container,'You were signed out after 15 minutes without any activity. Sign in again to continue.','info');
  if(new URLSearchParams(location.search).get('signedout')==='device')loginMessage(container,'You were signed out because this account was signed in on another device. The club allows one device per account.','info');
  const form=container.querySelector('#login-form');
  const eye=container.querySelector('[data-show-password]');eye.onclick=()=>{const field=form.elements.password,show=field.type==='password';field.type=show?'text':'password';eye.setAttribute('aria-pressed',String(show));eye.setAttribute('aria-label',show?'Hide password':'Show password');field.focus();};
@@ -72,7 +74,7 @@ function renderSignIn(container){
   if((audience==='member')!==isMember){await signOutUser();tabs.forEach(tab=>tab.disabled=false);button.disabled=false;button.textContent='Sign in →';loginMessage(container,isMember?'This is a member account. Choose Member above.':'This is a club-team account. Choose Club team above.','error');return;}
   // One device per account (when the club uses it): ask before signing the other device out.
   if(profile.role!=='superadmin'&&!(await claimDevice())){await signOutUser();tabs.forEach(tab=>tab.disabled=false);button.disabled=false;button.textContent='Sign in →';loginMessage(container,'Not signed in: the account stays signed in on the other device.','info');return;}
-  location.href=nextFor(profile.role)||homeFor(profile.role);};
+  markActive();location.href=nextFor(profile.role)||homeFor(profile.role);};
 }
 function renderSuperAdmin(container){
  container.innerHTML=`<span class="eyebrow" data-portal-eyebrow>FIRST-TIME SETUP</span><h1 data-portal-heading>Create superadmin account</h1><p data-portal-intro>This database is new. Choose a username and password for the superadmin. The superadmin creates the club accounts.</p><div id="setup-pane" data-setup-pane><div data-login-message class="notice" hidden></div><form id="superadmin-form" class="form-grid"><label class="field"><span>Superadmin username</span><input name="username" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9_.\\-]{2,31}" autocomplete="username" autocapitalize="none" spellcheck="false" required></label><label class="field"><span>Password</span><input name="password" type="password" minlength="8" autocomplete="new-password" required></label><label class="field"><span>Confirm password</span><input name="confirm" type="password" minlength="8" autocomplete="new-password" required></label><button class="button primary" type="submit">Create superadmin <span>→</span></button></form><p class="login-help">Use at least 8 characters. This screen only appears once, while the database has no administrator.</p></div>`;
@@ -86,6 +88,6 @@ function renderSuperAdmin(container){
   if(error){button.disabled=false;button.textContent='Create superadmin →';const {data:exists}=await supabase.rpc('has_admin_account');if(exists){renderSignIn(container);loginMessage(container,'A superadmin already exists. Sign in with its username.','info');return;}loginMessage(container,authError(error),'error');return;}
   const {error:signInError}=await supabase.auth.signInWithPassword({email:`${username}@users.mayma.invalid`,password});
   if(signInError){renderSignIn(container);loginMessage(container,'Superadmin created. Sign in with your username and password.','info');return;}
-  location.href=homeFor('superadmin');};
+  markActive();location.href=homeFor('superadmin');};
 }
 function loginMessage(container,text,kind){const node=container.querySelector('[data-login-message]');node.textContent=text;node.className=`notice ${kind}`;node.hidden=false;}
