@@ -2,6 +2,12 @@
 module.exports = async (page, { open, check, sample, OUT }) => {
   await open('/repo/pages/admin/results/page.js', sample);
   check(await page.locator('#results-table .table-scroll').isVisible() && !(await page.locator('#results-table .public-cards').isVisible()), 'desktop: table, no cards');
+  // Opens on the most recent race, not all races.
+  const opening = await page.locator('#results-table .race-summary').allInnerTexts();
+  check(await page.inputValue('#race-filter') !== 'all' && opening.length === 1 && /Batangas Derby/.test(opening[0]), `opens on the most recent race (${await page.inputValue('#race-filter')}: ${opening.length} header)`);
+  const ranks = await page.locator('#results-table tbody tr').evaluateAll(trs => trs.map(tr => tr.cells[0]?.innerText.trim()));
+  check(ranks[0] === '#1' && ranks[1] === '#2', `ranks within the race start at #1 (${ranks})`);
+  await page.selectOption('#race-filter', 'all');
   const heads = await page.locator('#results-table .race-summary').allInnerTexts();
   const derby = (heads.find(h => /Batangas Derby/.test(h)) || '').replace(/\s+/g, ' ');
   check(heads.length === 2 && /Batangas/.test(derby) && /° N, .*° E/.test(derby) && /2\/3 birds/.test(derby) && /Open/.test(derby), `a header per race: location, coordinates, release time, clocked/entered (${derby})`);
