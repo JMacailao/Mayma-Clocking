@@ -2,6 +2,7 @@ import './error-report.js';
 // Landing page (index.html): the winding "How it works" line, today's races,
 // the demo video, the club request form and the English / Tagalog switch.
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
+import { FORMSPREE_FORM } from './contact-config.js';
 
 const rpc = async (name, args = {}) => {
   const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
@@ -12,6 +13,20 @@ const rpc = async (name, args = {}) => {
   const data = await response.json().catch(() => null);
   if (!response.ok) throw new Error(data?.message || `Request failed (${response.status})`);
   return data;
+};
+// Club request by email (Formspree): it emails the request to the club's inbox.
+const sendByEmail = async (value, website) => {
+  const email = value('email');
+  const response = await fetch(`https://formspree.io/f/${encodeURIComponent(FORMSPREE_FORM)}`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      _subject: `AvilonX club request: ${value('club_name')}`, ...(email ? { _replyto: email, email } : {}),
+      name: value('contact_name'), club: value('club_name'), mobile: value('phone'), message: value('message') || '—', _gotcha: website,
+    }),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.errors?.map(error => error.message).join(' ') || 'Could not send the request. Check your connection and try again.');
 };
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -157,7 +172,8 @@ if (form) {
     const button = form.querySelector('[type="submit"]');
     button.disabled = true; say('Sending…');
     try {
-      await rpc('submit_club_request', { p_contact_name: value('contact_name'), p_club_name: value('club_name'), p_phone: value('phone'), p_email: value('email'), p_message: value('message'), p_website: f.website.value });
+      if (FORMSPREE_FORM) await sendByEmail(value, f.website.value);
+      else await rpc('submit_club_request', { p_contact_name: value('contact_name'), p_club_name: value('club_name'), p_phone: value('phone'), p_email: value('email'), p_message: value('message'), p_website: f.website.value });
       form.reset(); say('Request sent. We will contact you soon.', 'ok');
     } catch (error) {
       say(error.message, 'error');

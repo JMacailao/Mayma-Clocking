@@ -7,6 +7,9 @@ module.exports = async (page, { check, BASE, OUT }) => {
     if (name === 'submit_club_request') { sent.push(body); return route.fulfill({ json: { ok: true } }); }
     return route.fulfill({ status: 404, json: { message: 'unknown' } });
   });
+  // First without a Formspree form (requests saved for the Super Admin).
+  const noForm = route => route.fulfill({ contentType: 'text/javascript', body: "export const FORMSPREE_FORM = '';" });
+  await page.route('**/assets/js/contact-config.js', noForm);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${BASE}/repo/index.html`);
   await page.waitForSelector('[data-today]:not([hidden])', { timeout: 8000 }).catch(() => {});
@@ -25,6 +28,23 @@ module.exports = async (page, { check, BASE, OUT }) => {
   await page.waitForFunction(() => /Request sent/.test(document.querySelector('[data-contact-status]').textContent), null, { timeout: 5000 }).catch(() => {});
   check(sent.length === 1 && sent[0].p_club_name === 'Lipa Flyers' && sent[0].p_phone === '0917 123 4567' && sent[0].p_website === '', `request sent (${JSON.stringify(sent[0])})`);
   await form.screenshot({ path: `${OUT}/landing-contact.png` });
+
+  // With a Formspree form set: the request is emailed through Formspree, not saved for the Super Admin.
+  const mailed = [];
+  await page.unroute('**/assets/js/contact-config.js', noForm);
+  await page.route('**/assets/js/contact-config.js', route => route.fulfill({ contentType: 'text/javascript', body: "export const FORMSPREE_FORM = 'testform';" }));
+  await page.route('https://formspree.io/**', route => { mailed.push([route.request().url(), JSON.parse(route.request().postData() || '{}')]); return route.fulfill({ json: { ok: true } }); });
+  await page.reload(); await page.waitForTimeout(400);
+  await form.locator('[name="contact_name"]').fill('Pedro Reyes'); await form.locator('[name="club_name"]').fill('Lipa Flyers');
+  await form.locator('[name="phone"]').fill('0917 123 4567'); await form.locator('[name="email"]').fill('pedro@example.com');
+  await form.locator('[type="submit"]').click();
+  await page.waitForFunction(() => /Request sent/.test(document.querySelector('[data-contact-status]').textContent), null, { timeout: 5000 }).catch(() => {});
+  const mail = mailed[0]?.[1] || {};
+  check(mailed.length === 1 && /formspree\.io\/f\/testform$/.test(mailed[0][0]) && mail.club === 'Lipa Flyers' && mail.mobile === '0917 123 4567' && mail._replyto === 'pedro@example.com' && /Lipa Flyers/.test(mail._subject), `request emailed through Formspree (${JSON.stringify(mailed[0])})`);
+  check(sent.length === 1, 'not saved for the Super Admin when Formspree is set');
+  await page.unroute('**/assets/js/contact-config.js');
+  check(/FORMSPREE_FORM = 'xyewagpb'/.test(await (await page.request.get(`${BASE}/repo/assets/js/contact-config.js`)).text()), 'the club\'s Formspree form is set');
+  await page.reload(); await page.waitForTimeout(300);
 
   await page.click('.lp-lang [data-lang="tl"]');
   await page.waitForLoadState('load'); await page.waitForTimeout(400);
