@@ -30,7 +30,7 @@ async function getIdentity() {
 const loginUrl=()=>`${url('pages/login/index.html')}?next=${encodeURIComponent(location.pathname+location.search)}`;
 const homeFor = (role) => url(role==='superadmin'?'pages/superadmin/clubs/index.html':['admin','staff'].includes(role)?'pages/admin/dashboard/index.html':'pages/member/dashboard/index.html');
 // Line icons for the menu.
-const ICON_PATHS={
+const ICON_PATHS={pin:'<path d="M12 21s-6.5-6.2-6.5-11.2a6.5 6.5 0 0 1 13 0C18.5 14.8 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.3"/>',
   home:'<path d="M4 11.5 12 5l8 6.5V20h-5.5v-5h-5v5H4z"/>',
   user:'<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.7 3.6-5.6 7-5.6s6.2 1.9 7 5.6"/>',
   users:'<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-4.9 5.5-4.9s4.9 1.7 5.5 4.9"/><path d="M15 5.6a3 3 0 0 1 0 5.8M17 14.4c1.9.5 3.1 2 3.5 4.6"/>',
@@ -66,13 +66,13 @@ function adminNav(active,canManageAccounts) {
   return navGroups([
     ['',[['overview','Overview','pages/admin/dashboard/index.html','home']]],
     ['Club directory',[['members','Members','pages/admin/members/index.html','user'],['birds','Band Assignments','pages/admin/birds/index.html','bird']]],
-    ['Race setup',[['race-points','Race points','pages/admin/race-points/index.html','target'],['races','Races','pages/admin/races/index.html','clock'],['entries','Race entries','pages/admin/entries/index.html','list'],['remarks','Entry remarks','pages/admin/remarks/index.html','check']]],
+    ['Race setup',[['race-points','Race points','pages/admin/race-points/index.html','target'],['coordinates','My coordinates','pages/admin/coordinates/index.html','pin'],['races','Races','pages/admin/races/index.html','clock'],['entries','Race entries','pages/admin/entries/index.html','list'],['remarks','Entry remarks','pages/admin/remarks/index.html','check']]],
     ['Race day operations',[['raceday','Race day','pages/admin/raceday/index.html','raceday'],['clocking','Clocking','pages/admin/clocking/index.html','clocking'],['showup','Show up','pages/admin/showup/index.html','tick'],['readers','RFID readers','pages/admin/readers/index.html','wifi'],['results','Results','pages/admin/results/index.html','trend']]],
     ['Administration',[['history','Change history','pages/admin/history/index.html','history'],...(canManageAccounts?[['users','Team accounts','pages/admin/users/index.html','users'],['settings','Club settings','pages/admin/settings/index.html','settings']]:[])]]
   ],active);
 }
 function memberNav(active) {
-  return navGroups([['',[['dashboard','My races','pages/member/dashboard/index.html','home'],['history','My clocking history','pages/member/history/index.html','history'],['clocking','Clocking','pages/member/clocking/index.html','clocking'],['pigeons','My pigeons','pages/member/pigeons/index.html','bird'],['results','Results','pages/member/results/index.html','trend'],['settings','Settings','pages/member/settings/index.html','settings']]]],active);
+  return navGroups([['',[['dashboard','My races','pages/member/dashboard/index.html','home'],['history','My clocking history','pages/member/history/index.html','history'],['clocking','Clocking','pages/member/clocking/index.html','clocking'],['pigeons','My pigeons','pages/member/pigeons/index.html','bird'],['coordinates','My coordinates','pages/member/coordinates/index.html','pin'],['results','Results','pages/member/results/index.html','trend'],['settings','Settings','pages/member/settings/index.html','settings']]]],active);
 }
 // Phones: the four main pages of each role, plus More, which opens the full
 // menu (every page, language and sign out). Same links as the sidebar.
@@ -131,6 +131,7 @@ async function renderPage(view,role,identity,page=body.dataset.view,setCleanup=f
   else if(page==='history'&&role==='member'){const pageModule=await import('../../pages/member/history/page.js');await pageModule.render(view,identity);}
   else if(page==='member-results'&&role==='member'){const pageModule=await import('../../pages/member/results/page.js');await pageModule.render(view);}
   else if(page==='my-pigeons'&&role==='member'){const pageModule=await import('../../pages/member/pigeons/page.js');await pageModule.render(view,identity);}
+  else if(page==='my-coordinates'){const pageModule=await import('./my-coordinates.js');pageModule.render(view);}
   else if(page==='member-settings'&&role==='member'){const pageModule=await import('../../pages/member/settings/page.js');await pageModule.render(view,identity);}
 }
 async function main(){
@@ -316,6 +317,22 @@ const routes=[
     "view": "member-results",
     "role": "member",
     "active": "results"
+  },
+  {
+    "path": "pages/admin/coordinates/index.html",
+    "documentTitle": "My coordinates \u00b7 AvilonX Clocking",
+    "title": "My coordinates",
+    "view": "my-coordinates",
+    "role": "admin",
+    "active": "coordinates"
+  },
+  {
+    "path": "pages/member/coordinates/index.html",
+    "documentTitle": "My coordinates \u00b7 AvilonX Clocking",
+    "title": "My coordinates",
+    "view": "my-coordinates",
+    "role": "member",
+    "active": "coordinates"
   },
   {
     "path": "pages/member/settings/index.html",

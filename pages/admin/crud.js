@@ -1,11 +1,10 @@
+import { dmsText } from '../../assets/js/my-coordinates.js';
 import { supabase, escapeHTML, message, dbError, authError, fail, tableRows, USERNAME_RE, USERNAME_HELP, titleCase, loadSpreadsheetParser, normalizeImportHeader, coord2, sendEmailConfirm } from '../../assets/js/shared.js';
 
 const fields={
   members:[['member_no','Member ID','text',true],['full_name','Full name','text',true],['first_name','First name','text'],['middle_name','Middle name','text'],['last_name','Last name','text'],['loft_name','Loft name','text',true],['address','Address','text'],['phone','Phone','text'],['email','Email (for password reset)','email'],['paid','Membership paid','select',true],['latitude','Latitude','coordinates',true],['longitude','Longitude','coordinates',true]],
   race_points:[['location','Location','text',true],['description','Description','text'],['sector','Sector','radio',true,['North','South']],['latitude','Latitude','coordinates',true],['longitude','Longitude','coordinates',true]]
 };
-// Saved coordinate as N 12°52'46.27 (seconds with 2 decimals).
-function dmsText(value,key){const p=decimalToDms(value,key);return p.degrees===''?'—':`${p.hemisphere} ${p.degrees}°${String(p.minutes).padStart(2,'0')}'${Number(p.seconds).toFixed(2).padStart(5,'0')}`;}
 function decimalToDms(value,key) {
   const positive=key==='latitude'?'N':'E',negative=key==='latitude'?'S':'W';
   if(value===null||value===undefined||String(value).trim()==='')return {hemisphere:positive,degrees:'',minutes:'',seconds:''};

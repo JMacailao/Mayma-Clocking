@@ -3,8 +3,8 @@
 // button at least 44 × 44 px so a fingertip hits it.
 const fs = require('node:fs'), path = require('node:path');
 const PAGES = {
-  admin: ['admin/dashboard', 'admin/raceday', 'admin/members', 'admin/birds', 'admin/race-points', 'admin/races', 'admin/entries', 'admin/remarks', 'admin/clocking', 'admin/showup', 'admin/readers', 'admin/results', 'admin/history', 'admin/users', 'admin/settings'],
-  member: ['member/dashboard', 'member/history', 'member/clocking', 'member/pigeons', 'member/results', 'member/settings'],
+  admin: ['admin/dashboard', 'admin/raceday', 'admin/members', 'admin/birds', 'admin/race-points', 'admin/coordinates', 'admin/races', 'admin/entries', 'admin/remarks', 'admin/clocking', 'admin/showup', 'admin/readers', 'admin/results', 'admin/history', 'admin/users', 'admin/settings'],
+  member: ['member/dashboard', 'member/history', 'member/clocking', 'member/pigeons', 'member/coordinates', 'member/results', 'member/settings'],
   superadmin: ['superadmin/clubs', 'superadmin/stickers/register', 'superadmin/nfc', 'superadmin/readers', 'superadmin/stickers/generate', 'superadmin/setup'],
   visitor: ['login']
 };
